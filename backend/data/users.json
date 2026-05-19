@@ -1,0 +1,34 @@
+[
+  {
+    "id": "be02d994-e3db-4267-907a-804067a45522",
+    "companyName": "Test GmbH",
+    "entrepreneurName": "Max",
+    "email": "max@test.de",
+    "password": "secret",
+    "createdAt": "2026-05-11T16:07:20.630960+00:00"
+  },
+  {
+    "id": "509c38a3-e3f6-4b8b-8c16-38cc29e752a2",
+    "companyName": "Test GmbH",
+    "entrepreneurName": "Max",
+    "email": "max2@test.de",
+    "password": "secret",
+    "createdAt": "2026-05-11T16:07:26.238233+00:00"
+  },
+  {
+    "id": "0a329ffe-5435-4812-8ad1-d5f3e2c6c26f",
+    "companyName": "T",
+    "entrepreneurName": "M",
+    "email": "u3@t.de",
+    "password": "x",
+    "createdAt": "2026-05-11T16:07:32.265939+00:00"
+  },
+  {
+    "id": "e0ee9831-4ce8-4dc4-be67-57ba518edeaa",
+    "companyName": "Freiraum Beratung",
+    "entrepreneurName": "Denis Bytyqi",
+    "email": "denisbytyqi598@web.de",
+    "password": "KruemelJeta2212!",
+    "createdAt": "2026-05-11T16:30:17.132326+00:00"
+  }
+]

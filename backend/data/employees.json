@@ -1,0 +1,22 @@
+{
+  "employees": [
+    {
+      "id": "8e18a1db-278a-4069-98b5-d64dd8e3ea3a",
+      "name": "Marcel",
+      "role": "Baustellenleiter",
+      "active": true
+    },
+    {
+      "id": "d26b97d7-8422-448f-8940-7be6906b5813",
+      "name": "Matthias",
+      "role": "Azubi",
+      "active": true
+    },
+    {
+      "id": "70d13c48-b15a-4c68-a011-73b09b4a2dc1",
+      "name": "Endrit",
+      "role": "Vorarbeiter",
+      "active": true
+    }
+  ]
+}

@@ -1,0 +1,85 @@
+@import 'tailwindcss';
+
+html {
+  overflow-x: hidden;
+}
+
+@theme {
+  --color-freiraum-bg: #09090b;
+  --color-freiraum-card: #18181b;
+  --color-freiraum-border: #27272a;
+  --color-freiraum-orange: #f97316;
+  --color-freiraum-muted: #a1a1aa;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  background-color: var(--color-freiraum-bg);
+  color: #fafafa;
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    'Helvetica Neue',
+    Arial,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100dvh;
+}
+
+/* iOS / safe areas */
+.safe-area-pb {
+  padding-bottom: max(0.375rem, env(safe-area-inset-bottom, 0px));
+}
+.safe-area-pt-min {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Mikrofon-Idle: dezentes Pulsieren */
+@keyframes freiraum-mic-idle-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(249, 115, 22, 0.28),
+      0 12px 36px -16px rgba(249, 115, 22, 0.3);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 14px rgba(249, 115, 22, 0),
+      0 16px 42px -10px rgba(249, 115, 22, 0.38);
+    transform: scale(1.03);
+  }
+}
+
+/* Aufnahme: stärkeres Pulsieren */
+@keyframes freiraum-mic-record-pulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(249, 115, 22, 0.55),
+      0 0 40px rgba(249, 115, 22, 0.45);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow:
+      0 0 0 20px rgba(249, 115, 22, 0),
+      0 0 52px rgba(249, 115, 22, 0.55);
+    transform: scale(1.04);
+  }
+}
+
+.freiraum-mic-idle {
+  animation: freiraum-mic-idle-pulse 2.6s ease-in-out infinite;
+}
+
+.freiraum-mic-recording {
+  animation: freiraum-mic-record-pulse 1.05s ease-in-out infinite;
+}

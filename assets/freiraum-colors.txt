@@ -1,0 +1,7 @@
+Freiraum UI — V1 Referenz
+Background: #09090b
+Cards / Flächen: #18181b
+Border: #27272a
+Akzent Orange: #f97316
+Text hell: #fafafa
+Text muted: #a1a1aa

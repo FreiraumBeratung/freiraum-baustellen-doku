@@ -1,0 +1,1124 @@
+{
+  "cases": [
+    {
+      "name": "GaLaBau",
+      "rawText": "Heute haben wir 50 Quadratmeter Pflaster gemacht, drei Kubikmeter Schotter rein und 2 5 Split eingebaut. Danach haben wir Erde reingemacht.",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Schotter eingebaut",
+        "Splitt 2/5 mm"
+      ],
+      "expectedMaterials": [
+        "Pflastersteine",
+        "Schotter",
+        "Splitt"
+      ],
+      "expectedSummaryContains": [
+        "Auf der Baustelle",
+        "Pflaster",
+        "Schotter"
+      ],
+      "expectedActivitiesExact": [
+        "50 m² Pflaster verlegt",
+        "3 m³ Schotter eingebaut",
+        "Splitt 2/5 mm eingebaut"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden 50 m² Pflaster verlegt sowie 3 m³ Schotter eingebaut. Zusätzlich wurde Splitt 2/5 mm eingebaut."
+    },
+    {
+      "name": "SHK",
+      "rawText": "Wir haben heute Rohre gelegt, die Heizung angeschlossen und Wasser angeschlossen.",
+      "expectedActivities": [
+        "Heizungsanschlüsse montiert",
+        "Wasserleitungen verlegt"
+      ],
+      "expectedMaterials": [
+        "Rohrleitungen"
+      ],
+      "forbiddenMaterials": [
+        "Fittings"
+      ],
+      "expectedSummaryContains": [
+        "Baustelle",
+        "Wasserleitungen verlegt"
+      ],
+      "expectedActivitiesExact": [
+        "Heizungsanschlüsse montiert",
+        "Wasserleitungen verlegt"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden Heizungsanschlüsse montiert sowie Wasserleitungen verlegt."
+    },
+    {
+      "name": "Trockenbau",
+      "rawText": "Rigips dran gemacht, Wand zugemacht und zugespachtelt.",
+      "expectedActivities": [
+        "Gipskartonplatten montiert",
+        "Trockenbauwand geschlossen",
+        "Spachtelarbeiten durchgeführt"
+      ],
+      "expectedMaterials": [
+        "Gipskartonplatten"
+      ],
+      "forbiddenMaterials": [
+        "Schnellbauschrauben",
+        "Spachtelmasse"
+      ],
+      "expectedSummaryContains": [
+        "Gipskartonplatten",
+        "Baustelle"
+      ],
+      "expectedActivitiesExact": [
+        "Trockenbauwand geschlossen",
+        "Gipskartonplatten montiert",
+        "Spachtelarbeiten durchgeführt"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurde die Trockenbauwand geschlossen und Gipskartonplatten montiert. Zusätzlich wurden Spachtelarbeiten durchgeführt."
+    },
+    {
+      "name": "Sanierung",
+      "rawText": "Wir haben den alten Putz runtergemacht, Schimmel entfernt und Sanierputz aufgebracht.",
+      "expectedActivities": [
+        "Altputz entfernt",
+        "Schimmel beseitigt",
+        "Sanierputz aufgebracht"
+      ],
+      "expectedMaterials": [
+        "Sanierputz"
+      ],
+      "forbiddenMaterials": [
+        "Grundierung"
+      ],
+      "expectedSummaryContains": [
+        "Sanierputz",
+        "Baustelle"
+      ],
+      "expectedActivitiesExact": [
+        "Sanierputz aufgebracht",
+        "Altputz entfernt",
+        "Schimmel beseitigt"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden Sanierputz aufgebracht und Altputz entfernt. Zusätzlich wurde Schimmel beseitigt."
+    },
+    {
+      "name": "Fliesenleger",
+      "rawText": "Heute Fliesen gelegt, Kleber gezogen und zum Schluss verfugt.",
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Fliesenkleber aufgetragen",
+        "Fliesen verfugt"
+      ],
+      "expectedMaterials": [
+        "Fliesen",
+        "Fliesenkleber",
+        "Fugenmörtel"
+      ],
+      "expectedSummaryContains": [
+        "Fliesen",
+        "Baustelle"
+      ],
+      "expectedActivitiesExact": [
+        "Fliesen verlegt",
+        "Fliesenkleber aufgetragen",
+        "Fliesen verfugt"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden Fliesen verlegt und Fliesenkleber aufgetragen. Zusätzlich wurden Fliesen verfugt."
+    },
+    {
+      "name": "SemanticDedup",
+      "rawText": "Wir haben Pflaster verlegt. Wir haben 50 m² Pflaster verlegt. Danach Schotter eingebaut.",
+      "expectedActivities": [
+        "50 m² Pflaster verlegt",
+        "Schotter eingebaut"
+      ],
+      "forbiddenActivities": [
+        "Pflaster verlegt"
+      ],
+      "expectedMaterials": [
+        "Pflastersteine",
+        "Schotter"
+      ],
+      "expectedSummaryContains": [
+        "50",
+        "Pflaster"
+      ]
+    },
+    {
+      "name": "PriorityFliesen",
+      "rawText": "Heute 35 m² Fliesen verlegt und anschließend silikon gezogen.",
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Silikonfugen silikoniert"
+      ],
+      "expectedFirstActivity": "Fliesen verlegt",
+      "expectedMaterials": [
+        "Fliesen",
+        "Silikon"
+      ],
+      "expectedSummaryContains": [
+        "35",
+        "Fliesen"
+      ]
+    },
+    {
+      "name": "GaLaBauRealfallLong",
+      "rawText": "heute haben wir 50 Quadratmeter Pflaster verlegt wir haben 10 Quadratmeter Gartenmauer gebaut haben für den Untergrund Schotter verwendet und 25er Splitt verarbeitet im Anschluss hatten wir noch 5 Minuten Zeit und haben dann noch drei Pflanzkübel fertiggestellt die Kundin war sehr zufrieden",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Gartenmauer gebaut",
+        "Schotter eingebaut",
+        "Splitt 2/5 mm eingebaut",
+        "Pflanzkübel fertiggestellt"
+      ],
+      "expectedActivitiesExact": [
+        "50 m² Pflaster verlegt",
+        "10 m² Gartenmauer gebaut",
+        "Schotter eingebaut",
+        "Splitt 2/5 mm eingebaut",
+        "3 Pflanzkübel fertiggestellt"
+      ],
+      "expectedMaterials": [
+        "Schotter",
+        "Splitt",
+        "Pflastersteine",
+        "Pflanzkübel"
+      ],
+      "expectedSummaryContains": [
+        "Gartenmauer",
+        "Schotter",
+        "Splitt",
+        "Pflanzkübel"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden 50 m² Pflaster verlegt sowie 10 m² Gartenmauer gebaut. Außerdem wurden folgende Arbeiten ausgeführt: Schotter eingebaut, Splitt 2/5 mm eingebaut und 3 Pflanzkübel fertiggestellt."
+    },
+    {
+      "name": "TrockenbauFugenDisambiguation",
+      "rawText": "heute haben wir 40 Quadratmeter Gipskartonplatten montiert haben dafür Schnellbauschrauben benutzt wir haben noch eine weitere Decke abgehangen und haben dann anschließend als die Gipskartonplatten aufgebaut waren mit Fugenspachtel die ganzen Fugen zugemacht",
+      "expectedActivities": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt"
+      ],
+      "forbiddenActivities": [
+        "Fliesen verfugt"
+      ],
+      "expectedMaterials": [
+        "Gipskartonplatten",
+        "Schnellbauschrauben",
+        "Fugenspachtel"
+      ],
+      "forbiddenMaterials": [
+        "Fliesen"
+      ],
+      "expectedSummaryContains": [
+        "Gipskartonplatten montiert",
+        "Fugen verspachtelt"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden Gipskartonplatten montiert und die Decke abgehängt. Zusätzlich wurden Fugen verspachtelt."
+    },
+    {
+      "name": "ApproxMarkerRespected",
+      "rawText": "heute ca 50 Quadratmeter Pflaster verlegt",
+      "expectedActivities": [
+        "Pflaster verlegt"
+      ],
+      "expectedActivitiesExact": [
+        "ca. 50 m² Pflaster verlegt"
+      ],
+      "expectedMaterials": [
+        "Pflastersteine"
+      ],
+      "expectedSummaryContains": [
+        "ca.",
+        "Pflaster"
+      ]
+    },
+    {
+      "name": "ShkKgRohreMaterial",
+      "rawText": "heute haben wir Wasserleitung verlegt heizungsanschlüsse montiert und die KG Rohre im Außenbereich eingebaut",
+      "expectedActivities": [
+        "KG-Rohre verlegt",
+        "Heizungsanschlüsse montiert"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre"
+      ],
+      "expectedSummaryContains": [
+        "KG-Rohre",
+        "Heizungsanschlüsse"
+      ]
+    },
+    {
+      "name": "TiefbauGrabenUntergrund",
+      "rawText": "heute haben wir 25 laufende Meter kg Rohre verlegt den Graben verfüllt und den Untergrund verdichtet",
+      "expectedActivities": [
+        "KG-Rohre verlegt",
+        "Graben verfüllt",
+        "Untergrund verdichtet"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre"
+      ],
+      "expectedSummaryContains": [
+        "KG-Rohre",
+        "Graben verfüllt",
+        "Untergrund verdichtet"
+      ]
+    },
+    {
+      "name": "SummarySingularSplitt",
+      "rawText": "heute haben wir 50 Quadratmeter Pflaster verlegt und anschließend Splitt eingebaut",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Splitt eingebaut"
+      ],
+      "expectedSummaryContains": [
+        "Zusätzlich wurde Splitt eingebaut"
+      ]
+    },
+    {
+      "name": "TrockenbauNoDuplicate",
+      "rawText": "heute haben wir 40 Quadratmeter Gipskartonplatten montiert eine Decke abgehängt und mit Fugenspachtel die Fugen verspachtelt",
+      "expectedActivitiesExact": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt"
+      ]
+    },
+    {
+      "name": "LongMixedCoverageGaLa",
+      "rawText": "heute haben wir 50 Quadratmeter Pflaster verlegt dafür haben wir drei Kubikmeter Schotter benutzt anschließend haben wir die Tragschicht mit zwei Tonnen 25er Split fertig gemacht dann haben wir das Pflaster draufgelegt wir haben fünf Quadratmeter Gartenmauer gebaut anschließend haben wir 35 Pflanzkübel gesetzt haben diese mit Erde befüllt und dann mit Pflanzen bepflanzt anschließend haben wir noch eine Hecke beim Kunden geschnitten",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Gartenmauer gebaut",
+        "Hecke geschnitten",
+        "Pflanzkübel",
+        "Splitt"
+      ],
+      "expectedMaterials": [
+        "Pflastersteine",
+        "Schotter",
+        "Splitt",
+        "Pflanzkübel",
+        "Pflanzen"
+      ],
+      "expectedSummaryContains": [
+        "Hecke geschnitten",
+        "Pflanzkübel",
+        "Außerdem wurden"
+      ]
+    },
+    {
+      "name": "SingularHeckeGrammar",
+      "rawText": "heute haben wir 40 Quadratmeter Pflaster verlegt und danach die Hecke geschnitten",
+      "expectedSummaryContains": [
+        "die Hecke geschnitten"
+      ]
+    },
+    {
+      "name": "TrockenbauVerbTransitionSplit",
+      "rawText": "heute haben wir 40 Quadratmeter Gipskartonplatten angebracht eine Decke abgehängt und die Fugen mit Fugenspachtel verspachtelt",
+      "expectedActivities": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt"
+      ],
+      "forbiddenActivities": [
+        "Fliesen verfugt"
+      ],
+      "forbiddenMaterials": [
+        "CD-Profile",
+        "Abhänger"
+      ],
+      "expectedSummaryContains": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt"
+      ]
+    },
+    {
+      "name": "FliesenKleberBenutzt",
+      "rawText": "heute haben wir 35 Quadratmeter Fliesen gelegt dabei Fliesenkleber benutzt und anschließend die Fugen verfugt",
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Fliesenkleber aufgetragen",
+        "Fliesen verfugt"
+      ],
+      "expectedMaterials": [
+        "Fliesen",
+        "Fliesenkleber",
+        "Fugenmörtel"
+      ]
+    },
+    {
+      "name": "EvidenceGateNoDrywallHallucination",
+      "rawText": "heute haben wir 35 Quadratmeter Fliesen gelegt und danach die Fugen verfugt",
+      "forbiddenActivities": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt"
+      ],
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Fliesen verfugt"
+      ]
+    },
+    {
+      "name": "CatalogGaLaTeichPergola",
+      "rawText": "heute haben wir einen teich angelegt und danach eine pergola aufgestellt",
+      "expectedActivities": [
+        "Teichbau durchgeführt",
+        "Pergola/Carport aufgestellt"
+      ],
+      "expectedSummaryContains": [
+        "Teichbau",
+        "Pergola"
+      ]
+    },
+    {
+      "name": "CatalogTrockenbauStaenderwerkDaemmung",
+      "rawText": "heute haben wir ein ständerwerk mit cw und uw profilen gebaut und steinwolle dämmung eingebaut",
+      "expectedActivities": [
+        "Ständerwerk montiert",
+        "Dämmung eingebaut"
+      ],
+      "expectedSummaryContains": [
+        "Ständerwerk",
+        "Dämmung"
+      ]
+    },
+    {
+      "name": "WelleARealcheckGaLaCoverage",
+      "rawText": "Heute haben wir die Fläche profiliert, einen Teich angelegt, danach eine Pergola aufgestellt und zum Schluss die Hecke beim Kunden geschnitten.",
+      "expectedActivities": [
+        "Fläche profiliert",
+        "Teichbau durchgeführt",
+        "Pergola/Carport aufgestellt",
+        "Hecke geschnitten"
+      ],
+      "expectedSummaryContains": [
+        "Fläche profiliert",
+        "Teichbau",
+        "Pergola",
+        "Hecke geschnitten"
+      ],
+      "forbiddenMaterials": [
+        "Pflanzen"
+      ]
+    },
+    {
+      "name": "WelleARealcheckTrockenbauDaemmung",
+      "rawText": "Heute haben wir ein Ständerwerk mit CW- und UW-Profilen gebaut, Steinwolle als Dämmung eingebaut und anschließend die Decke abgehängt.",
+      "expectedActivities": [
+        "Ständerwerk montiert",
+        "Dämmung eingebaut",
+        "Decke abgehängt"
+      ],
+      "expectedMaterials": [
+        "CW/UW-Profile",
+        "Steinwolle"
+      ]
+    },
+    {
+      "name": "CatalogFlieseAbdichtung",
+      "rawText": "heute haben wir den untergrund grundiert, flüssigfolie aufgebracht, dichtband montiert und danach die fliesen verlegt sowie die fugen verfugt",
+      "expectedActivities": [
+        "Grundierung aufgetragen",
+        "Abdichtung hergestellt",
+        "Fliesen verlegt",
+        "Fliesen verfugt"
+      ],
+      "expectedMaterials": [
+        "Fliesen",
+        "Fugenmörtel"
+      ],
+      "expectedSummaryContains": [
+        "Abdichtung",
+        "Fliesen"
+      ]
+    },
+    {
+      "name": "CatalogShkHtlueftung",
+      "rawText": "heute haben wir ht dn 75 rohre verlegt, heizkörper montiert und eine wohnraumlüftung installiert",
+      "expectedActivities": [
+        "HT-Rohre",
+        "Heizkörper montiert",
+        "Lüftungs-/Klimatechnik installiert"
+      ],
+      "expectedMaterials": [
+        "HT-Rohre"
+      ],
+      "expectedSummaryContains": [
+        "HT-Rohre",
+        "Heizkörper"
+      ]
+    },
+    {
+      "name": "CatalogTiefbauWelleC",
+      "rawText": "heute haben wir den graben ausgehoben, kg dn 160 rohre verlegt, den untergrund verdichtet und den schacht gesetzt",
+      "expectedActivities": [
+        "Graben ausgehoben",
+        "KG-Rohre",
+        "Untergrund verdichtet",
+        "Kanal-/Schachtarbeiten durchgeführt"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre"
+      ],
+      "expectedSummaryContains": [
+        "Graben",
+        "KG-Rohre",
+        "Untergrund"
+      ]
+    },
+    {
+      "name": "CatalogHochbauWelleC",
+      "rawText": "heute haben wir die schalung erstellt, bewehrung eingebaut und 4 kubikmeter beton eingebracht",
+      "expectedActivities": [
+        "Schalung erstellt",
+        "Bewehrung eingebaut",
+        "4 m³ Beton eingebracht"
+      ],
+      "expectedSummaryContains": [
+        "Schalung",
+        "Bewehrung",
+        "Beton"
+      ]
+    },
+    {
+      "name": "CatalogStuckWelleC",
+      "rawText": "heute haben wir innenputz aufgetragen, wdvs dämmplatten angebracht und armierungsgewebe eingebettet",
+      "expectedActivities": [
+        "Innenputz aufgetragen",
+        "WDVS ausgeführt",
+        "Fassadenarmierung ausgeführt"
+      ],
+      "expectedSummaryContains": [
+        "Innenputz",
+        "WDVS",
+        "Fassadenarmierung"
+      ]
+    },
+    {
+      "name": "RasenkantensteineSeparateIntent",
+      "rawText": "Heute haben wir 50 Quadratmeter Pflaster verlegt, drei Kubikmeter Schotter eingebaut und 30 lfm Rasenkantensteine gesetzt.",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Rasenkantensteine gesetzt",
+        "Schotter eingebaut"
+      ],
+      "forbiddenActivities": [
+        "Rasen verlegt"
+      ],
+      "expectedMaterials": [
+        "Pflastersteine",
+        "Schotter",
+        "Rasenkantensteine"
+      ],
+      "expectedSummaryContains": [
+        "Rasenkantensteine gesetzt"
+      ]
+    },
+    {
+      "name": "RasenkantensteineWhisperVariante",
+      "rawText": "Heute haben wir entlang des Pflasters 20 lfm Rasen Kanten Steine gesetzt.",
+      "expectedActivities": [
+        "Rasenkantensteine gesetzt"
+      ],
+      "forbiddenActivities": [
+        "Rasen verlegt"
+      ],
+      "expectedMaterials": [
+        "Rasenkantensteine"
+      ]
+    },
+    {
+      "name": "FliesenkleberVerarbeitetCanonicalized",
+      "rawText": "Im Bad haben wir 35 Quadratmeter Fliesen verlegt, Fliesenkleber verarbeitet und anschließend mit Silikon die Arbeiten abgeschlossen.",
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Fliesenkleber aufgetragen"
+      ],
+      "forbiddenActivities": [
+        "Fliesenkleber verarbeitet"
+      ],
+      "expectedMaterials": [
+        "Fliesen",
+        "Fliesenkleber",
+        "Silikon"
+      ],
+      "expectedSummaryContains": [
+        "Fliesenkleber aufgetragen"
+      ]
+    },
+    {
+      "name": "SummaryHeckeMitArtikel",
+      "rawText": "Heute haben wir die Hecke geschnitten.",
+      "expectedActivities": [
+        "Hecke geschnitten"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurde die Hecke geschnitten."
+    },
+    {
+      "name": "SummaryUntergrundMitArtikel",
+      "rawText": "Heute haben wir den Untergrund verdichtet.",
+      "expectedActivities": [
+        "Untergrund verdichtet"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurde der Untergrund verdichtet."
+    },
+    {
+      "name": "SummarySchotterSingular",
+      "rawText": "Heute haben wir Schotter eingebaut.",
+      "expectedActivities": [
+        "Schotter eingebaut"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurde Schotter eingebaut."
+    },
+    {
+      "name": "SummaryMixedSingularPlural",
+      "rawText": "Heute haben wir 40 Quadratmeter Pflaster verlegt und die Hecke geschnitten.",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Hecke geschnitten"
+      ],
+      "expectedSummaryExact": "16.05.2026: Auf der Baustelle wurden 40 m² Pflaster verlegt und die Hecke geschnitten."
+    },
+    {
+      "name": "SummaryAusserdemBeiVielen",
+      "rawText": "Heute haben wir 40 Quadratmeter Pflaster verlegt, drei Pflanzkübel fertiggestellt, die Hecke geschnitten, Unkraut entfernt, den Untergrund verdichtet und Mulch verteilt.",
+      "expectedSummaryContains": [
+        "Außerdem wurden"
+      ]
+    },
+    {
+      "name": "WelleA_TrockenbauOhneKommas",
+      "rawText": "heute haben wir gipskartonplatten montiert die decke abgehängt fugen verspachtelt und dämmung eingebaut",
+      "expectedActivities": [
+        "Gipskartonplatten montiert",
+        "Decke abgehängt",
+        "Fugen verspachtelt",
+        "Dämmung eingebaut"
+      ],
+      "expectedSummaryContains": [
+        "Decke abgehängt"
+      ]
+    },
+    {
+      "name": "WelleA_GaLaOhneKommas",
+      "rawText": "heute haben wir 50 quadratmeter pflaster verlegt drei kubikmeter schotter eingebaut 30 lfm rasenkantensteine gesetzt",
+      "expectedActivities": [
+        "Pflaster verlegt",
+        "Schotter eingebaut",
+        "Rasenkantensteine gesetzt"
+      ],
+      "expectedActivitiesExact": [
+        "50 m² Pflaster verlegt",
+        "30 lfm Rasenkantensteine gesetzt",
+        "3 m³ Schotter eingebaut"
+      ]
+    },
+    {
+      "name": "WelleB_KeineAktivitaetImMaterial",
+      "rawText": "Heute haben wir Gipskartonplatten montiert, die Decke abgehängt, Fugen verspachtelt und Dämmung eingebaut.",
+      "expectedActivities": [
+        "Dämmung eingebaut"
+      ],
+      "forbiddenMaterials": [
+        "Dämmung eingebaut",
+        "Pflaster verlegt",
+        "Schotter eingebaut",
+        "Gipskartonplatten montiert"
+      ]
+    },
+    {
+      "name": "WelleC_BadezimmerLokation",
+      "rawText": "Heute im Badezimmer 35 Quadratmeter Fliesen verlegt, Fliesenkleber verarbeitet und mit Silikon abgeschlossen.",
+      "expectedActivities": [
+        "Fliesen verlegt",
+        "Fliesenkleber aufgetragen",
+        "Silikonfugen silikoniert"
+      ],
+      "expectedSummaryContains": [
+        "Im Bad wurden"
+      ]
+    },
+    {
+      "name": "WelleC_NasszelleLokation",
+      "rawText": "In der Nasszelle haben wir 20 Quadratmeter Fliesen verlegt.",
+      "expectedSummaryContains": [
+        "Im Bad wurden"
+      ]
+    },
+    {
+      "name": "WelleC_SilikonAbgeschlossen",
+      "rawText": "Heute Fliesen verlegt und mit Silikon abgeschlossen.",
+      "expectedActivities": [
+        "Silikonfugen silikoniert"
+      ]
+    },
+    {
+      "name": "WelleC_ArbeitenAbgeschlossenKeinSilikon",
+      "rawText": "Heute haben wir die Arbeiten abgeschlossen und Pflanzen gesetzt.",
+      "forbiddenActivities": [
+        "Silikonfugen silikoniert"
+      ],
+      "expectedSummaryContains": [
+        "Die Baustelle wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "PhaseA_Abschluss_BaustelleAbgeschlossen",
+      "rawText": "Heute haben wir 35 Quadratmeter Fliesen verlegt. Die Baustelle ist damit abgeschlossen.",
+      "expectedSummaryContains": [
+        "Die Baustelle wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "PhaseA_Abschluss_BauvorhabenFertiggestellt",
+      "rawText": "Heute haben wir den Untergrund verdichtet und das Bauvorhaben fertiggestellt.",
+      "expectedSummaryContains": [
+        "Das Bauvorhaben wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "PhaseA_Abschluss_HierFertigNichtMehrHin",
+      "rawText": "Hecke geschnitten und Pflanzen gesetzt. Hier sind wir fertig, hier brauchen wir nicht mehr hin.",
+      "expectedSummaryContains": [
+        "Die Baustelle wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "PhaseA_Abschluss_Arbeitstag",
+      "rawText": "Heute haben wir KG-Rohre verlegt, für heute sind wir fertig.",
+      "expectedSummaryContains": [
+        "Der Arbeitstag wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "PhaseB1_Fliesen_VorschlaegeOhneMaterial",
+      "rawText": "Heute im Badezimmer 35 Quadratmeter Fliesen verlegt.",
+      "expectedActivities": [
+        "Fliesen verlegt"
+      ],
+      "expectedMaterialSuggestions": [
+        "Fliesenkleber benutzt?",
+        "Grundierung benutzt?",
+        "Fugenmörtel benutzt?"
+      ],
+      "forbiddenMaterials": [
+        "Fliesenkleber",
+        "Grundierung",
+        "Fugenmörtel"
+      ]
+    },
+    {
+      "name": "PhaseB1_Fliesen_KeineVorschlaegeWennExplizit",
+      "rawText": "Heute im Bad 35 Quadratmeter Fliesen verlegt, Fliesenkleber aufgetragen und Fliesen verfugt.",
+      "forbiddenMaterialSuggestions": [
+        "Fliesenkleber benutzt?",
+        "Fugenmörtel benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB1_Trockenbau_DeckeAbgehaengt_Vorschlaege",
+      "rawText": "Heute haben wir die Decke abgehängt.",
+      "expectedActivities": [
+        "Decke abgehängt"
+      ],
+      "expectedMaterialSuggestions": [
+        "CD-Profile benutzt?",
+        "UD-Profile benutzt?",
+        "Abhänger benutzt?"
+      ],
+      "forbiddenMaterials": [
+        "CD-Profile",
+        "UD-Profile",
+        "Abhänger"
+      ]
+    },
+    {
+      "name": "PhaseB1_Trockenbau_Staenderwerk_Vorschlaege",
+      "rawText": "Heute haben wir das Ständerwerk montiert.",
+      "expectedActivities": [
+        "Ständerwerk montiert"
+      ],
+      "expectedMaterialSuggestions": [
+        "CW/UW-Profile benutzt?",
+        "UA-Profile benutzt?",
+        "Schnellbauschrauben benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB1_Trockenbau_KeineVorschlaegeWennExplizit",
+      "rawText": "Heute haben wir Gipskartonplatten montiert und Schnellbauschrauben verwendet.",
+      "forbiddenMaterialSuggestions": [
+        "Schnellbauschrauben benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_GaLa_Rasenkanten_Vorschlaege",
+      "rawText": "Heute haben wir 25 lfm Rasenkantensteine gesetzt.",
+      "expectedMaterialSuggestions": [
+        "Beton benutzt?",
+        "Splitt benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_Tiefbau_KG_Vorschlaege",
+      "rawText": "Heute haben wir 50 lfm KG-Rohre verlegt.",
+      "expectedMaterialSuggestions": [
+        "KG-Bögen benutzt?",
+        "KG-Abzweige benutzt?",
+        "Reinigungsrohr benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_SHK_Wasserleitung_Vorschlaege",
+      "rawText": "Heute haben wir Wasserleitungen verlegt.",
+      "expectedMaterialSuggestions": [
+        "Pressfittings benutzt?",
+        "Mehrschichtverbundrohr benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_Stuck_Innenputz_Vorschlaege",
+      "rawText": "Heute haben wir Innenputz aufgetragen.",
+      "expectedMaterialSuggestions": [
+        "Haftgrund benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_Hochbau_Bewehrung_Vorschlaege",
+      "rawText": "Heute haben wir die Bewehrung eingebaut.",
+      "expectedMaterialSuggestions": [
+        "Bindedraht benutzt?",
+        "Abstandhalter benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_Hochbau_Fundament_Vorschlaege",
+      "rawText": "Heute haben wir das Fundament erstellt.",
+      "expectedMaterialSuggestions": [
+        "Schalung benutzt?",
+        "Bewehrung benutzt?",
+        "Beton benutzt?"
+      ]
+    },
+    {
+      "name": "PhaseB2_KeineVorschlaegeWennExplizit",
+      "rawText": "Heute haben wir 50 lfm KG-Rohre verlegt und KG-Bögen sowie KG-Abzweige gesetzt.",
+      "forbiddenMaterialSuggestions": [
+        "KG-Bögen benutzt?",
+        "KG-Abzweige benutzt?"
+      ]
+    },
+    {
+      "name": "WaveB_Randsteine_Meter_Benutzt",
+      "rawText": "Heute haben wir 25 Meter Randsteine benutzt.",
+      "expectedActivities": [
+        "Randsteine gesetzt"
+      ],
+      "expectedActivitiesExact": [
+        "25 lfm Randsteine gesetzt"
+      ],
+      "expectedMaterialSuggestions": [
+        "Beton benutzt?",
+        "Splitt benutzt?"
+      ]
+    },
+    {
+      "name": "WaveB_Randsteine_Stueck",
+      "rawText": "Heute haben wir 25 Stück Randsteine gesetzt.",
+      "expectedActivities": [
+        "Randsteine gesetzt"
+      ],
+      "expectedActivitiesExact": [
+        "25 Stück Randsteine gesetzt"
+      ]
+    },
+    {
+      "name": "WaveB_Rasenkantensteine_Lfm",
+      "rawText": "Heute haben wir 25 laufende Meter Rasenkantensteine gesetzt.",
+      "expectedActivitiesExact": [
+        "25 lfm Rasenkantensteine gesetzt"
+      ],
+      "expectedMaterialSuggestions": [
+        "Beton benutzt?",
+        "Splitt benutzt?"
+      ]
+    },
+    {
+      "name": "WaveB_Randsteine_KeineLeerSummary",
+      "rawText": "Heute haben wir 25 Meter Randsteine benutzt und die Baustelle ist damit abgeschlossen.",
+      "expectedSummaryContains": [
+        "Randsteine gesetzt",
+        "Die Baustelle wurde abgeschlossen."
+      ]
+    },
+    {
+      "name": "WaveB_Randsteine_DedupeMengeGewinnt",
+      "rawText": "Heute haben wir Rasenkantensteine gesetzt und danach 3 lfm Rasenkantensteine gebaut.",
+      "expectedActivitiesExact": [
+        "3 lfm Rasenkantensteine gesetzt"
+      ]
+    },
+    {
+      "name": "Putz_Oberputz_RawPhrase_Normalized",
+      "rawText": "heute haben wir den Altputz entfernt den Schimmel beseitigt und den neuen Oberputz aufgetragen",
+      "expectedActivitiesExact": [
+        "Altputz entfernt",
+        "Schimmel beseitigt",
+        "Oberputz aufgetragen"
+      ],
+      "expectedMaterials": [
+        "Oberputz"
+      ],
+      "expectedSummaryContains": [
+        "Oberputz aufgetragen"
+      ]
+    },
+    {
+      "name": "Putz_Oberputz_Material_Ableitung",
+      "rawText": "Heute Oberputz verarbeitet.",
+      "expectedActivities": [
+        "Oberputz aufgetragen"
+      ],
+      "expectedMaterials": [
+        "Oberputz"
+      ],
+      "expectedMaterialSuggestions": [
+        "Grundierung benutzt?",
+        "Haftgrund benutzt?",
+        "Unterputz aufgetragen?"
+      ]
+    },
+    {
+      "name": "Putz_Schimmel_Vorschlag",
+      "rawText": "Heute haben wir den Schimmel beseitigt.",
+      "expectedActivities": [
+        "Schimmel beseitigt"
+      ],
+      "expectedMaterialSuggestions": [
+        "Schimmelentferner benutzt?"
+      ]
+    },
+    {
+      "name": "Putz_Altputz_Vorschlaege",
+      "rawText": "Heute haben wir den Altputz entfernt.",
+      "expectedActivities": [
+        "Altputz entfernt"
+      ],
+      "expectedMaterialSuggestions": [
+        "Entsorgungssäcke benutzt?",
+        "Container benutzt?"
+      ]
+    },
+    {
+      "name": "Putz_Oberputz_KeineVorschlaegeWennExplizit",
+      "rawText": "Heute haben wir Oberputz aufgetragen, Grundierung benutzt und Unterputz aufgetragen.",
+      "forbiddenMaterialSuggestions": [
+        "Grundierung benutzt?",
+        "Unterputz aufgetragen?"
+      ]
+    },
+    {
+      "name": "Tiefbau_GrubeRohrVerfuelltVerdichtet",
+      "rawText": "heute haben wir mit dem Bagger eine Grube gegraben haben dann 25 laufende Meter DN 150 kg Rohre verlegt die Grube verfüllt und zum Schluss die Grube verdichtet",
+      "expectedActivities": [
+        "Graben ausgehoben",
+        "KG-Rohre DN 150 verlegt",
+        "Graben verfüllt",
+        "Untergrund verdichtet"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 150"
+      ],
+      "expectedMaterialSuggestions": [
+        "KG-Bögen DN 150 benutzt?",
+        "KG-Abzweige DN 150 benutzt?",
+        "Reinigungsrohr DN 150 benutzt?"
+      ],
+      "expectedSummaryContains": [
+        "Graben ausgehoben",
+        "KG-Rohre DN 150"
+      ]
+    },
+    {
+      "name": "Tiefbau_DN160_Suggestions",
+      "rawText": "Heute 30 lfm DN 160 KG Rohre verlegt.",
+      "expectedActivities": [
+        "KG-Rohre DN 160 verlegt"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 160"
+      ],
+      "expectedMaterialSuggestions": [
+        "KG-Bögen DN 160 benutzt?",
+        "KG-Abzweige DN 160 benutzt?"
+      ]
+    },
+    {
+      "name": "Tiefbau_Umgangssprache_100erAuf110",
+      "rawText": "Heute haben wir 20 laufende Meter Hunderter KG Rohr verlegt.",
+      "expectedActivities": [
+        "KG-Rohre DN 110 verlegt"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 110"
+      ],
+      "expectedMaterialSuggestions": [
+        "KG-Bögen DN 110 benutzt?",
+        "KG-Abzweige DN 110 benutzt?"
+      ]
+    },
+    {
+      "name": "Tiefbau_Umgangssprache_150erAuf160",
+      "rawText": "Heute haben wir 20 laufende Meter 150er KG Rohr verlegt.",
+      "expectedActivities": [
+        "KG-Rohre DN 160 verlegt"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 160"
+      ],
+      "expectedMaterialSuggestions": [
+        "KG-Bögen DN 160 benutzt?",
+        "KG-Abzweige DN 160 benutzt?"
+      ]
+    },
+    {
+      "name": "Tiefbau_ExplizitDN160Bleibt160",
+      "rawText": "Heute haben wir 20 laufende Meter DN 160 KG Rohr verlegt.",
+      "expectedActivities": [
+        "KG-Rohre DN 160 verlegt"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 160"
+      ],
+      "forbiddenMaterials": [
+        "KG-Rohre DN 110"
+      ]
+    },
+    {
+      "name": "Tiefbau_WhisperDenAlsDN",
+      "rawText": "heute haben wir mit dem bagger eine grube gegraben dann 25 laufende meter den 150 kg rohre verlegt die grube verfüllt und zum schluss die grube verdichtet",
+      "expectedActivities": [
+        "KG-Rohre DN 150 verlegt",
+        "Graben ausgehoben",
+        "Graben verfüllt",
+        "Untergrund verdichtet"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 150"
+      ],
+      "expectedMaterialSuggestions": [
+        "KG-Bögen DN 150 benutzt?",
+        "KG-Abzweige DN 150 benutzt?",
+        "Reinigungsrohr DN 150 benutzt?"
+      ],
+      "expectedMachineSuggestions": [
+        "Baggerstunden erfassen?"
+      ]
+    },
+    {
+      "name": "T2_AbzweigCanonicalized",
+      "rawText": "Heute haben wir 18 lfm KG-Rohre DN 200 verlegt und einen Abzweig eingebaut.",
+      "expectedActivitiesExact": [
+        "18 lfm KG-Rohre DN 200 verlegt",
+        "KG-Abzweig eingebaut"
+      ],
+      "expectedMaterials": [
+        "KG-Rohre DN 200"
+      ]
+    },
+    {
+      "name": "TR1_UWWhisperNormalized",
+      "rawText": "Heute haben wir Dämmung eingebaut, Fugen verspachtelt und Uwe Profil montiert.",
+      "expectedActivities": [
+        "Dämmung eingebaut",
+        "Fugen verspachtelt",
+        "Ständerwerk montiert"
+      ],
+      "forbiddenActivities": [
+        "Uwe profil montiert"
+      ]
+    },
+    {
+      "name": "T2_NoDnsuggestionWhenMaterialExists",
+      "rawText": "Heute haben wir 18 lfm KG-Rohre DN 200 verlegt und KG-Bögen eingebaut.",
+      "expectedMaterials": [
+        "KG-Rohre DN 200",
+        "KG-Bögen"
+      ],
+      "forbiddenMaterialSuggestions": [
+        "KG-Bögen DN 200 benutzt?"
+      ]
+    },
+    {
+      "name": "S1_SHK_ThermostatSuggestionDedupe",
+      "rawText": "Heute haben wir Wasserleitungen verlegt, Heizkörper montiert, Fittings eingebaut und Thermostatventile eingebaut.",
+      "expectedMaterials": [
+        "Rohrleitungen",
+        "Fittings",
+        "Heizkörper",
+        "Thermostatventile"
+      ],
+      "forbiddenMaterialSuggestions": [
+        "Thermostatventil benutzt?"
+      ]
+    },
+    {
+      "name": "S2_HT_NoKgLeak_AndDnSuggestions",
+      "rawText": "Heute haben wir HT DN 50 Rohre verlegt.",
+      "expectedActivities": [
+        "HT-Rohre DN 50 verlegt"
+      ],
+      "expectedMaterials": [
+        "HT-Rohre DN 50"
+      ],
+      "forbiddenMaterials": [
+        "KG-Rohre DN 160"
+      ],
+      "expectedMaterialSuggestions": [
+        "HT-Bögen DN 50 benutzt?",
+        "HT-Abzweige DN 50 benutzt?",
+        "HT-Manschette DN 50 benutzt?"
+      ]
+    },
+    {
+      "name": "H1_WhisperL5_Mauerwerk",
+      "rawText": "Heute haben wir 17 l5er Poroton Steine gemauert.",
+      "expectedActivities": [
+        "Mauerwerk erstellt"
+      ],
+      "forbiddenActivities": [
+        "Gartenmauer gebaut"
+      ],
+      "expectedMaterialSuggestions": [
+        "Dünnbettmörtel benutzt?",
+        "Mauerwerksanker benutzt?"
+      ]
+    },
+    {
+      "name": "H2_WhisperBewaehrung_Normalized",
+      "rawText": "Heute haben wir Schalung erstellt, 5er Bewährung verarbeitet und Beton eingebracht.",
+      "expectedActivities": [
+        "Schalung erstellt",
+        "Bewehrung eingebaut",
+        "Beton eingebracht"
+      ],
+      "forbiddenActivities": [
+        "5er verarbeitet bewährung"
+      ]
+    },
+    {
+      "name": "Maschine_StundenAusRaw_KeineSuggestion",
+      "rawText": "Heute 4 Stunden mit dem Bagger gearbeitet und einen Graben ausgehoben.",
+      "expectedMachineHours": [
+        "Bagger: 4 h"
+      ],
+      "forbiddenMachineSuggestions": [
+        "Baggerstunden erfassen?"
+      ]
+    }
+  ]
+}

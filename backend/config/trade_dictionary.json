@@ -1,0 +1,269 @@
+{
+  "universal": {
+    "normalizations": {
+      "qm": "m²",
+      "quadratmeter": "m²",
+      "kubikmeter": "m³",
+      "tonnen": "t",
+      "split": "Splitt",
+      "zwei fünfer splitt": "Splitt 2/5 mm",
+      "zwei fünfer split": "Splitt 2/5 mm",
+      "zwei fuenfer splitt": "Splitt 2/5 mm",
+      "zwei fuenfer split": "Splitt 2/5 mm",
+      "zwei fünf split": "Splitt 2/5 mm",
+      "zwei fuenf split": "Splitt 2/5 mm",
+      "zwei-fünfer split": "Splitt 2/5 mm",
+      "zwei-fuenfer split": "Splitt 2/5 mm",
+      "zwei fünfer": "2/5",
+      "zwei fuenfer": "2/5",
+      "acht elf": "8/11",
+      "sechzehn fünfundzwanzig": "16/25"
+    },
+    "activity_terms": [
+      "eingebaut",
+      "verlegt",
+      "montiert",
+      "installiert"
+    ],
+    "material_terms": [
+      "splitt",
+      "schotter",
+      "pflastersteine",
+      "mörtel",
+      "moertel",
+      "gipskartonplatten",
+      "fliesenkleber",
+      "fugenmörtel",
+      "fugenmoertel",
+      "rohrleitungen",
+      "fittings",
+      "elektroleitungen",
+      "pflanzsubstrat"
+    ],
+    "material_inference": {}
+  },
+  "galabau": {
+    "normalizations": {
+      "pflaster gelegt": "Pflaster verlegt",
+      "erde reingemacht": "mit Pflanzsubstrat verfüllt",
+      "pflanzkübel fertig gemacht": "Pflanzkübel vorbereitet",
+      "pflanzkuebel fertig gemacht": "Pflanzkübel vorbereitet",
+      "schotter rein": "Schotter eingebaut",
+      "pflanzkübel mit erde bepackt": "Pflanzkübel mit Pflanzsubstrat verfüllt",
+      "pflanzkuebel mit erde bepackt": "Pflanzkübel mit Pflanzsubstrat verfüllt"
+    },
+    "activity_terms": [
+      "pflaster verlegt",
+      "schotter eingebaut",
+      "pflanzkübel vorbereitet",
+      "pflanzkübel mit pflanzsubstrat verfüllt"
+    ],
+    "material_terms": [
+      "pflastersteine",
+      "splitt",
+      "schotter",
+      "pflanzsubstrat"
+    ],
+    "material_inference": {
+      "pflaster verlegt": [
+        "Pflastersteine",
+        "Splitt",
+        "Schotter"
+      ],
+      "schotter eingebaut": [
+        "Schotter"
+      ],
+      "pflanzkübel vorbereitet": [
+        "Pflanzsubstrat"
+      ],
+      "pflanzkübel mit pflanzsubstrat verfüllt": [
+        "Pflanzsubstrat"
+      ]
+    }
+  },
+  "trockenbau": {
+    "normalizations": {
+      "rigips dran gemacht": "Gipskartonplatten montiert",
+      "rigips": "Gipskartonplatten",
+      "zugespachtelt": "Verspachtelungsarbeiten durchgeführt",
+      "wand zugemacht": "Trockenbauwand geschlossen"
+    },
+    "activity_terms": [
+      "gipskartonplatten montiert",
+      "trockenbauwand geschlossen",
+      "verspachtelungsarbeiten durchgeführt"
+    ],
+    "material_terms": [
+      "gipskartonplatten",
+      "schnellbauschrauben",
+      "spachtelmasse"
+    ],
+    "material_inference": {
+      "gipskartonplatten montiert": [
+        "Gipskartonplatten",
+        "Schnellbauschrauben"
+      ],
+      "trockenbauwand geschlossen": [
+        "Gipskartonplatten",
+        "Spachtelmasse"
+      ],
+      "verspachtelungsarbeiten durchgeführt": [
+        "Spachtelmasse"
+      ]
+    }
+  },
+  "fliesen": {
+    "normalizations": {
+      "fliesen gemacht": "Fliesenarbeiten durchgeführt",
+      "verfugt": "Verfugungsarbeiten durchgeführt",
+      "kleber gezogen": "Fliesenkleber aufgetragen",
+      "silikon gezogen": "Herstellung von Silikonfugen"
+    },
+    "activity_terms": [
+      "fliesenarbeiten durchgeführt",
+      "verfugungsarbeiten durchgeführt",
+      "fliesenkleber aufgetragen",
+      "herstellung von silikonfugen"
+    ],
+    "material_terms": [
+      "fliesen",
+      "fliesenkleber",
+      "fugenmörtel",
+      "silikon"
+    ],
+    "material_inference": {
+      "fliesenarbeiten durchgeführt": [
+        "Fliesen",
+        "Fliesenkleber",
+        "Fugenmörtel"
+      ],
+      "herstellung von silikonfugen": [
+        "Silikon"
+      ]
+    }
+  },
+  "shk": {
+    "normalizations": {
+      "rohre gelegt": "Rohrleitungen installiert",
+      "heizung eingebaut": "Heizungsanlage montiert",
+      "wasser angeschlossen": "Montage der Wasserleitungen",
+      "wasserleitung montiert": "Montage der Wasserleitungen"
+    },
+    "activity_terms": [
+      "rohrleitungen installiert",
+      "heizungsanlage montiert",
+      "trinkwasseranschlüsse hergestellt",
+      "montage der wasserleitungen"
+    ],
+    "material_terms": [
+      "rohrleitungen",
+      "fittings",
+      "befestigungsmaterial",
+      "heizungsanlage"
+    ],
+    "material_inference": {
+      "rohrleitungen installiert": [
+        "Rohrleitungen",
+        "Fittings",
+        "Befestigungsmaterial"
+      ],
+      "heizungsanlage montiert": [
+        "Heizungsanlage",
+        "Befestigungsmaterial"
+      ],
+      "trinkwasseranschlüsse hergestellt": [
+        "Rohrleitungen",
+        "Fittings"
+      ],
+      "montage der wasserleitungen": [
+        "Rohrleitungen",
+        "Fittings"
+      ]
+    }
+  },
+  "elektro": {
+    "normalizations": {
+      "kabel gezogen": "Leitungen verlegt",
+      "dosen gesetzt": "Installationsdosen gesetzt",
+      "lampe angeschlossen": "Leuchte angeschlossen"
+    },
+    "activity_terms": [
+      "leitungen verlegt",
+      "installationsdosen gesetzt",
+      "leuchte angeschlossen"
+    ],
+    "material_terms": [
+      "elektroleitungen",
+      "installationsmaterial",
+      "installationsdosen",
+      "leuchte"
+    ],
+    "material_inference": {
+      "leitungen verlegt": [
+        "Elektroleitungen",
+        "Installationsmaterial"
+      ],
+      "installationsdosen gesetzt": [
+        "Installationsdosen",
+        "Installationsmaterial"
+      ],
+      "leuchte angeschlossen": [
+        "Leuchte",
+        "Installationsmaterial"
+      ]
+    }
+  },
+  "hochbau": {
+    "normalizations": {},
+    "activity_terms": [],
+    "material_terms": [],
+    "material_inference": {}
+  },
+  "tiefbau": {
+    "normalizations": {},
+    "activity_terms": [],
+    "material_terms": [],
+    "material_inference": {}
+  },
+  "sanierung": {
+    "normalizations": {
+      "schimmel weg gemacht": "Schimmelbefall behandelt",
+      "putz runter": "Altputz entfernt",
+      "sanierputz drauf": "Aufbringung von Sanierputz",
+      "entfeuchtungsputz": "Entfeuchtungsputz aufgetragen",
+      "alten putz runtergemacht": "Altputz entfernt",
+      "den alten putz runtergemacht": "Altputz entfernt",
+      "sanierputz drauf gemacht": "Aufbringung von Sanierputz",
+      "sanierputz aufgetragen": "Aufbringung von Sanierputz",
+      "sanierputz aufgebracht": "Aufbringung von Sanierputz"
+    },
+    "activity_terms": [
+      "altputz entfernt",
+      "schimmelbefall behandelt",
+      "sanierputz aufgetragen",
+      "aufbringung von sanierputz",
+      "entfeuchtungsputz aufgetragen"
+    ],
+    "material_terms": [
+      "sanierputz",
+      "entfeuchtungsputz",
+      "schutzmittel"
+    ],
+    "material_inference": {
+      "altputz entfernt": [
+        "Entsorgungsmaterial"
+      ],
+      "schimmelbefall behandelt": [
+        "Schimmelentferner",
+        "Schutzmittel"
+      ],
+      "sanierputz aufgetragen": [
+        "Sanierputz"
+      ],
+      "aufbringung von sanierputz": [
+        "Sanierputz",
+        "Grundierung"
+      ]
+    }
+  }
+}

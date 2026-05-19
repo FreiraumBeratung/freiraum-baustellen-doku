@@ -1,0 +1,10 @@
+{
+  "companyName": "Freiraum Beratung",
+  "contactPerson": "Denis Bytyqi",
+  "officeEmail": "max@test.de",
+  "phone": "015688998899",
+  "address": "Freiraum Straße 123",
+  "logoFilename": "45b8bcbaff4640c58ad83091bfffcd96.png",
+  "defaultExportFormat": "PDF",
+  "defaultRecipientEmail": "max@test.de"
+}

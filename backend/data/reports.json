@@ -1,0 +1,43 @@
+{
+  "reports": [
+    {
+      "id": "b424f38f-342d-4908-8ff4-849bb512886f",
+      "companyId": "local-company",
+      "companyName": "Freiraum Beratung",
+      "companyLogoUrl": "/uploads/logos/45b8bcbaff4640c58ad83091bfffcd96.png",
+      "officeEmail": "max@test.de",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "customerName": "Denis Bytyqi",
+      "date": "2026-05-19",
+      "employees": [
+        "Marcel",
+        "Matthias",
+        "Endrit"
+      ],
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "exportFormat": "PDF",
+      "rawText": "Heute haben wir 50 m² Pflaster gelegt und 3 m² Gartenmauer gebaut",
+      "structured": {
+        "summary": "19.05.2026: Auf der Baustelle wurden 50 m² Pflaster verlegt sowie 3 m² Gartenmauer gebaut.",
+        "activities": [
+          "50 m² Pflaster verlegt",
+          "3 m² Gartenmauer gebaut"
+        ],
+        "materials": [
+          "Pflastersteine"
+        ],
+        "materialSuggestions": [
+          "Splitt benutzt?",
+          "Schotter benutzt?",
+          "Fugensand benutzt?"
+        ],
+        "problems": [],
+        "openItems": [],
+        "customerTalk": "Keine Angabe"
+      },
+      "createdAt": "2026-05-19T16:44:48.886388+00:00"
+    }
+  ]
+}

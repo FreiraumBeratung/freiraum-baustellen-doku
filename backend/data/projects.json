@@ -1,0 +1,22 @@
+{
+  "projects": [
+    {
+      "id": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "name": "Denis Garten",
+      "customer": "Denis Bytyqi",
+      "address": "Kaisastraße 123",
+      "contactPerson": "Matthias",
+      "note": "Key Account",
+      "status": "aktiv"
+    },
+    {
+      "id": "3d63e137-2b84-4616-b5b9-9e446d780eee",
+      "name": "Mirjeta Garten",
+      "customer": "Mirjeta Bytyqi",
+      "address": "Nrrot somes 123",
+      "contactPerson": "",
+      "note": "",
+      "status": "aktiv"
+    }
+  ]
+}
