@@ -46,6 +46,14 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bhaben wir\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\b(?:dann noch|dann|anschließend|anschliessend|sowie|und dann)\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bdabei\b", ".", t, flags=re.IGNORECASE)
+    # Whisper-Verhoerer: "um" steht haeufig faelschlich fuer "und" direkt vor
+    # einer Mengenangabe (z.B. "verlegt um 4 Kubik Beton eingebracht").
+    t = re.sub(
+        r"\bum\s+(?=\d+(?:[.,]\d+)?\s*(?:kubik|kubikmeter|m³|m3|m²|m2|qm|tonnen?|kg|liter|stück|st))",
+        ". ",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bfür den untergrund\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bden graben\b", ". den graben", t, flags=re.IGNORECASE)
     t = re.sub(r"\bund\b", ".", t, flags=re.IGNORECASE)
@@ -68,9 +76,19 @@ _TRANSITION_VERBS = (
     "verfugt",
     "aufgetragen",
     "aufgebracht",
+    "verarbeitet",
+    "benutzt",
+    "verwendet",
+    "nachgearbeitet",
     "eingebaut",
     "gebaut",
     "gesetzt",
+    "gestellt",
+    "aufgestellt",
+    "aufgebaut",
+    "hochgezogen",
+    "aufgemauert",
+    "gemauert",
     "geschnitten",
     "befüllt",
     "befuellt",
@@ -145,12 +163,19 @@ _FOLLOW_NOUNS = (
     "ks-stein",
     "ks stein",
     "bewehrung",
+    "bewährung",
+    "bewahrung",
+    "bewehrungsstahl",
+    "bewährungsstahl",
     "schalung",
     "fundament",
     "wasserleitungen",
     "heizung",
     "heizkörper",
+    "herzkörper",
     "heizkoerper",
+    "thermostatventil",
+    "thermostatventile",
     "heizungsanschlüsse",
     "heizungsanschluesse",
     "filigrandecke",
@@ -211,6 +236,12 @@ _NUMBER_WORDS = (
     "elf",
     "zwölf",
     "zwoelf",
+    # Baustellensprache: "Fuenfer/Achter/Zehner" als Steinformat- oder
+    # Durchmesserangabe. Erlaubt Split nach Verb, wenn solch ein Format folgt.
+    "fünfer",
+    "fuenfer",
+    "achter",
+    "zehner",
 )
 
 
@@ -245,6 +276,16 @@ def _split_by_semantic_comma(part: str) -> list[str]:
     return splits if splits else [t]
 
 
+def normalize_for_match(text: str) -> str:
+    """Public alias of the internal normalization helper.
+
+    Useful for downstream modules that want to apply the same Whisper/
+    spelling fixes before running their own pattern matching, ohne dass dort
+    eigene Duplikate gepflegt werden muessen.
+    """
+    return _normalize_for_match(text)
+
+
 def _normalize_for_match(text: str) -> str:
     out = text.casefold()
     # Whisper-Fehler im Rohrkontext: "den/de en/d n 150 kg" -> "dn 150 kg"
@@ -274,23 +315,84 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bht\s*dn\s*\d+\b", "ht rohre", out)
     out = re.sub(r"\brasen[\s-]*kanten[\s-]*steine?\b", "rasenkantensteine", out)
     out = re.sub(r"\brasen[\s-]*kanten\b", "rasenkanten", out)
-    out = re.sub(r"\bbew(ä|ae)hrung\b|\bbewahrung\b", "bewehrung", out)
-    out = re.sub(r"\b(puroton|porroton|poriton|porit)\b", "poroton", out)
-    out = re.sub(r"\b(yetong|yton)\b", "ytong", out)
+    # Whisper-Verhoerer: "Bewaehrung/Bewahrung/Bewährung(sstahl)" auf
+    # "Bewehrung(sstahl)" vereinheitlichen. Wichtig: auch das Wortbestandteil
+    # "bewährungsstahl" wird erfasst, damit Dedupe spaeter greift.
+    out = re.sub(r"\bbew(?:ä|ae)hrungsstahl\b|\bbewahrungsstahl\b", "bewehrungsstahl", out)
+    out = re.sub(r"\bbew(?:ä|ae)hrung\b|\bbewahrung\b", "bewehrung", out)
+    # Whisper-Verhoerer: "Duennbettmoertel" wird haeufig zu "den Bettmoertel".
+    # Wir fangen "den bettmoertel" zentral als "duennbettmoertel" ab, bevor andere Patterns laufen.
+    out = re.sub(r"\bden\s+bettm(ö|oe)rtel\b", "dünnbettmörtel", out)
+    out = re.sub(r"\bd(ü|ue)nn[\s-]?bettm(ö|oe)rtel\b", "dünnbettmörtel", out)
+    # Familien-Normalisierung Hochbau: Poroton (Ziegel) vs Porit (Porenbeton).
+    # Wichtig: porit/purit gehoeren zur Porenbeton-Familie und duerfen NICHT zu poroton gemappt werden.
+    out = re.sub(r"\b(puroton|porroton|poriton|porotn|porothon)\b", "poroton", out)
+    out = re.sub(r"\b(purit|poriht|porriht|porith)\b", "porit", out)
+    out = re.sub(r"\b(yetong|yton|y-tong|y tong)\b", "ytong", out)
+    out = re.sub(r"\bporen\s*beton\b", "porenbeton", out)
+    out = re.sub(r"\bkalk\s*sandstein(e)?\b", "kalksandstein", out)
+    out = re.sub(r"\bherz\s*k(ö|oe)rper\b|\bherzk(ö|oe)rper\b", "heizkörper", out)
+    out = re.sub(r"\bmanschete\b", "manschette", out)
     out = _normalize_masonry_size_notation(out)
     out = re.sub(r"\s+", " ", out).strip()
     return out
 
 
+_STONE_WORD_PATTERN = r"(poroton|porit|porenbeton|ytong|kalksandstein|ks(?:[-\s]*stein(?:e)?)?|ziegel)"
+
+
 def _normalize_masonry_size_notation(text: str) -> str:
+    """Repariert Whisper-Fragmente bei Steinformaten (Poroton/Porit/KS).
+
+    Wichtige Invarianten:
+    - 15er bleibt 15er, 11,5er bleibt 11,5er, 17,5er bleibt 17,5er.
+    - Nur der Spezialfall "l5"/"el5" (Whisper-Verhoerer) wird zu 11,5er.
+    - "aporoton/aporit/aytong/aks" werden als " a poroton" entklebt.
+    - Format-Glue: "17 5 a poroton" -> "17,5er Poroton",
+      "15 a poroton" -> "15er Poroton" (NICHT 11,5er!).
+    """
+
     t = str(text or "")
-    if not re.search(r"\b(poroton|porenbeton|ytong|kalksandstein|ks(?:-stein)?|mauerwerk|ziegel|stein)\b", t):
+
+    # Whisper-Klebung: "aporoton/aporit/aytong/akalksandstein/aziegel" zuerst aufloesen,
+    # damit der Wachhund-Check unten die Steinwoerter findet. Wir splitten an der
+    # Wortgrenze vor "a" + Steinwort -> "a <stein>".
+    t = re.sub(
+        r"\ba(poroton|porit|porenbeton|ytong|kalksandstein|ziegel)\b",
+        r"a \1",
+        t,
+        flags=re.IGNORECASE,
+    )
+
+    if not re.search(rf"\b{_STONE_WORD_PATTERN}\b|\bmauerwerk\b|\bstein(?:e|en)?\b", t, flags=re.IGNORECASE):
         return t
-    # Baustellen-/Whisper-Varianten wie "11 fünfer", "17 fünfer".
+
+    # Halbzahlige Formate mit getrenntem "5" oder "fuenfer" + optionalem "a" + Steinwort.
+    # Beispiele: "17 5 a poroton" -> "17,5er Poroton", "11 5 porit" -> "11,5er Porit".
+    t = re.sub(
+        rf"\b(\d{{1,2}})\s+(?:5|fünfer|fuenfer)\s+(?:a\s+)?{_STONE_WORD_PATTERN}\b",
+        lambda m: f"{m.group(1)},5er {m.group(2)}",
+        t,
+        flags=re.IGNORECASE,
+    )
+
+    # Ganzzahlige Formate mit optionalem "a"-Glue + Steinwort.
+    # Beispiele: "15 a poroton" -> "15er Poroton", "24 poroton" -> "24er Poroton".
+    t = re.sub(
+        rf"\b(\d{{1,2}})\s+(?:a\s+)?{_STONE_WORD_PATTERN}\b",
+        lambda m: f"{m.group(1)}er {m.group(2)}",
+        t,
+        flags=re.IGNORECASE,
+    )
+
+    # Baustellensprache ohne explizites Steinwort: "11 fuenfer" -> "11,5er".
     t = re.sub(r"\b(\d{1,2})\s*(fünfer|fuenfer)\b", lambda m: f"{m.group(1)},5er", t, flags=re.IGNORECASE)
-    # Häufiger Whisper-Fehler: "l5/l5er/el5er" statt "11,5er".
+
+    # Whisper-Verhoerer "l5/l5er/el5/el5er" -> Spezialfall fuer 11,5er.
     t = re.sub(r"\b(?:l|el)\s*5(?:er)?\b", "11,5er", t, flags=re.IGNORECASE)
     t = re.sub(r"\b(?:l|el)\s*(fünfer|fuenfer)\b", "11,5er", t, flags=re.IGNORECASE)
+
+    t = re.sub(r"\s+", " ", t).strip()
     return t
 
 
@@ -414,7 +516,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return None
 
     # Fliesenleger
-    if "grundierung" in t and re.search(r"\b(aufgetragen|aufgebracht)\b", t):
+    if "grundierung" in t and re.search(r"\b(aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet)\b", t):
         return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
     if "abdichtung" in t and re.search(r"\b(hergestellt|aufgebracht|eingebaut)\b", t):
         return CanonicalActivity("abdichtung_hergestellt", "Abdichtung hergestellt", 71.0, False)
@@ -422,7 +524,18 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Fliesen verlegt" if qty else "Fliesen verlegt"
         return CanonicalActivity("fliesen_verlegt", text, 100.0, bool(qty))
-    if ("kleber" in t or "flexkleber" in t or "mittelbettmörtel" in t or "mittelbettmoertel" in t or "dünnbettmörtel" in t or "duennbettmoertel" in t) and re.search(
+    # Fliesenkleber/Flexkleber sind eindeutige Fliesen-Kontexte. Generischer
+    # "Baukleber" gehoert nicht hier rein, sonst wuerde Mauerwerks-Baukleber
+    # faelschlich zu "Fliesenkleber aufgetragen" werden.
+    fliesen_kleber_hit = re.search(
+        r"\b(fliesenkleber|flexkleber|mittelbettm(?:ö|oe)rtel)\b",
+        t,
+    )
+    duennbett_fliesen_context = (
+        re.search(r"\bd(?:ü|ue)nnbettm(?:ö|oe)rtel\b", t)
+        and re.search(r"\bfliesen\b", t)
+    )
+    if (fliesen_kleber_hit or duennbett_fliesen_context) and re.search(
         r"\b(gezogen|aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht|drauf)\b",
         t,
     ):
@@ -541,13 +654,37 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         else:
             text = "KG-Rohre verlegt"
         return CanonicalActivity("kg_rohre_verlegt", text, 89.0, bool(qty))
-    if re.search(r"\babzweig(e)?\b", t) and re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t):
-        context_probe = f"{t} | {str(raw_text or '').casefold()}"
+    raw_probe = str(raw_text or "").casefold()
+    if re.search(r"\babzweig(e)?\b", t) and (
+        re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t)
+        or re.search(r"\babzweig(e)?\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut)\b", raw_probe)
+    ):
+        context_probe = f"{t} | {raw_probe}"
         if "kg" in context_probe or "kanal" in context_probe:
             return CanonicalActivity("kg_abzweig_eingebaut", "KG-Abzweig eingebaut", 63.0, False)
         if "ht" in context_probe or "abwasser" in context_probe:
             return CanonicalActivity("ht_abzweig_eingebaut", "HT-Abzweig eingebaut", 62.0, False)
         return CanonicalActivity("abzweig_eingebaut", "Abzweig eingebaut", 58.0, False)
+    if re.search(r"\bb(ö|oe)gen?\b|\bbogen\b", t) and (
+        re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t)
+        or re.search(r"\bb(ö|oe)gen?\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut)\b", raw_probe)
+    ):
+        context_probe = f"{t} | {raw_probe}"
+        if "kg" in context_probe or "kanal" in context_probe:
+            return CanonicalActivity("kg_boegen_eingebaut", "KG-Bögen eingebaut", 62.5, False)
+        if "ht" in context_probe or "abwasser" in context_probe:
+            return CanonicalActivity("ht_boegen_eingebaut", "HT-Bögen eingebaut", 61.5, False)
+        return CanonicalActivity("boegen_eingebaut", "Bögen eingebaut", 57.5, False)
+    if re.search(r"\bmanschette\b", t) and (
+        re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t)
+        or re.search(r"\bmanschette\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut)\b", raw_probe)
+    ):
+        context_probe = f"{t} | {raw_probe}"
+        if "ht" in context_probe or "abwasser" in context_probe:
+            return CanonicalActivity("ht_manschette_montiert", "HT-Manschette montiert", 61.0, False)
+        return CanonicalActivity("manschette_montiert", "Manschette montiert", 56.0, False)
+    if re.search(r"\br(ü|ue)cklaufverschraubung(en)?\b", t) and re.search(r"\b(montiert|eingebaut|gesetzt|verschraubt)\b", t):
+        return CanonicalActivity("ruecklaufverschraubung_montiert", "Rücklaufverschraubung montiert", 57.0, False)
     if "fittings" in t:
         return CanonicalActivity("fittings_eingebaut", "Fittings eingebaut", 52.0, False)
     if ("ht rohre" in t or "ht rohr" in t or "innenabflussrohr" in t or "abwasserrohr" in t) and re.search(
@@ -584,13 +721,20 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("oberputz_aufgetragen", "Oberputz aufgetragen", 78.0, False)
     if "grundputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet)\b", t):
         return CanonicalActivity("grundputz_aufgetragen", "Grundputz aufgetragen", 77.0, False)
+    if "unterputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|nachgearbeitet)\b", t):
+        return CanonicalActivity("unterputz_aufgetragen", "Unterputz aufgetragen", 77.0, False)
     if ("innenputz" in t or "aussenputz" in t or "außenputz" in t) and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet)\b", t):
         if "innenputz" in t:
             return CanonicalActivity("innenputz_aufgetragen", "Innenputz aufgetragen", 76.0, False)
         return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.0, False)
     if re.search(r"\bputz\b", t) and re.search(r"\b(aufgebracht|aufgetragen|verarbeitet)\b", t):
         return CanonicalActivity("putz_aufgebracht", "Putz aufgebracht", 76.0, False)
-    if ("fassade" in t or "armierung" in t or "gewebe" in t) and re.search(r"\b(hergestellt|aufgebracht|eingebettet)\b", t):
+    if ("armierung" in t or "gewebe" in t) and re.search(r"\b(hergestellt|aufgebracht|eingebettet|ausgeführt|ausgefuehrt)\b", t):
+        raw_probe = str(raw_text or "").casefold()
+        if "fassade" in t or re.search(r"\bfassade|fassaden\b", raw_probe):
+            return CanonicalActivity("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, False)
+        return CanonicalActivity("armierung_ausgefuehrt", "Armierung ausgeführt", 71.5, False)
+    if "fassade" in t and re.search(r"\b(hergestellt|aufgebracht|eingebettet)\b", t):
         return CanonicalActivity("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, False)
     if "wdvs" in t and re.search(r"\b(gedämmt|angebracht|montiert|ausgeführt)\b", t):
         return CanonicalActivity("wdvs_ausgefuehrt", "WDVS ausgeführt", 73.0, False)
@@ -604,14 +748,17 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     ):
         return CanonicalActivity("bewehrung_eingebaut", "Bewehrung eingebaut", 84.0, False)
     if (
-        re.search(r"\b(mauerwerk|poroton|porenbeton|ytong|kalksandstein|ks(?:-stein)?|ziegel|stein)\b", t)
-        and re.search(r"\b(gemauert|gebaut|erstellt|gesetzt)\b", t)
+        re.search(r"\b(mauerwerk|poroton|porit|porenbeton|ytong|kalksandstein|ks(?:-stein)?|ziegel|stein)\b", t)
+        and re.search(r"\b(gemauert|gebaut|erstellt|gesetzt|verarbeitet|hochgezogen|aufgemauert)\b", t)
         and "gartenmauer" not in t
     ):
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Mauerwerk erstellt" if qty else "Mauerwerk erstellt"
         return CanonicalActivity("mauerwerk_erstellt", text, 84.0, bool(qty))
-    if "schalung" in t and re.search(r"\b(erstellt|gestellt|gebaut)\b", t):
+    if "schalung" in t and re.search(
+        r"\b(erstellt|gestellt|gebaut|aufgebaut|aufgestellt|montiert|gesetzt|aufgeschlagen)\b",
+        t,
+    ):
         return CanonicalActivity("schalung_erstellt", "Schalung erstellt", 83.0, False)
     if "beton" in t and re.search(r"\b(gegossen|eingebracht|verarbeitet)\b", t):
         qty = _extract_qty_m3(t)
@@ -773,6 +920,7 @@ def _compact_activity_items(items: list[str]) -> list[str]:
         if low.startswith("decke montiert") and any("decke abgehängt" in x.casefold() for x in out):
             continue
         out.append(t)
+
     # Wenn für Rand-/Rasenkantensteine sowohl eine generische als auch eine
     # Mengenvariante vorhanden ist, bleibt nur die Mengenvariante.
     has_quantified_edge_stone = any(
@@ -782,16 +930,37 @@ def _compact_activity_items(items: list[str]) -> list[str]:
         )
         for x in out
     )
-    if not has_quantified_edge_stone:
-        return out
+    if has_quantified_edge_stone:
+        filtered: list[str] = []
+        for item in out:
+            low = str(item).casefold()
+            if "randsteine gesetzt" in low or "rasenkantensteine gesetzt" in low:
+                has_qty = "lfm" in low or "stück" in low or bool(re.search(r"\b\d+(?:[.,]\d+)?\b", low))
+                if not has_qty:
+                    continue
+            filtered.append(item)
+        out = filtered
 
-    filtered: list[str] = []
+    # Generische Formteile durch gewerkspezifische Varianten ersetzen.
+    has_kg_bogen = any("kg-bögen eingebaut" in str(x).casefold() for x in out)
+    has_ht_bogen = any("ht-bögen eingebaut" in str(x).casefold() for x in out)
+    has_kg_abzweig = any("kg-abzweig eingebaut" in str(x).casefold() for x in out)
+    has_ht_abzweig = any("ht-abzweig eingebaut" in str(x).casefold() for x in out)
+    # Bewehrungs-Dedupe: "Bewehrung eingebaut" (kanonisch) schlaegt jede
+    # Variante mit "Bewehrungsstahl/Bewährungsstahl" - es ist dieselbe Sache.
+    has_bewehrung = any(
+        re.match(r"^bewehrung\s+(eingebaut|verlegt|gestellt)$", str(x).casefold())
+        for x in out
+    )
+    cleaned: list[str] = []
     for item in out:
         low = str(item).casefold()
-        if "randsteine gesetzt" in low or "rasenkantensteine gesetzt" in low:
-            has_qty = "lfm" in low or "stück" in low or bool(re.search(r"\b\d+(?:[.,]\d+)?\b", low))
-            if not has_qty:
-                continue
-        filtered.append(item)
-    return filtered
+        if (has_kg_bogen or has_ht_bogen) and low == "bögen eingebaut":
+            continue
+        if (has_kg_abzweig or has_ht_abzweig) and low == "abzweig eingebaut":
+            continue
+        if has_bewehrung and re.search(r"\bbew(?:e|ä|ae)hrungsstahl\b", low):
+            continue
+        cleaned.append(item)
+    return cleaned
 

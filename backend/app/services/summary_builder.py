@@ -43,6 +43,7 @@ def build_deterministic_summary(
 ) -> str:
     items = [_clean_fragment(x, raw_text=raw_text) for x in activities if str(x).strip()]
     items = [x for x in items if x]
+    items = _prune_redundant_fragments(items)
     closure_sentence = _closure_sentence(raw_text)
     if not items:
         if closure_sentence:
@@ -118,7 +119,38 @@ def _clean_fragment(value: str, *, raw_text: str = "") -> str:
     )
     out = _apply_quantity_certainty(out, raw_text=raw_text)
     out = _humanize_quantity_phrases(out, raw_text=raw_text)
+    out = re.sub(r"\bherzk(ö|oe)rper\b", "Heizkörper", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bmanschete\b", "Manschette", out, flags=re.IGNORECASE)
+    # Wiederholte Fragmente aus Whisper-Ketten glätten.
+    out = re.sub(
+        r"\b(Thermostatventile eingebaut)\s+\1\b",
+        r"\1",
+        out,
+        flags=re.IGNORECASE,
+    )
     out = re.sub(r"\s+", " ", out).strip(" ,.;")
+    return out
+
+
+def _prune_redundant_fragments(items: list[str]) -> list[str]:
+    vals = [str(x).strip() for x in items if str(x).strip()]
+    if len(vals) < 2:
+        return vals
+    out: list[str] = []
+    lower_vals = [v.casefold() for v in vals]
+    for idx, value in enumerate(vals):
+        low = lower_vals[idx]
+        # Entfernt überlange Mischfragmente, wenn deren Teilaussagen bereits
+        # als eigene saubere Tätigkeiten vorhanden sind.
+        covered_by_two = 0
+        for jdx, other in enumerate(lower_vals):
+            if idx == jdx:
+                continue
+            if other and other in low and other != low:
+                covered_by_two += 1
+        if covered_by_two >= 2:
+            continue
+        out.append(value)
     return out
 
 
@@ -152,15 +184,56 @@ def _second_sentence(secondaries: list[str], *, hidden_count: int = 0) -> str:
     parts = [p for p in parts if p]
     if not parts:
         return ""
+    style_probe = " | ".join(parts).casefold()
+    list_style_terms = (
+        "putz",
+        "haftgrund",
+        "armierung",
+        "wdvs",
+        "thermostatventil",
+        "rücklaufverschraubung",
+        "ruecklaufverschraubung",
+        "manschette",
+        "abzweig",
+        "bögen",
+        "boegen",
+    )
+    prefer_list_style = any(term in style_probe for term in list_style_terms)
+    # Hochbau-/Rohbau-Kontext: Bei klassischen Rohbau-Begriffen wirkt der
+    # gleichfoermige "Zusaetzlich"-Auftakt redundant. "Ausserdem" klingt
+    # natuerlicher und vermeidet den Listen-Eindruck.
+    rohbau_terms = (
+        "schalung",
+        "bewehrung",
+        "fundament",
+        "mauerwerk",
+        "beton ",
+        "beton.",
+        "filigrandecke",
+    )
+    is_rohbau_context = any(term in style_probe for term in rohbau_terms)
+    secondary_intro_one = "Außerdem" if is_rohbau_context else "Zusätzlich"
+    secondary_intro_pair = "Außerdem" if is_rohbau_context else "Zusätzlich"
     if len(parts) == 1:
         one = _normalize_secondary_phrase(parts[0], single_mode=True)
+        if prefer_list_style:
+            sentence = f"Ergänzend: {one}."
+            if hidden_count > 0:
+                sentence += " Weitere Arbeiten sind in den Tätigkeiten dokumentiert."
+            return sentence
         verb = "wurde" if _is_singular_secondary(one) else "wurden"
-        sentence = f"Zusätzlich {verb} {one}."
+        sentence = f"{secondary_intro_one} {verb} {one}."
+        if hidden_count > 0:
+            sentence += " Weitere Arbeiten sind in den Tätigkeiten dokumentiert."
+        return sentence
+    if prefer_list_style:
+        listed = _join_with_und(parts)
+        sentence = f"Ergänzend: {listed}."
         if hidden_count > 0:
             sentence += " Weitere Arbeiten sind in den Tätigkeiten dokumentiert."
         return sentence
     if len(parts) == 2:
-        sentence = f"Zusätzlich wurden {parts[0]} und {parts[1]}."
+        sentence = f"{secondary_intro_pair} wurden {parts[0]} und {parts[1]}."
         if hidden_count > 0:
             sentence += " Weitere Arbeiten sind in den Tätigkeiten dokumentiert."
         return sentence

@@ -20,6 +20,15 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from office_mail import send_report_to_office
 from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
 from report_structure import structure_report_fields
+from app.services.mail_autodiscover import (
+    provider_hint_for,
+    verify_smtp_credentials,
+)
+from app.services.mail_store import (
+    get_mail_config,
+    has_mail_config,
+    save_mail_config,
+)
 from app.services.quality_filter import apply_quality_filter
 from services.ai_report_service import structure_report_with_ai
 from services.trade_language_service import (
@@ -149,6 +158,56 @@ class LoginBody(BaseModel):
 def hash_password_plain_v1(password: str) -> str:
     # TODO: Passwort-Hashing für Produktivbetrieb ergänzen (bcrypt/argon2)
     return password
+
+
+def _format_smtp_error_message(
+    headline: str,
+    smtp_error: str | None,
+    provider_hint: str | None,
+) -> str:
+    """Kompakte, mehrzeilige Fehlermeldung fuer das Login-/Register-UI.
+
+    Das Frontend rendert HTTPException-``detail``-Strings mit ``whitespace-pre-line``,
+    so dass wir Provider-Hinweise (z.B. App-Passwort) direkt anhaengen koennen.
+    """
+    parts: list[str] = [headline]
+    if smtp_error:
+        parts.append(smtp_error)
+    if provider_hint:
+        parts.append("Hinweis: " + provider_hint)
+    return "\n".join(parts)
+
+
+def _verify_and_store_smtp(email: str, password: str) -> dict[str, Any]:
+    """Führt Auto-Discovery + SMTP-Login durch und speichert die Konfiguration
+    bei Erfolg im verschlüsselten Mail-Store. Liefert ein kompaktes Status-Dict
+    zurück, das dem Frontend Provider-Hinweise und Quelle (Preset/Guess) zeigt.
+    """
+    result = verify_smtp_credentials(email, password)
+    if not result.ok or result.candidate is None:
+        return {
+            "ok": False,
+            "error": result.error or "SMTP-Verifizierung fehlgeschlagen",
+            "provider_hint": result.provider_hint or provider_hint_for(email),
+        }
+    cand = result.candidate
+    save_mail_config(
+        email,
+        password,
+        host=cand.host,
+        port=cand.port,
+        use_tls=cand.use_tls,
+        use_ssl=cand.use_ssl,
+        source=cand.source,
+    )
+    return {
+        "ok": True,
+        "host": cand.host,
+        "port": cand.port,
+        "use_tls": cand.use_tls,
+        "use_ssl": cand.use_ssl,
+        "source": cand.source,
+    }
 
 
 def get_users() -> list[dict]:
@@ -284,17 +343,31 @@ def debug_ping() -> dict[str, Any]:
 
 @app.post("/api/auth/register")
 def register(body: RegisterBody):
-    if find_user_by_email(body.email):
+    email_norm = str(body.email).strip().lower()
+    if find_user_by_email(email_norm):
         raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
 
-    # TODO: Passwort-Hashing für Produktivbetrieb ergänzen
+    # SMTP-Auto-Discovery + Login-Test als Eintrittsbedingung. Ohne gueltige
+    # Mail-Credentials wird KEIN User angelegt - so ist sichergestellt, dass der
+    # Tagesbericht-Versand direkt funktioniert.
+    smtp_status = _verify_and_store_smtp(email_norm, body.password)
+    if not smtp_status.get("ok"):
+        raise HTTPException(
+            status_code=400,
+            detail=_format_smtp_error_message(
+                "Mail-Anbindung fehlgeschlagen",
+                smtp_status.get("error"),
+                smtp_status.get("provider_hint"),
+            ),
+        )
+
     pwd_store = hash_password_plain_v1(body.password)
     user_id = str(uuid.uuid4())
     user = {
         "id": user_id,
         "companyName": body.companyName,
         "entrepreneurName": body.entrepreneurName,
-        "email": str(body.email).strip().lower(),
+        "email": email_norm,
         "password": pwd_store,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
@@ -318,22 +391,99 @@ def register(body: RegisterBody):
     if not prof.get("companyName"):
         prof["companyName"] = body.companyName
         prof["contactPerson"] = body.entrepreneurName
-        prof["officeEmail"] = str(body.email)
-        prof["defaultRecipientEmail"] = str(body.email)
+        prof["officeEmail"] = email_norm
+        prof["defaultRecipientEmail"] = email_norm
         _write_json(COMPANY_FILE, prof)
 
-    return {"access_token": user_id, "token_type": "bearer", "user_id": user_id}
+    return {
+        "access_token": user_id,
+        "token_type": "bearer",
+        "user_id": user_id,
+        "mail": {
+            "configured": True,
+            "host": smtp_status.get("host"),
+            "port": smtp_status.get("port"),
+            "source": smtp_status.get("source"),
+        },
+    }
 
 
 @app.post("/api/auth/login")
 def login(body: LoginBody):
-    user = find_user_by_email(str(body.email))
+    email_norm = str(body.email).strip().lower()
+    user = find_user_by_email(email_norm)
+
     if not user:
+        # Kein lokaler User vorhanden - aktuelle Auth-Architektur erfordert
+        # eine separate Registrierung. Wir geben den gleichen 401 zurueck wie
+        # bei Passwort-Fehlern und lassen das Frontend auf "Registrieren" leiten.
         raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
-    # TODO: Passwort-Hashing für Produktivbetrieb ergänzen
-    if user.get("password") != hash_password_plain_v1(body.password):
-        raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
-    return {"access_token": user["id"], "token_type": "bearer", "user_id": user["id"]}
+
+    local_pw_ok = user.get("password") == hash_password_plain_v1(body.password)
+
+    if not local_pw_ok:
+        # Fallback: Vielleicht wurde das Mail-Passwort beim Provider geaendert.
+        # Wenn der echte SMTP-Login erfolgreich ist, synchronisieren wir das
+        # lokale Passwort und lassen den User durch. Sonst harter 401.
+        smtp_status = _verify_and_store_smtp(email_norm, body.password)
+        if not smtp_status.get("ok"):
+            raise HTTPException(
+                status_code=401,
+                detail=_format_smtp_error_message(
+                    "Ungültige Zugangsdaten",
+                    smtp_status.get("error"),
+                    smtp_status.get("provider_hint"),
+                ),
+            )
+        users = get_users()
+        for u in users:
+            if u.get("email", "").lower() == email_norm:
+                u["password"] = hash_password_plain_v1(body.password)
+                break
+        save_users(users)
+        return {
+            "access_token": user["id"],
+            "token_type": "bearer",
+            "user_id": user["id"],
+            "mail": {
+                "configured": True,
+                "host": smtp_status.get("host"),
+                "port": smtp_status.get("port"),
+                "source": smtp_status.get("source"),
+                "synced_password": True,
+            },
+        }
+
+    # Lokales Passwort stimmt. SMTP wird best-effort verifiziert/aktualisiert -
+    # ein Fehler hier blockiert den App-Login NICHT, damit der User auch offline
+    # oder bei kurzzeitigen Provider-Problemen weiterarbeiten kann.
+    smtp_status = _verify_and_store_smtp(email_norm, body.password)
+    return {
+        "access_token": user["id"],
+        "token_type": "bearer",
+        "user_id": user["id"],
+        "mail": {
+            "configured": bool(smtp_status.get("ok")) or has_mail_config(email_norm),
+            "host": smtp_status.get("host"),
+            "port": smtp_status.get("port"),
+            "source": smtp_status.get("source"),
+            "smtp_error": None if smtp_status.get("ok") else smtp_status.get("error"),
+            "provider_hint": None if smtp_status.get("ok") else smtp_status.get("provider_hint"),
+        },
+    }
+
+
+@app.post("/api/auth/logout")
+def logout(_user: str = Depends(require_bearer)):
+    """Stateless Logout-Endpoint.
+
+    Das eigentliche Auslog-Token wird im Frontend (localStorage) entfernt. Die
+    zentrale Mail-Konfiguration bleibt bewusst erhalten, da innerhalb einer
+    Firma mehrere Mitarbeiter dieselbe Geschaefts-Mail nutzen koennen - jeder
+    naechste Login synchronisiert das Passwort bei Bedarf automatisch.
+    """
+    _ = _user
+    return {"ok": True}
 
 
 @app.get("/api/company-profile")
@@ -810,7 +960,6 @@ def send_report_to_office_endpoint(
     report_id: str,
     _user: str = Depends(require_bearer),
 ) -> SendOfficeResponse:
-    _ = _user
     rep = _find_report_doc(report_id)
     prof = _read_json(COMPANY_FILE, {})
     office = str(prof.get("officeEmail") or "").strip()
@@ -819,12 +968,31 @@ def send_report_to_office_endpoint(
             status_code=400,
             detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.",
         )
-    ok, simulated, message = send_report_to_office(rep, prof, office)
-    if not ok:
+
+    # SMTP-Daten aus dem verschluesselten User-Store laden. Token = user_id.
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == _user:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
         raise HTTPException(
-            status_code=500,
-            detail="Bericht konnte nicht gesendet werden.",
+            status_code=401,
+            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
         )
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_report_to_office(rep, prof, office, mail_config=mail_config)
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 

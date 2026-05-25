@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.activity_canonicalizer import canonicalize_activities
+from app.services.activity_canonicalizer import canonicalize_activities, normalize_for_match
 from app.services.human_language_engine import humanize_activity, humanize_material
 from app.services.summary_builder import build_deterministic_summary
 from app.services.trade_phrase_memory import apply_trade_phrase_memory, phrase_priority_boost
@@ -51,7 +51,9 @@ _ACTIVITY_REWRITE_RULES: tuple[tuple[str, str], ...] = (
     (r"\binnenputz\s+(?:aufgetragen|aufgebracht|verarbeitet)\b", "Innenputz aufgetragen"),
     (r"\b(aussenputz|außenputz)\s+(?:aufgetragen|aufgebracht|verarbeitet)\b", "Außenputz aufgetragen"),
     (r"\bein\s+abzweig\s+eingebaut\b", "Abzweig eingebaut"),
+    (r"\bein[e]?\s+manschette?\s+montiert\b", "HT-Manschette montiert"),
     (r"\buwe[-\s]*profil\s+montiert\b", "UW-Profil montiert"),
+    (r"\bherzk(ö|oe)rper\b", "Heizkörper"),
 )
 
 _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] = (
@@ -64,6 +66,7 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bfugen verspachtelt\b", ("Fugenspachtel",), (), ()),
     (r"\bsanierputz aufgebracht\b|\bsanierputz aufgetragen\b", ("Sanierputz",), (), ("Grundierung",)),
     (r"\boberputz aufgetragen\b", ("Oberputz",), (), ()),
+    (r"\bunterputz aufgetragen\b", ("Unterputz",), (), ()),
     (r"\bgrundputz aufgetragen\b", ("Grundputz",), (), ()),
     (r"\binnenputz aufgetragen\b", ("Innenputz",), (), ()),
     (r"\baußenputz aufgetragen\b|\baussenputz aufgetragen\b", ("Außenputz",), (), ()),
@@ -82,7 +85,9 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bheizungsanschlüsse montiert\b", (), ("Fittings",), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?kg-rohre verlegt\b", ("KG-Rohre",), ("KG-Bögen", "KG-Abzweige"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?ht-rohre verlegt\b", ("HT-Rohre",), ("HT-Bögen", "HT-Abzweige"), ()),
+    (r"\bht-manschette montiert\b", ("HT-Manschette",), (), ()),
     (r"\bfassadenarmierung ausgeführt\b|\bfassadenarmierung ausgefuehrt\b", ("Armierungsgewebe",), ("Armierungsmörtel",), ()),
+    (r"\barmierung ausgeführt\b|\barmierung ausgefuehrt\b", ("Armierungsgewebe",), ("Armierungsmörtel",), ()),
 )
 
 _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -96,6 +101,8 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bgipskartonplatten?\b", "Gipskartonplatten"),
     (r"\bsanierputz\b", "Sanierputz"),
     (r"\boberputz\b", "Oberputz"),
+    (r"\bunterputz\b", "Unterputz"),
+    (r"\bgrundierung\b|\bhaftgrund\b|\btiefgrund\b|\bbetonkontakt\b", "Grundierung"),
     (r"\bgrundputz\b", "Grundputz"),
     (r"\binnenputz\b", "Innenputz"),
     (r"\baussenputz\b|\baußenputz\b", "Außenputz"),
@@ -109,6 +116,7 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bht[-\s]*bögen?\b|\bht[-\s]*bogen\b", "HT-Bögen"),
     (r"\bkg[-\s]*abzweige?\b", "KG-Abzweige"),
     (r"\bht[-\s]*abzweige?\b", "HT-Abzweige"),
+    (r"\bht[-\s]*manschette\b|\bmanschette\b", "HT-Manschette"),
     (r"\bfittings\b", "Fittings"),
     (r"\bheizk(ö|oe)rper\b", "Heizkörper"),
     (r"\bthermostatventile?\b", "Thermostatventile"),
@@ -121,8 +129,16 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bmineralwolle\b", "Mineralwolle"),
     (r"\barmierungsgewebe\b", "Armierungsgewebe"),
     (r"\barmierungsm(ö|oe)rtel\b", "Armierungsmörtel"),
-    (r"\bporoton\b|\bporenbeton\b|\bytong\b", "Porenbetonsteine"),
+    (r"\bhaftgrund\b|\btiefgrund\b|\bbetonkontakt\b", "Haftgrund"),
+    (r"\bporoton(?:[-\s]*ziegel)?\b", "Poroton-Ziegel"),
+    (r"\b(?:porit|porenbeton|ytong)\b", "Porenbetonsteine"),
     (r"\bkalksandstein\b|\bks[-\s]*steine?\b|\bks\b", "Kalksandsteine"),
+    (r"\bschalung\b", "Schalung"),
+    (r"\bbewehrung(?:sstahl)?\b|\bbst\s*500\b", "Bewehrungsstahl"),
+    (r"\bd(ü|ue)nnbettm(ö|oe)rtel\b", "Dünnbettmörtel"),
+    (r"\bmauerm(ö|oe)rtel\b", "Mauermörtel"),
+    (r"\bbaukleber\b", "Baukleber"),
+    (r"\bbeton\b", "Beton"),
 )
 
 _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
@@ -262,6 +278,13 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         ),
     ),
     (
+        r"\barmierung ausgeführt\b|\barmierung ausgefuehrt\b",
+        (
+            ("Armierungsmörtel benutzt?", r"\barmierungsm(ö|oe)rtel\b"),
+            ("Armierungsgewebe benutzt?", r"\barmierungsgewebe\b"),
+        ),
+    ),
+    (
         r"\bschalung erstellt\b",
         (
             ("Schalöl benutzt?", r"\bschal(ö|oe)l\b"),
@@ -287,7 +310,17 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         r"\bmauerwerk erstellt\b",
         (
             ("Dünnbettmörtel benutzt?", r"\bd(ü|ue)nnbettm(ö|oe)rtel\b"),
+            ("Mauermörtel benutzt?", r"\bmauerm(ö|oe)rtel\b"),
+            ("Baukleber benutzt?", r"\bbaukleber\b"),
             ("Mauerwerksanker benutzt?", r"\bmauerwerksanker\b"),
+        ),
+    ),
+    (
+        r"\bbewehrung eingebaut\b|\bschalung erstellt\b|\bfundament erstellt\b",
+        (
+            ("Bewehrungsstahl benutzt?", r"\bbewehrungs?stahl\b|\bbst\s*500\b"),
+            ("Mattenstahl benutzt?", r"\bmattenstahl\b|\bbst[-\s]*matten\b"),
+            ("Rödeldraht benutzt?", r"\br(ö|oe)deldraht\b"),
         ),
     ),
     (
@@ -531,10 +564,33 @@ def _material_confidence_buckets(
     low: list[str] = []
     acts_join = " | ".join(activities).casefold()
     raw_probe = str(raw_text or "").casefold()
+    # Zweiter Probe-Text mit Whisper-/Schreibfehler-Reparatur, damit Patterns
+    # auch bei Varianten wie "Bewährung", "Aporoton", "11 5 a poroton" greifen.
+    raw_probe_norm = normalize_for_match(str(raw_text or ""))
 
     for pattern, value in _EXPLICIT_MATERIAL_PATTERNS:
-        if re.search(pattern, acts_join, flags=re.IGNORECASE) or re.search(pattern, raw_probe, flags=re.IGNORECASE):
+        if (
+            re.search(pattern, acts_join, flags=re.IGNORECASE)
+            or re.search(pattern, raw_probe, flags=re.IGNORECASE)
+            or re.search(pattern, raw_probe_norm, flags=re.IGNORECASE)
+        ):
             high.append(value)
+
+    # Sonderfall "Bettmoertel" ohne klares Praefix: Whisper macht aus
+    # "Duennbettmoertel" gelegentlich "den Bettmoertel" (zentral schon repariert),
+    # in anderen Faellen bleibt nur "Bettmoertel" stehen. Kontextabhaengig aufloesen:
+    # - im KS/Kalksandstein-Kontext -> "Mauermoertel"
+    # - im Porit/Ytong/Porenbeton-Kontext -> "Duennbettmoertel"
+    # - sonst (z.B. Poroton, neutral) -> "Duennbettmoertel" als haeufigste Lesart.
+    if re.search(r"\bbettm(ö|oe)rtel\b", raw_probe_norm, flags=re.IGNORECASE) and not re.search(
+        r"\bd(ü|ue)nnbettm(ö|oe)rtel\b|\bmittelbettm(ö|oe)rtel\b|\bdickbettm(ö|oe)rtel\b",
+        raw_probe_norm,
+        flags=re.IGNORECASE,
+    ):
+        if re.search(r"\bkalksandstein\b|\bks[-\s]*stein\b|\bks\b", raw_probe_norm, flags=re.IGNORECASE):
+            high.append("Mauermörtel")
+        else:
+            high.append("Dünnbettmörtel")
 
     for pattern, high_vals, med_vals, low_vals in _MATERIAL_CONFIDENCE_RULES:
         if re.search(pattern, acts_join, flags=re.IGNORECASE):
@@ -546,6 +602,12 @@ def _material_confidence_buckets(
         high.append(f"KG-Rohre DN {dn}")
     for dn in _extract_dn_values(raw_probe, kind="ht"):
         high.append(f"HT-Rohre DN {dn}")
+
+    # Deterministische Extraktion spezifischer Steinformate aus dem
+    # normalisierten Rohtext - greift unabhaengig von der AI-Strukturierung
+    # und sorgt fuer Konsistenz zwischen den Steinfamilien (Poroton/Porit/KS).
+    for fmt in _extract_stone_formats(raw_probe_norm):
+        high.append(fmt)
 
     for item in ai_materials:
         clean = _clean_material(item)
@@ -564,6 +626,52 @@ def _material_confidence_buckets(
         "medium": _dedupe([x for x in medium if x]),
         "low": _dedupe([x for x in low if x]),
     }
+
+
+def _extract_stone_formats(text: str) -> list[str]:
+    """Extrahiert spezifische Steinformate aus dem (normalisierten) Rohtext.
+
+    Liefert Materialien wie "15er Poroton", "17,5er KS", "11,5er Porit".
+    Wird in der HIGH-Konfidenz-Liste hinzugefuegt; der spaetere
+    `_prefer_specific_material_labels`-Schritt entfernt dann die generischen
+    Familieneintraege.
+    """
+    out: list[str] = []
+    t = str(text or "")
+    if not t:
+        return out
+
+    # Poroton-Familie (Ziegel)
+    for m in re.finditer(r"\b(\d{1,2})(?:[.,](5))?er\s+poroton\b", t, flags=re.IGNORECASE):
+        size = m.group(1)
+        if m.group(2):
+            size = f"{size},5"
+        out.append(f"{size}er Poroton")
+
+    # Porit/Ytong/Porenbeton-Familie
+    for m in re.finditer(
+        r"\b(\d{1,2})(?:[.,](5))?er\s+(porit|ytong|porenbeton)\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
+        size = m.group(1)
+        if m.group(2):
+            size = f"{size},5"
+        family = m.group(3).capitalize()
+        out.append(f"{size}er {family}")
+
+    # Kalksandstein-Familie (KS)
+    for m in re.finditer(
+        r"\b(\d{1,2})(?:[.,](5))?er\s+(?:ks|kalksandstein|ks[-\s]*stein)\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
+        size = m.group(1)
+        if m.group(2):
+            size = f"{size},5"
+        out.append(f"{size}er KS")
+
+    return out
 
 
 def _extract_dn_values(text: str, *, kind: str) -> list[str]:
@@ -760,6 +868,7 @@ def _material_key(value: str) -> str:
     t = re.sub(r"\babzweige\b", "abzweig", t)
     t = re.sub(r"\bb(ö|oe)gen\b", "bogen", t)
     t = re.sub(r"\bfittings\b", "fitting", t)
+    t = re.sub(r"\bboegen\b", "bogen", t)
     t = re.sub(r"[^a-z0-9äöüß/\s-]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
     return t
@@ -796,6 +905,109 @@ def _prefer_dn_specific_materials(materials: list[str]) -> list[str]:
         if has_kg_dn and low == "kg-rohre":
             continue
         if has_ht_dn and low == "ht-rohre":
+            continue
+        out.append(value)
+    return _dedupe(out)
+
+
+def _resolve_bettmoertel_conflicts(materials: list[str]) -> list[str]:
+    """Entfernt einen isolierten "Bettmoertel"-Eintrag, wenn bereits eine
+    spezifischere Moertel-Variante (Duenn-/Mittel-/Dickbett-/Mauermoertel) im
+    Material steht. Hintergrund: Whisper macht aus "Duennbettmoertel" oft
+    "den Bettmoertel"; die zentrale Normalisierung repariert das, aber AI-
+    Material-Extraktion liefert zusaetzlich rohes "Bettmoertel" - das ist eine
+    Dopplung.
+    """
+    vals = [str(x).strip() for x in materials if str(x).strip()]
+    if not vals:
+        return []
+    probe = " | ".join(v.casefold() for v in vals)
+    has_specific_mortar = bool(
+        re.search(r"\b(d(ü|ue)nnbett|mittelbett|dickbett)m(ö|oe)rtel\b", probe, flags=re.IGNORECASE)
+    ) or bool(re.search(r"\bmauerm(ö|oe)rtel\b", probe, flags=re.IGNORECASE))
+    if not has_specific_mortar:
+        return vals
+    out: list[str] = []
+    for v in vals:
+        if v.casefold().strip() in ("bettmörtel", "bettmoertel"):
+            continue
+        out.append(v)
+    return out
+
+
+def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
+    vals = [str(x).strip() for x in materials if str(x).strip()]
+    probe = " | ".join(v.casefold() for v in vals)
+
+    has_kg_bogen = "kg-bögen" in probe or "kg-boegen" in probe
+    has_ht_bogen = "ht-bögen" in probe or "ht-boegen" in probe
+    has_kg_abzweig = "kg-abzweige" in probe or "kg-abzweig" in probe
+    has_ht_abzweig = "ht-abzweige" in probe or "ht-abzweig" in probe
+    has_specific_putz = any(
+        key in probe
+        for key in ("oberputz", "unterputz", "innenputz", "außenputz", "aussenputz", "grundputz", "sanierputz")
+    )
+    # Spezifische Stein-Formate (z.B. "24er Poroton", "17,5er Poroton")
+    # ueberschreiben den generischen Familieneintrag ("Poroton-Ziegel").
+    has_specific_poroton = bool(
+        re.search(r"\b\d{1,2}(?:[.,]5)?er\s*poroton\b", probe, flags=re.IGNORECASE)
+    )
+    has_specific_porenbeton = bool(
+        re.search(r"\b\d{1,2}(?:[.,]5)?er\s*(?:porit|porenbeton|ytong)\b", probe, flags=re.IGNORECASE)
+    )
+    has_specific_ks = bool(
+        re.search(r"\b\d{1,2}(?:[.,]5)?er\s*(?:ks|kalksandstein)\b", probe, flags=re.IGNORECASE)
+    )
+
+    out: list[str] = []
+    for value in vals:
+        low = value.casefold()
+        if (has_kg_bogen or has_ht_bogen) and low in ("bögen", "bogen", "boegen"):
+            continue
+        if (has_kg_abzweig or has_ht_abzweig) and low in ("abzweige", "abzweig"):
+            continue
+        if has_specific_putz and low == "putz":
+            continue
+        if has_specific_poroton and low in ("poroton-ziegel", "poroton ziegel", "poroton"):
+            continue
+        if has_specific_porenbeton and low in ("porenbetonsteine", "porenbeton", "porit", "ytong"):
+            continue
+        if has_specific_ks and low in ("kalksandsteine", "kalksandstein", "ks", "ks-steine", "ks-stein"):
+            continue
+        out.append(value)
+    return _dedupe(out)
+
+
+def _apply_dn_to_pipe_fittings(materials: list[str], activities: list[str], raw_text: str) -> list[str]:
+    vals = [str(x).strip() for x in materials if str(x).strip()]
+    if not vals:
+        return []
+    acts_probe = " | ".join(str(x or "") for x in activities).casefold()
+    raw_probe = str(raw_text or "").casefold()
+    has_kg_context = bool(re.search(r"\bkg\b|\bkanal\b", f"{acts_probe} | {raw_probe}", flags=re.IGNORECASE))
+    has_ht_context = bool(re.search(r"\bht\b|\babwasser\b", f"{acts_probe} | {raw_probe}", flags=re.IGNORECASE))
+    kg_dns = _extract_dn_values(raw_text, kind="kg")
+    ht_dns = _extract_dn_values(raw_text, kind="ht")
+    kg_dn = kg_dns[0] if len(kg_dns) == 1 else None
+    ht_dn = ht_dns[0] if len(ht_dns) == 1 else None
+
+    out: list[str] = []
+    for value in vals:
+        low = value.casefold()
+        if kg_dn and (low in ("kg-bögen", "kg-boegen") or (has_kg_context and low in ("bögen", "bogen", "boegen"))):
+            out.append(f"KG-Bögen DN {kg_dn}")
+            continue
+        if kg_dn and (low in ("kg-abzweige", "kg-abzweig") or (has_kg_context and low in ("abzweige", "abzweig"))):
+            out.append(f"KG-Abzweige DN {kg_dn}")
+            continue
+        if ht_dn and (low in ("ht-bögen", "ht-boegen") or (has_ht_context and low in ("bögen", "bogen", "boegen"))):
+            out.append(f"HT-Bögen DN {ht_dn}")
+            continue
+        if ht_dn and (low in ("ht-abzweige", "ht-abzweig") or (has_ht_context and low in ("abzweige", "abzweig"))):
+            out.append(f"HT-Abzweige DN {ht_dn}")
+            continue
+        if ht_dn and low in ("manschette", "ht-manschette"):
+            out.append(f"HT-Manschette DN {ht_dn}")
             continue
         out.append(value)
     return _dedupe(out)
@@ -934,10 +1146,22 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
             return True
         return any("fliesen verlegt" in x.casefold() for x in all_activities)
     if "fliesenkleber aufgetragen" in low:
-        return bool(
-            re.search(r"\b\w*kleber\w*\b", raw)
-            and re.search(r"(gezogen|aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht|drauf)", raw)
+        has_verb = re.search(
+            r"(gezogen|aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht|drauf)",
+            raw,
         )
+        if not has_verb:
+            return False
+        if re.search(r"\bfliesenkleber\b|\bflexkleber\b|\bmittelbettm(ö|oe)rtel\b", raw):
+            return True
+        # Generischer "Kleber" zaehlt nur, wenn auch Fliesen-Kontext da ist.
+        if re.search(r"\b\w*kleber\b", raw) and re.search(r"\bfliesen?\b", raw):
+            return True
+        # Duennbettmoertel ist nur im Fliesen-Kontext eindeutig Fliesenkleber;
+        # im Mauerwerks-Kontext (Poroton/Porit/Ytong/KS) NICHT.
+        if re.search(r"\bd(ü|ue)nnbettm(ö|oe)rtel\b", raw) and re.search(r"\bfliesen?\b", raw):
+            return True
+        return False
     if "pflanzen gesetzt" in low:
         return bool(re.search(r"\bpflanz", raw) and re.search(r"(gesetzt|gepflanzt|bepflanzt|eingepflanzt)", raw))
     if "hecke geschnitten" in low:
@@ -1019,6 +1243,9 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     # Nur HIGH-Confidence-Materialien sind im finalen Bericht sichtbar.
     materials = _enforce_explicit_optional_materials(confidence["high"], raw_text)
     materials = _prefer_dn_specific_materials(materials)
+    materials = _apply_dn_to_pipe_fittings(materials, activities, raw_text)
+    materials = _resolve_bettmoertel_conflicts(materials)
+    materials = _prefer_specific_material_labels(materials)
     materials = _enforce_pipe_family_consistency(materials, activities, raw_text)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)

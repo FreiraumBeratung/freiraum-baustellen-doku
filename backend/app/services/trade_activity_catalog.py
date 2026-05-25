@@ -77,7 +77,7 @@ _TIEFBAU_RULES: tuple[_CatalogRule, ...] = (
 )
 
 _HOCHBAU_RULES: tuple[_CatalogRule, ...] = (
-    _CatalogRule("mauerwerk_erstellt", "Mauerwerk erstellt", 84.0, (r"\b(mauer|ziegel|kalksandstein|porenbeton)\b", r"\b(gemauert|gebaut|erstellt)\b")),
+    _CatalogRule("mauerwerk_erstellt", "Mauerwerk erstellt", 84.0, (r"\b(mauer(?:werk)?|ziegel|kalksandstein|ks[-\s]*stein|ks\b|porenbeton|poroton|porit|ytong)\b", r"\b(gemauert|gebaut|erstellt|aufgemauert|hochgezogen)\b")),
     _CatalogRule("schalung_erstellt", "Schalung erstellt", 83.0, (r"\bschalung\b", r"\b(erstellt|gebaut|gestellt)\b")),
     _CatalogRule("bewehrung_eingebaut", "Bewehrung eingebaut", 84.0, (r"\b(bewehrung|bewehrungsstahl|armierung)\b", r"\b(eingebaut|verlegt|gestellt)\b")),
     _CatalogRule("beton_eingebracht", "Beton eingebracht", 86.0, (r"\bbeton\b", r"\b(eingebracht|gegossen|verarbeitet|betoniert)\b")),

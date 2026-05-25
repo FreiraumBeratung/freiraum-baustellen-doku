@@ -15,6 +15,11 @@ backend/.env
 backend/uploads/
 !backend/uploads/.gitkeep
 
+# Mail-Verschlüsselungsschlüssel + verschlüsselte Mail-Konfigurationen
+# (niemals committen, gerätelokal pro Backend-Instanz)
+backend/data/.mail_key
+backend/data/mail_configs.json
+
 # mkcert Dev-Zertifikate (niemals committen)
 config/certs/*.pem
 

@@ -85,6 +85,9 @@ def main() -> int:
         for expected in case.get("expectedSummaryContains") or []:
             if str(expected).casefold() not in summary.casefold():
                 failures.append(f"{name}: summary fehlt -> {expected}")
+        for forbidden in case.get("forbiddenSummaryContains") or []:
+            if str(forbidden).casefold() in summary.casefold():
+                failures.append(f"{name}: summary darf nicht enthalten -> {forbidden}")
         expected_summary_exact = str(case.get("expectedSummaryExact") or "").strip()
         if expected_summary_exact:
             if _norm_text(summary) != _norm_text(expected_summary_exact):

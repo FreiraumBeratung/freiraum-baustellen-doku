@@ -490,12 +490,12 @@
       "expectedActivities": [
         "Innenputz aufgetragen",
         "WDVS ausgeführt",
-        "Fassadenarmierung ausgeführt"
+        "Armierung ausgeführt"
       ],
       "expectedSummaryContains": [
         "Innenputz",
         "WDVS",
-        "Fassadenarmierung"
+        "Armierung"
       ]
     },
     {
@@ -1108,6 +1108,266 @@
       ],
       "forbiddenActivities": [
         "5er verarbeitet bewährung"
+      ]
+    },
+    {
+      "name": "S3_HT_FormteileAlsAktivitaet",
+      "rawText": "Heute haben wir 22 laufende Meter HT DN 50 verlegt, zwei Bögen gesetzt, einen Abzweig eingebaut und eine Manschette montiert.",
+      "expectedActivities": [
+        "HT-Rohre DN 50 verlegt",
+        "HT-Bögen eingebaut",
+        "HT-Abzweig eingebaut",
+        "HT-Manschette montiert"
+      ],
+      "expectedMaterials": [
+        "HT-Bögen DN 50",
+        "HT-Abzweige DN 50",
+        "HT-Manschette DN 50",
+        "HT-Rohre DN 50"
+      ],
+      "forbiddenMaterials": [
+        "Manschette"
+      ]
+    },
+    {
+      "name": "S4_KG_MaterialSpezifischStattGenerisch",
+      "rawText": "Heute haben wir 30 laufende Meter Hunderter KG Rohr verlegt, danach KG Bögen und KG Abzweige eingebaut.",
+      "expectedMaterials": [
+        "KG-Rohre DN 110",
+        "KG-Bögen DN 110",
+        "KG-Abzweige DN 110"
+      ],
+      "forbiddenMaterials": [
+        "Bögen",
+        "Abzweige"
+      ],
+      "expectedMaterialSuggestions": [
+        "Reinigungsrohr DN 110 benutzt?"
+      ],
+      "forbiddenMaterialSuggestions": [
+        "KG-Bögen DN 110 benutzt?",
+        "KG-Abzweige DN 110 benutzt?"
+      ]
+    },
+    {
+      "name": "S5_SHK_WhisperDuplikatBereinigt",
+      "rawText": "Heute Wasserleitungen verlegt, drei herzkörper montiert, Thermostatventile eingebaut und Rücklaufverschraubungen gesetzt.",
+      "expectedActivities": [
+        "Wasserleitungen verlegt",
+        "Heizkörper montiert",
+        "Thermostatventile eingebaut",
+        "Rücklaufverschraubung montiert"
+      ],
+      "forbiddenActivities": [
+        "Drei herzkörper montiert thermostatventile eingebaut"
+      ],
+      "forbiddenSummaryContains": [
+        "thermostatventile eingebaut thermostatventile eingebaut"
+      ]
+    },
+    {
+      "name": "ST3_OberputzSchlaegtPutz",
+      "rawText": "Heute alten Putz runtergemacht, Schimmel entfernt, Haftgrund drauf und danach den neuen Oberputz aufgetragen.",
+      "expectedMaterials": [
+        "Oberputz",
+        "Haftgrund"
+      ],
+      "forbiddenMaterials": [
+        "Putz"
+      ]
+    },
+    {
+      "name": "ST5_UnterputzUndAussenputz",
+      "rawText": "Heute den Unterputz aufgetragen und danach Außenputz verarbeitet.",
+      "expectedActivities": [
+        "Unterputz aufgetragen",
+        "Außenputz aufgetragen"
+      ],
+      "expectedMaterials": [
+        "Unterputz",
+        "Außenputz"
+      ]
+    },
+    {
+      "name": "ST5_UserPhrase_GrundierungUndUnterputz",
+      "rawText": "Heute den neuen Aussenputz verarbeitet, Grundierung benutzt und Unterputz nachgearbeitet.",
+      "expectedActivities": [
+        "Außenputz aufgetragen",
+        "Grundierung aufgetragen",
+        "Unterputz aufgetragen"
+      ],
+      "expectedMaterials": [
+        "Außenputz",
+        "Grundierung",
+        "Unterputz"
+      ],
+      "expectedSummaryContains": [
+        "Grundierung",
+        "Unterputz"
+      ]
+    },
+    {
+      "name": "H3_WhisperGlue_17_5_AporotonBleibtPoroton",
+      "rawText": "Heute haben wir 25 m² 17 5 aporoton gemauert und Dünnbettmörtel verarbeitet.",
+      "expectedActivities": [
+        "Mauerwerk erstellt"
+      ],
+      "expectedMaterials": [
+        "17,5er Poroton",
+        "Dünnbettmörtel"
+      ],
+      "forbiddenMaterials": [
+        "Porenbetonsteine",
+        "Poroton-Ziegel"
+      ]
+    },
+    {
+      "name": "H4_PorenbetonPoritFamilieGetrennt",
+      "rawText": "Heute haben wir 15 m² 11 5 a porit hochgezogen, Baukleber benutzt und Bewehrung eingebaut.",
+      "expectedActivities": [
+        "Mauerwerk erstellt",
+        "Bewehrung eingebaut"
+      ],
+      "expectedMaterials": [
+        "11,5er Porit",
+        "Baukleber",
+        "Bewehrungsstahl"
+      ],
+      "forbiddenMaterials": [
+        "Poroton-Ziegel",
+        "Porenbetonsteine"
+      ]
+    },
+    {
+      "name": "H5_15erBleibt15er_NichtZu11_5",
+      "rawText": "Heute haben wir 30 m² 15 aporoton gemauert und Mauermörtel verarbeitet.",
+      "expectedActivities": [
+        "Mauerwerk erstellt"
+      ],
+      "expectedMaterials": [
+        "15er Poroton",
+        "Mauermörtel"
+      ],
+      "forbiddenSummaryContains": [
+        "11,5"
+      ],
+      "forbiddenMaterials": [
+        "Poroton-Ziegel"
+      ]
+    },
+    {
+      "name": "H6_KompletterRohbauWorkflow",
+      "rawText": "Heute Schalung gestellt, Bewehrung verarbeitet und 5 m³ Beton eingebracht.",
+      "expectedActivities": [
+        "Schalung erstellt",
+        "Bewehrung eingebaut",
+        "Beton eingebracht"
+      ],
+      "expectedMaterials": [
+        "Schalung",
+        "Bewehrungsstahl",
+        "Beton"
+      ]
+    },
+    {
+      "name": "H7_PorotonMix_15und24",
+      "rawText": "heute mit 15 aporoton gemauert 24er Poroton verarbeitet und Mauerwerk erstellt",
+      "expectedActivities": [
+        "Mauerwerk erstellt"
+      ],
+      "expectedMaterials": [
+        "15er Poroton",
+        "24er Poroton"
+      ],
+      "forbiddenMaterials": [
+        "Poroton-Ziegel"
+      ]
+    },
+    {
+      "name": "H8_KS_DenBettmoertel_Whisper",
+      "rawText": "heute 17.5er KS Stein gesetzt dann 15er Kalksandstein gemauert und den bettmörtel verwendet",
+      "expectedActivities": [
+        "Mauerwerk erstellt"
+      ],
+      "expectedMaterials": [
+        "17,5er KS",
+        "15er KS",
+        "Dünnbettmörtel"
+      ],
+      "forbiddenMaterials": [
+        "Bettmörtel",
+        "Kalksandsteine"
+      ]
+    },
+    {
+      "name": "H8b_KS_BettmoertelOhneDen_AlsMauermoertel",
+      "rawText": "heute 15er Kalksandstein gemauert und Bettmörtel verwendet",
+      "expectedMaterials": [
+        "15er KS",
+        "Mauermörtel"
+      ],
+      "forbiddenMaterials": [
+        "Bettmörtel",
+        "Kalksandsteine"
+      ]
+    },
+    {
+      "name": "H9_Bewehrungsstahl_DedupeMitBewehrung",
+      "rawText": "heute Schalung erstellt Fünfer Bewährung verarbeitet dann bewährungsstahl eingebaut und Beton eingebracht",
+      "expectedActivities": [
+        "Schalung erstellt",
+        "Bewehrung eingebaut",
+        "Beton eingebracht"
+      ],
+      "forbiddenActivities": [
+        "Bewährungsstahl eingebaut",
+        "Bewehrungsstahl eingebaut"
+      ],
+      "expectedMaterials": [
+        "Schalung",
+        "Bewehrungsstahl",
+        "Beton"
+      ]
+    },
+    {
+      "name": "H11_BettmoertelKonflikt_DuennbettWinsBettmoertel",
+      "rawText": "heute 11,5er Porit gemauert mit Dünnbettmörtel und Bettmörtel verarbeitet",
+      "expectedMaterials": [
+        "11,5er Porit",
+        "Dünnbettmörtel"
+      ],
+      "forbiddenMaterials": [
+        "Bettmörtel"
+      ]
+    },
+    {
+      "name": "H12_KSFormatSpezifik_MultiFormat",
+      "rawText": "heute 24er KS Stein gesetzt und 11,5er Kalksandstein gemauert sowie 17,5er KS verarbeitet",
+      "expectedMaterials": [
+        "24er KS",
+        "11,5er KS",
+        "17,5er KS"
+      ],
+      "forbiddenMaterials": [
+        "Kalksandsteine"
+      ]
+    },
+    {
+      "name": "H10_Fundament_UmWhisperFix",
+      "rawText": "heute Fundament erstellt Schalung gestellt Bewährung verlegt um 4 Kubik Beton eingebracht",
+      "expectedActivities": [
+        "Fundament erstellt",
+        "Schalung erstellt",
+        "Bewehrung eingebaut",
+        "Beton eingebracht"
+      ],
+      "expectedMaterials": [
+        "Schalung",
+        "Bewehrungsstahl",
+        "Beton"
+      ],
+      "expectedSummaryContains": [
+        "Außerdem"
       ]
     },
     {
