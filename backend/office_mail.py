@@ -17,6 +17,7 @@ import re
 import smtplib
 import ssl
 from email.message import EmailMessage
+from pathlib import Path
 from typing import Any
 
 from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
@@ -28,6 +29,7 @@ MSG_NOT_CONFIGURED = (
     "damit die SMTP-Daten geprüft und gespeichert werden."
 )
 MSG_SENT = "Bericht wurde ans Büro gesendet."
+MSG_SENT_WITH_PHOTOS = "Bericht mit {count} Foto(s) wurde ans Büro gesendet."
 
 
 def _format_date_de(date_raw: Any) -> str:
@@ -53,7 +55,7 @@ def _company_signoff_name(profile: dict[str, Any]) -> str:
     return "Ihr Team"
 
 
-def _build_mail_body(report: dict[str, Any], profile: dict[str, Any]) -> str:
+def _build_mail_body(report: dict[str, Any], profile: dict[str, Any], *, photo_count: int = 0) -> str:
     site = report.get("projectName") or "—"
     day = _format_date_de(report.get("date"))
     company = _company_signoff_name(profile)
@@ -64,9 +66,14 @@ def _build_mail_body(report: dict[str, Any], profile: dict[str, Any]) -> str:
         emps = "Keine Angabe"
     start = report.get("startTime") or "?"
     end = report.get("endTime") or "?"
+    photo_line = ""
+    if photo_count > 0:
+        label = "Baustellenfoto" if photo_count == 1 else "Baustellenfotos"
+        photo_line = f"{label}: {photo_count} Bild(er) im Anhang.\n\n"
     return (
         "Hallo,\n\n"
         f"anbei der Tagesbericht zur Baustelle {site} vom {day}.\n\n"
+        f"{photo_line}"
         f"Mitarbeiter: {emps}\n"
         f"Arbeitszeit: {start} – {end}\n\n"
         "Mit freundlichen Grüßen\n"
@@ -75,12 +82,99 @@ def _build_mail_body(report: dict[str, Any], profile: dict[str, Any]) -> str:
     )
 
 
+def _report_photos_list(report: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = report.get("photos")
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, dict)]
+
+
+def _safe_photo_path(filename: str, photos_dir: Path) -> Path | None:
+    fn = str(filename or "")
+    if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
+        return None
+    base = photos_dir.resolve()
+    path = (photos_dir / fn).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return path
+
+
+def _photo_mime(filename: str, content_type: Any) -> tuple[str, str]:
+    ct = str(content_type or "").split(";")[0].strip().lower()
+    if ct in {"image/jpeg", "image/png", "image/webp"}:
+        main, sub = ct.split("/", 1)
+        return main, sub
+    ext = Path(filename).suffix.lower()
+    if ext in {".jpg", ".jpeg"}:
+        return "image", "jpeg"
+    if ext == ".png":
+        return "image", "png"
+    if ext == ".webp":
+        return "image", "webp"
+    return "application", "octet-stream"
+
+
+def _photo_attachment_filename(entry: dict[str, Any], index: int) -> str:
+    original = str(entry.get("originalFilename") or "").strip()
+    if original:
+        name = Path(original).name
+        safe = re.sub(r"[^\w.\-]+", "_", name, flags=re.UNICODE)
+        if safe and len(safe) <= 120:
+            return safe
+    stored = str(entry.get("filename") or "")
+    ext = Path(stored).suffix.lower() or ".jpg"
+    if ext == ".jpeg":
+        ext = ".jpg"
+    return f"baustellenfoto_{index}{ext}"
+
+
+def _count_attachable_photos(report: dict[str, Any], photos_dir: Path | None) -> int:
+    if photos_dir is None:
+        return 0
+    count = 0
+    for entry in _report_photos_list(report):
+        fn = entry.get("filename")
+        if isinstance(fn, str) and _safe_photo_path(fn, photos_dir) is not None:
+            count += 1
+    return count
+
+
+def _attach_report_photos(msg: EmailMessage, report: dict[str, Any], photos_dir: Path | None) -> int:
+    if photos_dir is None:
+        return 0
+    attached = 0
+    for i, entry in enumerate(_report_photos_list(report), start=1):
+        fn = entry.get("filename")
+        if not isinstance(fn, str):
+            continue
+        path = _safe_photo_path(fn, photos_dir)
+        if path is None:
+            logger.warning("Baustellenfoto nicht gefunden oder ungueltig: %s", fn)
+            continue
+        try:
+            blob = path.read_bytes()
+        except OSError:
+            logger.warning("Baustellenfoto konnte nicht gelesen werden: %s", fn)
+            continue
+        main, sub = _photo_mime(fn, entry.get("contentType"))
+        attach_name = _photo_attachment_filename(entry, i)
+        msg.add_attachment(blob, maintype=main, subtype=sub, filename=attach_name)
+        attached += 1
+    return attached
+
+
 def send_report_to_office(
     report: dict[str, Any],
     profile: dict[str, Any],
     to_email: str,
     *,
     mail_config: dict[str, Any] | None = None,
+    photos_upload_dir: Path | str | None = None,
 ) -> tuple[bool, bool, str]:
     """Sendet den Tagesbericht per SMTP ans Büro.
 
@@ -92,6 +186,8 @@ def send_report_to_office(
         mail_config: SMTP-Konfiguration mit Feldern ``host``, ``port``,
             ``use_tls``, ``use_ssl``, ``email``, ``password``. Wird beim Login
             befüllt und aus dem verschlüsselten Mail-Store geladen.
+        photos_upload_dir: Verzeichnis der hochgeladenen Baustellenfotos
+            (``report["photos"]`` → Dateien auf Platte).
 
     Returns:
         Tuple ``(ok, simulated, message)``. ``simulated`` ist immer ``False``
@@ -114,7 +210,6 @@ def send_report_to_office(
 
     subject_day = _format_date_de(report.get("date"))
     subject = f"Tagesbericht: {report.get('projectName') or '—'} vom {subject_day}"
-    body = _build_mail_body(report, profile)
 
     fmt = str(report.get("exportFormat") or "PDF").strip().lower()
     try:
@@ -136,8 +231,14 @@ def send_report_to_office(
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_email
-    msg.set_content(body)
+
+    photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
+    photo_count = _count_attachable_photos(report, photos_dir)
+    msg.set_content(_build_mail_body(report, profile, photo_count=photo_count))
     msg.add_attachment(blob, maintype=main, subtype=sub, filename=ascii_fn)
+    attached_photos = _attach_report_photos(msg, report, photos_dir)
+    if attached_photos != photo_count:
+        photo_count = attached_photos
 
     ctx = ssl.create_default_context()
     try:
@@ -167,4 +268,4 @@ def send_report_to_office(
         logger.exception("SMTP-Fehler beim Versand")
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
-    return True, False, MSG_SENT
+    return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT

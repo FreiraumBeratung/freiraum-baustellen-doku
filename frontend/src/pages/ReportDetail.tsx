@@ -1,7 +1,14 @@
-import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, downloadExport } from '../api/client'
+import { ReportPhotosSection } from '../components/ReportPhotosSection'
+import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
+
+type ReportDetailNavState = {
+  openPhotos?: boolean
+  photoUploadOk?: boolean
+}
 
 type ReportDoc = {
   id: string
@@ -30,12 +37,19 @@ type ReportDoc = {
 export function ReportDetailPage() {
   const { id } = useParams()
   const nav = useNavigate()
+  const location = useLocation()
+  const navState = (location.state ?? null) as ReportDetailNavState | null
+  const searchParams = new URLSearchParams(location.search)
+  const openPhotosFromQuery = searchParams.get('photos') === '1'
+  const openSignaturesFromQuery = searchParams.get('signatures') === '1'
+  const uploadedFromQuery = searchParams.get('uploaded') === '1'
   const [r, setR] = useState<ReportDoc | null>(null)
   const [dlBusy, setDlBusy] = useState(false)
   const [dlErr, setDlErr] = useState('')
   const [officeBusy, setOfficeBusy] = useState(false)
   const [officeMsg, setOfficeMsg] = useState('')
   const [officeErr, setOfficeErr] = useState('')
+  const abschlussRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!id) return
@@ -43,6 +57,14 @@ export function ReportDetailPage() {
       .then(setR)
       .catch(() => setR(null))
   }, [id])
+
+  useEffect(() => {
+    if (!r || (!openPhotosFromQuery && !openSignaturesFromQuery)) return
+    const t = window.setTimeout(() => {
+      abschlussRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 350)
+    return () => window.clearTimeout(t)
+  }, [r, openPhotosFromQuery, openSignaturesFromQuery])
 
   async function dlExport(kind: 'pdf' | 'word') {
     if (!id) return
@@ -177,7 +199,29 @@ export function ReportDetailPage() {
         </section>
       </Card>
 
+      <div ref={abschlussRef} id="bericht-abschluss" className="mt-4 scroll-mt-4">
+        <Card>
+          <ReportPhotosSection
+            reportId={id}
+            enabled
+            embedded
+            iosGalleryRedirect
+            initialOpen={Boolean(navState?.openPhotos || openPhotosFromQuery)}
+          />
+          <ReportSignaturesSection
+            reportId={id}
+            enabled
+            embedded
+            customerName={report.customerName}
+            initialOpen={Boolean(openSignaturesFromQuery)}
+          />
+        </Card>
+      </div>
+
       <div className="mt-6 space-y-3">
+        {navState?.photoUploadOk || uploadedFromQuery ? (
+          <p className="text-center text-sm text-emerald-400/90">Foto übernommen.</p>
+        ) : null}
         {officeMsg ? <p className="text-sm text-orange-300">{officeMsg}</p> : null}
         {officeErr ? <p className="text-sm text-red-400">{officeErr}</p> : null}
         {dlErr ? <p className="text-sm text-red-400">{dlErr}</p> : null}

@@ -83,3 +83,10 @@ body {
 .freiraum-mic-recording {
   animation: freiraum-mic-record-pulse 1.05s ease-in-out infinite;
 }
+
+/* Foto-Upload: iOS-PWA — backdrop-blur an der Nav kann Black-Screen ausloesen. */
+body[data-photo-upload-busy='1'] nav[aria-label='Hauptnavigation'] {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background-color: #09090b;
+}

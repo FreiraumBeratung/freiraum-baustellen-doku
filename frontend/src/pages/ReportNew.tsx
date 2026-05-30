@@ -16,8 +16,10 @@ export type ReportPreviewState = {
   customerName: string
   date: string
   employees: string[]
+  employeeIds: string[]
   startTime: string
   endTime: string
+  breakMinutes: number
   exportFormat: string
   rawText: string
   structured: StructuredPayload
@@ -55,6 +57,7 @@ export function ReportNewPage() {
   const [selectedEmp, setSelectedEmp] = useState<Record<string, boolean>>({})
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime] = useState('16:30')
+  const [breakMinutes, setBreakMinutes] = useState(45)
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
   const [busy, setBusy] = useState(false)
@@ -172,6 +175,7 @@ export function ReportNewPage() {
     setBusy(true)
     try {
       const names = employees.filter((e) => selectedEmp[e.id]).map((e) => e.name)
+      const ids = employees.filter((e) => selectedEmp[e.id]).map((e) => e.id)
       const r = await api<{
         projectName: string
         customerName: string
@@ -218,8 +222,10 @@ export function ReportNewPage() {
         customerName: proj?.customer || r.customerName,
         date: r.date,
         employees: names,
+        employeeIds: ids,
         startTime,
         endTime,
+        breakMinutes,
         exportFormat: r.exportFormat,
         rawText,
         structured,
@@ -298,6 +304,21 @@ export function ReportNewPage() {
               />
             </label>
           </div>
+
+          <label className="block">
+            <span className="text-[0.875rem] text-zinc-500">Pause</span>
+            <select
+              className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+              value={breakMinutes}
+              onChange={(e) => setBreakMinutes(Number(e.target.value))}
+            >
+              <option value={0}>Keine Pause</option>
+              <option value={30}>30 Minuten</option>
+              <option value={45}>45 Minuten</option>
+              <option value={60}>60 Minuten</option>
+              <option value={90}>90 Minuten</option>
+            </select>
+          </label>
 
           <label className="block">
             <span className="text-[0.875rem] text-zinc-500">Ausgabeformat</span>

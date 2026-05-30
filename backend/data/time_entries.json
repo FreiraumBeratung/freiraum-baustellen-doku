@@ -1,0 +1,69 @@
+{
+  "entries": [
+    {
+      "id": "5de9cccc-3e4b-4c48-ab7e-42591615ebd8",
+      "source": "manual",
+      "reportId": null,
+      "employeeId": "70d13c48-b15a-4c68-a011-73b09b4a2dc1",
+      "employeeName": "Endrit",
+      "date": "2026-05-30",
+      "projectId": null,
+      "projectName": "Manuelle Korrektur",
+      "startTime": "",
+      "endTime": "",
+      "breakMinutes": 0,
+      "hours": -5.0,
+      "note": "Früher nach Hause gegangen",
+      "createdAt": "2026-05-30T16:29:52.565485+00:00",
+      "updatedAt": "2026-05-30T16:29:52.565485+00:00"
+    },
+    {
+      "id": "9674f4fe-2f78-43b4-a8dc-cc86625ffc92",
+      "source": "report",
+      "reportId": "35ba2bce-fb5b-4b58-9ae7-07795ffd234c",
+      "employeeId": "8e18a1db-278a-4069-98b5-d64dd8e3ea3a",
+      "employeeName": "Marcel",
+      "date": "2026-05-30",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "breakMinutes": 45,
+      "hours": 7.75,
+      "createdAt": "2026-05-30T17:00:52.908156+00:00",
+      "updatedAt": "2026-05-30T17:00:52.908156+00:00"
+    },
+    {
+      "id": "33f51ce2-6b23-474c-a60a-87ea1c638096",
+      "source": "report",
+      "reportId": "35ba2bce-fb5b-4b58-9ae7-07795ffd234c",
+      "employeeId": "d26b97d7-8422-448f-8940-7be6906b5813",
+      "employeeName": "Matthias",
+      "date": "2026-05-30",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "breakMinutes": 45,
+      "hours": 7.75,
+      "createdAt": "2026-05-30T17:00:52.908156+00:00",
+      "updatedAt": "2026-05-30T17:00:52.908156+00:00"
+    },
+    {
+      "id": "19262b9e-c6db-4269-81a7-001355114804",
+      "source": "report",
+      "reportId": "35ba2bce-fb5b-4b58-9ae7-07795ffd234c",
+      "employeeId": "70d13c48-b15a-4c68-a011-73b09b4a2dc1",
+      "employeeName": "Endrit",
+      "date": "2026-05-30",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "breakMinutes": 45,
+      "hours": 7.75,
+      "createdAt": "2026-05-30T17:00:52.908156+00:00",
+      "updatedAt": "2026-05-30T17:00:52.908156+00:00"
+    }
+  ]
+}

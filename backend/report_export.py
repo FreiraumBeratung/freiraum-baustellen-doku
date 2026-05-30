@@ -27,6 +27,8 @@ SOFT_BG_HEX = HexColor("#f4f4f5")
 TEXT_DARK_HEX = HexColor("#111827")
 SECTION_HEX = HexColor("#1f2937")
 LOGO_DIR = Path(__file__).resolve().parent / "uploads" / "logos"
+SIGNATURES_DIR = Path(__file__).resolve().parent / "uploads" / "signatures"
+SIGNATURE_ROLES = ("customer", "employee")
 
 
 def sanitize_export_slug(s: str) -> str:
@@ -142,6 +144,151 @@ def _logo_image_for_pdf(path: Path, max_width_cm: float, max_height_cm: float) -
     img = Image(str(path), width=float(iw) * scale, height=float(ih) * scale)
     img.hAlign = "LEFT"
     return img
+
+
+def _report_signatures_doc(report: dict[str, Any]) -> dict[str, dict[str, Any] | None]:
+    raw = report.get("signatures")
+    out: dict[str, dict[str, Any] | None] = {"customer": None, "employee": None}
+    if not isinstance(raw, dict):
+        return out
+    for role in SIGNATURE_ROLES:
+        entry = raw.get(role)
+        if isinstance(entry, dict) and entry.get("filename"):
+            out[role] = entry
+    return out
+
+
+def _safe_signature_path(filename: str) -> Path | None:
+    fn = str(filename or "")
+    if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
+        return None
+    base = SIGNATURES_DIR.resolve()
+    path = (SIGNATURES_DIR / fn).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        return None
+    if not path.is_file():
+        return None
+    return path
+
+
+def _format_signed_at_de(signed_at: Any, fallback_date: Any = None) -> str:
+    s = str(signed_at or "").strip()
+    if s:
+        m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+        if m:
+            return f"{m.group(3)}.{m.group(2)}.{m.group(1)}"
+        m2 = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", s[:10])
+        if m2:
+            return f"{int(m2.group(3))}.{int(m2.group(2))}.{m2.group(1)}"
+    return _format_date_de(str(fallback_date or "—"))
+
+
+def _signature_image_for_pdf(path: Path, max_width: float, max_height: float) -> Image | None:
+    try:
+        iw, ih = ImageReader(str(path)).getSize()
+    except Exception:
+        return None
+    if iw <= 0 or ih <= 0:
+        return None
+    scale = min(max_width / float(iw), max_height / float(ih), 1.0)
+    img = Image(str(path), width=float(iw) * scale, height=float(ih) * scale)
+    img.hAlign = "CENTER"
+    return img
+
+
+def _pdf_signature_cell(
+    entry: dict[str, Any] | None,
+    *,
+    default_label: str,
+    report_date: str,
+    col_width: float,
+    info_label_style: ParagraphStyle,
+    meta_style: ParagraphStyle,
+) -> list[Any]:
+    if not isinstance(entry, dict):
+        return [Spacer(1, 1)]
+    path = _safe_signature_path(str(entry.get("filename") or ""))
+    if path is None:
+        return [Spacer(1, 1)]
+
+    flows: list[Any] = []
+    img = _signature_image_for_pdf(path, max(col_width - 16, 40), 2.6 * cm)
+    if img:
+        flows.append(img)
+    else:
+        flows.append(Spacer(1, 28))
+
+    label = str(entry.get("signedByLabel") or default_label).strip() or default_label
+    date_line = _format_signed_at_de(entry.get("signedAt"), report_date)
+    flows.append(Spacer(1, 4))
+    flows.append(Paragraph(_xml_para_text(label), info_label_style))
+    flows.append(Paragraph(_xml_para_text(f"Datum: {date_line}"), meta_style))
+    return flows
+
+
+def _append_pdf_signatures(
+    story: list[Any],
+    doc_tpl: SimpleDocTemplate,
+    report: dict[str, Any],
+    *,
+    section_head: ParagraphStyle,
+    info_label_style: ParagraphStyle,
+    meta_style: ParagraphStyle,
+) -> None:
+    sigs = _report_signatures_doc(report)
+    customer = sigs.get("customer")
+    employee = sigs.get("employee")
+    has_customer = isinstance(customer, dict) and _safe_signature_path(str(customer.get("filename") or ""))
+    has_employee = isinstance(employee, dict) and _safe_signature_path(str(employee.get("filename") or ""))
+    if not has_customer and not has_employee:
+        return
+
+    report_date = str(report.get("date") or "—")
+    col_w = doc_tpl.width * 0.48
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(_xml_para_text("Unterschriften"), section_head))
+
+    sig_tbl = Table(
+        [
+            [
+                _pdf_signature_cell(
+                    customer if has_customer else None,
+                    default_label="Kunde",
+                    report_date=report_date,
+                    col_width=col_w,
+                    info_label_style=info_label_style,
+                    meta_style=meta_style,
+                ),
+                _pdf_signature_cell(
+                    employee if has_employee else None,
+                    default_label="Baustellenleitung / Mitarbeiter",
+                    report_date=report_date,
+                    col_width=col_w,
+                    info_label_style=info_label_style,
+                    meta_style=meta_style,
+                ),
+            ]
+        ],
+        colWidths=[col_w, col_w],
+        hAlign="LEFT",
+    )
+    sig_tbl.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("TOPPADDING", (0, 0), (-1, -1), 6),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("BOX", (0, 0), (0, 0), 0.5, LINE_HEX),
+                ("BOX", (1, 0), (1, 0), 0.5, LINE_HEX),
+            ]
+        )
+    )
+    story.append(sig_tbl)
 
 
 def build_pdf_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> bytes:
@@ -340,6 +487,15 @@ def build_pdf_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> 
 
     story.append(sec("Kundengespräch"))
     story.append(Paragraph(_xml_para_text(ktalk), section_text_style))
+
+    _append_pdf_signatures(
+        story,
+        doc_tpl,
+        report,
+        section_head=section_head,
+        info_label_style=info_label_style,
+        meta_style=meta_style,
+    )
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()

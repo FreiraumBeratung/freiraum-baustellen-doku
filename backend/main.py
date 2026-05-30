@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from office_mail import send_report_to_office
 from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
 from report_structure import structure_report_fields
+from app.services import time_account
 from app.services.mail_autodiscover import (
     provider_hint_for,
     verify_smtp_credentials,
@@ -50,11 +52,25 @@ COMPANY_FILE = DATA_DIR / "company_profile.json"
 EMPLOYEES_FILE = DATA_DIR / "employees.json"
 PROJECTS_FILE = DATA_DIR / "projects.json"
 REPORTS_FILE = DATA_DIR / "reports.json"
+TIME_ENTRIES_FILE = DATA_DIR / "time_entries.json"
 AUDIO_UPLOAD_DIR = BASE_DIR / "uploads" / "audio"
 AUDIO_UPLOADS_FILE = DATA_DIR / "audio_uploads.json"
+PHOTOS_UPLOAD_DIR = BASE_DIR / "uploads" / "photos"
+SIGNATURES_UPLOAD_DIR = BASE_DIR / "uploads" / "signatures"
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+PHOTOS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+time_account.configure(TIME_ENTRIES_FILE)
+
+MAX_PHOTOS_PER_REPORT = 10
+MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024
+SIGNATURE_ROLES = frozenset({"customer", "employee"})
+MAX_SIGNATURE_BYTES = 512 * 1024
+MIN_SIGNATURE_BYTES = 80
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 # --- CORS (DEV / WLAN-Handy): localhost + LAN-IPs auf Frontend-Port 51710 -------------
 # FREIRAUM_DEV_LAN_CORS=0 schaltet Regex ab (nur noch localhost / 127.0.0.1).
@@ -253,12 +269,23 @@ class EmployeeCreate(BaseModel):
     name: str
     role: str | None = ""
     active: bool = True
+    hoursBalanceStart: float = 0.0
+    hoursBalanceStartDate: str | None = None
 
 
 class EmployeePatch(BaseModel):
     name: str | None = None
     role: str | None = None
     active: bool | None = None
+    hoursBalanceStart: float | None = None
+    hoursBalanceStartDate: str | None = None
+
+
+class TimeEntryCreate(BaseModel):
+    employeeId: str
+    date: str
+    hours: float
+    note: str
 
 
 # --- Projects ---
@@ -315,8 +342,10 @@ class ReportCreateBody(BaseModel):
     customerName: str = ""
     date: str
     employees: list[str] = []
+    employeeIds: list[str] = []
     startTime: str
     endTime: str
+    breakMinutes: int = Field(default=45, ge=0, le=480)
     exportFormat: str = "PDF"
     rawText: str
     structured: StructuredBlock
@@ -644,7 +673,14 @@ def create_employee(body: EmployeeCreate, _user: str = Depends(require_bearer)):
         "name": body.name.strip(),
         "role": (body.role or "").strip(),
         "active": body.active,
+        "hoursBalanceStart": round(float(body.hoursBalanceStart), 2),
     }
+    start_date = time_account.employee_hours_balance_start_date({"hoursBalanceStartDate": body.hoursBalanceStartDate})
+    hours_start = emp["hoursBalanceStart"]
+    if hours_start != 0 and not start_date:
+        raise HTTPException(status_code=400, detail="Stand zum Datum erforderlich bei Startsaldo ungleich 0")
+    if start_date:
+        emp["hoursBalanceStartDate"] = start_date
     data.setdefault("employees", []).append(emp)
     _write_json(EMPLOYEES_FILE, data)
     return emp
@@ -662,9 +698,154 @@ def patch_employee(employee_id: str, body: EmployeePatch, _user: str = Depends(r
                 e["role"] = body.role
             if body.active is not None:
                 e["active"] = body.active
+            if body.hoursBalanceStart is not None:
+                e["hoursBalanceStart"] = round(float(body.hoursBalanceStart), 2)
+            if body.hoursBalanceStartDate is not None:
+                raw_date = str(body.hoursBalanceStartDate or "").strip()
+                if not raw_date:
+                    e.pop("hoursBalanceStartDate", None)
+                else:
+                    normalized = time_account.employee_hours_balance_start_date({"hoursBalanceStartDate": raw_date})
+                    if not normalized:
+                        raise HTTPException(status_code=400, detail="Ungültiges Datum für Startsaldo (YYYY-MM-DD)")
+                    e["hoursBalanceStartDate"] = normalized
+            hours_start = round(float(e.get("hoursBalanceStart") or 0), 2)
+            if hours_start != 0 and not time_account.employee_hours_balance_start_date(e):
+                raise HTTPException(status_code=400, detail="Stand zum Datum erforderlich bei Startsaldo ungleich 0")
+            if hours_start == 0:
+                e.pop("hoursBalanceStartDate", None)
             _write_json(EMPLOYEES_FILE, data)
             return e
     raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+
+
+@app.get("/api/time-entries")
+def list_time_entries_endpoint(
+    employeeId: str | None = None,
+    month: str | None = None,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    entries = time_account.list_time_entries(
+        read_json=_read_json,
+        employee_id=employeeId,
+        month=month,
+    )
+    return {"entries": entries, "count": len(entries)}
+
+
+@app.post("/api/time-entries")
+def create_time_entry_endpoint(body: TimeEntryCreate, _user: str = Depends(require_bearer)):
+    _ = _user
+    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    try:
+        entry = time_account.create_manual_time_entry(
+            employee_id=body.employeeId,
+            date_str=body.date,
+            hours=body.hours,
+            note=body.note,
+            employees=list(employees_data.get("employees") or []),
+            read_json=_read_json,
+            write_json=_write_json,
+        )
+    except ValueError as exc:
+        code = str(exc)
+        messages = {
+            "employee_not_found": "Mitarbeiter nicht gefunden",
+            "invalid_date": "Ungültiges Datum (YYYY-MM-DD)",
+            "hours_zero": "Stunden dürfen nicht 0 sein",
+            "hours_out_of_range": "Stunden müssen zwischen -24 und +24 liegen",
+            "note_required": "Bitte kurzen Grund angeben (mind. 2 Zeichen)",
+        }
+        raise HTTPException(status_code=400, detail=messages.get(code, "Ungültige Korrektur")) from exc
+    return entry
+
+
+@app.delete("/api/time-entries/{entry_id}")
+def delete_time_entry_endpoint(entry_id: str, _user: str = Depends(require_bearer)):
+    _ = _user
+    removed = time_account.delete_time_entry(entry_id, read_json=_read_json, write_json=_write_json)
+    if not removed:
+        raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
+    return {"ok": True}
+
+
+@app.get("/api/time-accounts")
+def list_time_accounts_endpoint(
+    month: str | None = None,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    return time_account.list_time_accounts(
+        list(employees_data.get("employees") or []),
+        read_json=_read_json,
+        month=month,
+    )
+
+
+def _time_export_payload(month: str | None) -> dict[str, Any]:
+    month_prefix = str(month or datetime.now(timezone.utc).strftime("%Y-%m")).strip()[:7]
+    if not re.match(r"^\d{4}-\d{2}$", month_prefix):
+        raise HTTPException(status_code=400, detail="Ungültiger Monat (YYYY-MM)")
+
+    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    employees = list(employees_data.get("employees") or [])
+    entries = time_account.list_time_entries(read_json=_read_json, month=month_prefix)
+    reports_data = _read_json(REPORTS_FILE, {"reports": []})
+    reports_by_id = {
+        str(r.get("id") or ""): r for r in (reports_data.get("reports") or []) if isinstance(r, dict) and r.get("id")
+    }
+    entries = time_account.enrich_entries_for_export(entries, reports_by_id)
+    accounts_doc = time_account.list_time_accounts(employees, read_json=_read_json, month=month_prefix)
+    company = _read_json(COMPANY_FILE, {})
+    company_name = str(company.get("companyName") or "")
+
+    return {
+        "entries": entries,
+        "accounts": list(accounts_doc.get("accounts") or []),
+        "month": month_prefix,
+        "company_name": company_name,
+    }
+
+
+@app.get("/api/time-accounts/export/csv")
+def export_time_accounts_csv(
+    month: str | None = None,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    payload = _time_export_payload(month)
+    blob = time_account.build_time_export_csv(**payload)
+    ascii_fn = f"stundenkonto_{payload['month']}.csv"
+    return Response(
+        content=blob,
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": _content_disposition_attachment(ascii_fn, ascii_fn),
+        },
+    )
+
+
+@app.get("/api/time-accounts/export/xlsx")
+def export_time_accounts_xlsx(
+    month: str | None = None,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    payload = _time_export_payload(month)
+    try:
+        blob = time_account.build_time_export_xlsx(**payload)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Excel-Export konnte nicht erstellt werden.") from exc
+    ascii_fn = f"stundenkonto_{payload['month']}.xlsx"
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": _content_disposition_attachment(ascii_fn, ascii_fn),
+        },
+    )
 
 
 @app.get("/api/projects")
@@ -900,14 +1081,25 @@ def create_report(body: ReportCreateBody, _user: str = Depends(require_bearer)):
         "customerName": body.customerName,
         "date": body.date,
         "employees": body.employees,
+        "employeeIds": [str(x).strip() for x in body.employeeIds if str(x).strip()],
         "startTime": body.startTime,
         "endTime": body.endTime,
+        "breakMinutes": int(body.breakMinutes),
         "exportFormat": body.exportFormat,
         "rawText": body.rawText,
         "structured": body.structured.model_dump(),
+        "photos": [],
+        "signatures": {"customer": None, "employee": None},
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     _write_json_reports(doc)
+    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    doc["timeBooking"] = time_account.sync_entries_for_report(
+        doc,
+        list(employees_data.get("employees") or []),
+        read_json=_read_json,
+        write_json=_write_json,
+    )
     return doc
 
 
@@ -923,6 +1115,182 @@ def _find_report_doc(report_id: str) -> dict[str, Any]:
         if r.get("id") == report_id:
             return r
     raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+
+
+def _report_photos_list(report: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = report.get("photos")
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, dict)]
+
+
+def _photo_public_url(filename: str) -> str:
+    return f"/uploads/photos/{filename}"
+
+
+def _photo_api_item(entry: dict[str, Any]) -> dict[str, Any]:
+    fn = str(entry.get("filename") or "")
+    return {
+        "id": entry.get("id"),
+        "filename": fn,
+        "originalFilename": entry.get("originalFilename"),
+        "contentType": entry.get("contentType"),
+        "sizeBytes": entry.get("sizeBytes"),
+        "uploadedAt": entry.get("uploadedAt"),
+        "url": _photo_public_url(fn) if fn else None,
+    }
+
+
+def _resolve_photo_path(filename: str) -> Path:
+    fn = str(filename or "")
+    if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
+        raise HTTPException(status_code=400, detail="Ungültiger Fotodateiname")
+    base = PHOTOS_UPLOAD_DIR.resolve()
+    path = (PHOTOS_UPLOAD_DIR / fn).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    return path
+
+
+def _guess_photo_extension(content_type: str | None, filename: str) -> str:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    if ct == "image/jpeg":
+        return "jpg"
+    if ct == "image/png":
+        return "png"
+    if ct == "image/webp":
+        return "webp"
+    ext = Path(filename or "").suffix.lower()
+    if ext == ".jpeg":
+        return "jpg"
+    if ext in {".jpg", ".png", ".webp"}:
+        return ext.lstrip(".")
+    return "jpg"
+
+
+def _save_report_photos(report_id: str, photos: list[dict[str, Any]]) -> None:
+    data = _read_json(REPORTS_FILE, {"reports": []})
+    for r in data.get("reports", []):
+        if r.get("id") == report_id:
+            r["photos"] = photos
+            _write_json(REPORTS_FILE, data)
+            return
+    raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+
+
+def _delete_report_photo_files(report: dict[str, Any]) -> None:
+    for entry in _report_photos_list(report):
+        fn = entry.get("filename")
+        if not isinstance(fn, str) or not fn:
+            continue
+        try:
+            path = _resolve_photo_path(fn)
+            path.unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+
+
+def _empty_signatures_doc() -> dict[str, Any]:
+    return {"customer": None, "employee": None}
+
+
+def _report_signatures_doc(report: dict[str, Any]) -> dict[str, Any]:
+    raw = report.get("signatures")
+    out = _empty_signatures_doc()
+    if not isinstance(raw, dict):
+        return out
+    for role in SIGNATURE_ROLES:
+        entry = raw.get(role)
+        if isinstance(entry, dict) and entry.get("filename"):
+            out[role] = entry
+    return out
+
+
+def _signature_public_url(filename: str) -> str:
+    return f"/uploads/signatures/{filename}"
+
+
+def _signature_api_item(role: str, entry: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not isinstance(entry, dict):
+        return None
+    fn = str(entry.get("filename") or "")
+    if not fn:
+        return None
+    return {
+        "id": entry.get("id"),
+        "role": role,
+        "filename": fn,
+        "contentType": entry.get("contentType"),
+        "sizeBytes": entry.get("sizeBytes"),
+        "signedAt": entry.get("signedAt"),
+        "signedByLabel": entry.get("signedByLabel"),
+        "url": _signature_public_url(fn),
+    }
+
+
+def _resolve_signature_path(filename: str) -> Path:
+    fn = str(filename or "")
+    if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
+        raise HTTPException(status_code=400, detail="Ungültiger Signaturdateiname")
+    base = SIGNATURES_UPLOAD_DIR.resolve()
+    path = (SIGNATURES_UPLOAD_DIR / fn).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
+    return path
+
+
+def _validate_signature_role(role: str) -> str:
+    r = str(role or "").strip().lower()
+    if r not in SIGNATURE_ROLES:
+        raise HTTPException(status_code=400, detail="Ungültige Signatur-Rolle.")
+    return r
+
+
+def _validate_signature_png(content: bytes) -> None:
+    n = len(content)
+    if n < MIN_SIGNATURE_BYTES:
+        raise HTTPException(status_code=400, detail="Signatur ist leer oder zu klein.")
+    if n > MAX_SIGNATURE_BYTES:
+        raise HTTPException(status_code=400, detail="Signaturdatei zu groß.")
+    if not content.startswith(PNG_MAGIC):
+        raise HTTPException(status_code=400, detail="Nur PNG-Signaturen erlaubt.")
+
+
+def _save_report_signatures(report_id: str, signatures: dict[str, Any]) -> None:
+    data = _read_json(REPORTS_FILE, {"reports": []})
+    for r in data.get("reports", []):
+        if r.get("id") == report_id:
+            r["signatures"] = signatures
+            _write_json(REPORTS_FILE, data)
+            return
+    raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+
+
+def _delete_signature_file(filename: str | None) -> None:
+    if not isinstance(filename, str) or not filename:
+        return
+    try:
+        _resolve_signature_path(filename).unlink(missing_ok=True)
+    except HTTPException:
+        pass
+    except OSError:
+        pass
+
+
+def _delete_report_signature_files(report: dict[str, Any]) -> None:
+    for entry in _report_signatures_doc(report).values():
+        if isinstance(entry, dict):
+            _delete_signature_file(entry.get("filename"))
 
 
 def _content_disposition_attachment(ascii_filename: str, utf8_filename: str) -> str:
@@ -941,12 +1309,212 @@ def delete_report(report_id: str, _user: str = Depends(require_bearer)):
     _ = _user
     data = _read_json(REPORTS_FILE, {"reports": []})
     reports_list = list(data.get("reports", []))
-    next_list = [r for r in reports_list if r.get("id") != report_id]
-    if len(next_list) == len(reports_list):
+    target = next((r for r in reports_list if r.get("id") == report_id), None)
+    if target is None:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+    _delete_report_photo_files(target)
+    _delete_report_signature_files(target)
+    time_account.delete_entries_for_report(report_id, read_json=_read_json, write_json=_write_json)
+    next_list = [r for r in reports_list if r.get("id") != report_id]
     data["reports"] = next_list
     _write_json(REPORTS_FILE, data)
     return {"ok": True}
+
+
+@app.get("/api/reports/{report_id}/photos")
+def list_report_photos(report_id: str, _user: str = Depends(require_bearer)):
+    _ = _user
+    report = _find_report_doc(report_id)
+    photos = [_photo_api_item(p) for p in _report_photos_list(report)]
+    return {
+        "photos": photos,
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_REPORT,
+    }
+
+
+@app.post("/api/reports/{report_id}/photos")
+async def upload_report_photo(
+    report_id: str,
+    file: UploadFile = File(...),
+    _user: str = Depends(require_bearer),
+):
+    """Baustellenfoto zu einem gespeicherten Tagesbericht hochladen (max. 10 pro Bericht)."""
+    _ = _user
+    report = _find_report_doc(report_id)
+    photos = _report_photos_list(report)
+    if len(photos) >= MAX_PHOTOS_PER_REPORT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {MAX_PHOTOS_PER_REPORT} Fotos pro Bericht erlaubt.",
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
+    if ext not in {".jpg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Nur JPEG-, PNG- oder WebP-Bilder erlaubt")
+
+    content = await file.read()
+    n = len(content)
+    if n == 0:
+        raise HTTPException(status_code=400, detail="Leere Bilddatei")
+    if n > MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+
+    photo_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    file_ext = _guess_photo_extension(file.content_type, file.filename or "")
+    safe_name = f"photo_{ts}_{photo_id}.{file_ext}"
+    dest = PHOTOS_UPLOAD_DIR / safe_name
+    dest.write_bytes(content)
+
+    original = file.filename if file.filename else ""
+    ctype = file.content_type if file.content_type else "application/octet-stream"
+    entry: dict[str, Any] = {
+        "id": photo_id,
+        "filename": safe_name,
+        "originalFilename": original,
+        "contentType": ctype,
+        "sizeBytes": n,
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    photos.append(entry)
+    _save_report_photos(report_id, photos)
+
+    return {
+        "ok": True,
+        "photo": _photo_api_item(entry),
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_REPORT,
+    }
+
+
+@app.delete("/api/reports/{report_id}/photos/{photo_id}")
+def delete_report_photo(
+    report_id: str,
+    photo_id: str,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    report = _find_report_doc(report_id)
+    photos = _report_photos_list(report)
+    kept: list[dict[str, Any]] = []
+    removed: dict[str, Any] | None = None
+    for p in photos:
+        if str(p.get("id")) == photo_id and removed is None:
+            removed = p
+            continue
+        kept.append(p)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+
+    fn = removed.get("filename")
+    if isinstance(fn, str) and fn:
+        try:
+            _resolve_photo_path(fn).unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+
+    _save_report_photos(report_id, kept)
+    return {
+        "ok": True,
+        "count": len(kept),
+        "maxPhotos": MAX_PHOTOS_PER_REPORT,
+    }
+
+
+def _signatures_api_payload(report: dict[str, Any]) -> dict[str, Any]:
+    doc = _report_signatures_doc(report)
+    return {
+        role: _signature_api_item(role, doc.get(role))
+        for role in sorted(SIGNATURE_ROLES)
+    }
+
+
+@app.get("/api/reports/{report_id}/signatures")
+def list_report_signatures(report_id: str, _user: str = Depends(require_bearer)):
+    _ = _user
+    report = _find_report_doc(report_id)
+    signatures = _signatures_api_payload(report)
+    count = sum(1 for v in signatures.values() if v is not None)
+    return {"signatures": signatures, "count": count}
+
+
+@app.post("/api/reports/{report_id}/signatures/{role}")
+async def upload_report_signature(
+    report_id: str,
+    role: str,
+    file: UploadFile = File(...),
+    signedByLabel: str | None = Form(None),
+    _user: str = Depends(require_bearer),
+):
+    """Unterschrift fuer Kunde oder Mitarbeiter speichern (PNG, max. eine pro Rolle)."""
+    _ = _user
+    sig_role = _validate_signature_role(role)
+    report = _find_report_doc(report_id)
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+
+    content = await file.read()
+    _validate_signature_png(content)
+
+    signatures = _report_signatures_doc(report)
+    previous = signatures.get(sig_role)
+    if isinstance(previous, dict):
+        _delete_signature_file(previous.get("filename"))
+
+    sig_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    safe_name = f"sig_{ts}_{sig_role}_{sig_id}.png"
+    dest = SIGNATURES_UPLOAD_DIR / safe_name
+    dest.write_bytes(content)
+
+    label = str(signedByLabel or "").strip()[:120] or None
+    entry: dict[str, Any] = {
+        "id": sig_id,
+        "role": sig_role,
+        "filename": safe_name,
+        "contentType": "image/png",
+        "sizeBytes": len(content),
+        "signedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if label:
+        entry["signedByLabel"] = label
+
+    signatures[sig_role] = entry
+    _save_report_signatures(report_id, signatures)
+
+    item = _signature_api_item(sig_role, entry)
+    count = sum(1 for v in signatures.values() if isinstance(v, dict))
+    return {"ok": True, "signature": item, "signatures": _signatures_api_payload({"signatures": signatures}), "count": count}
+
+
+@app.delete("/api/reports/{report_id}/signatures/{role}")
+def delete_report_signature(
+    report_id: str,
+    role: str,
+    _user: str = Depends(require_bearer),
+):
+    _ = _user
+    sig_role = _validate_signature_role(role)
+    report = _find_report_doc(report_id)
+    signatures = _report_signatures_doc(report)
+    previous = signatures.get(sig_role)
+    if not isinstance(previous, dict):
+        raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
+
+    _delete_signature_file(previous.get("filename"))
+    signatures[sig_role] = None
+    _save_report_signatures(report_id, signatures)
+    count = sum(1 for v in signatures.values() if isinstance(v, dict))
+    return {"ok": True, "signatures": _signatures_api_payload({"signatures": signatures}), "count": count}
 
 
 class SendOfficeResponse(BaseModel):
@@ -990,7 +1558,13 @@ def send_report_to_office_endpoint(
             ),
         )
 
-    ok, simulated, message = send_report_to_office(rep, prof, office, mail_config=mail_config)
+    ok, simulated, message = send_report_to_office(
+        rep,
+        prof,
+        office,
+        mail_config=mail_config,
+        photos_upload_dir=PHOTOS_UPLOAD_DIR,
+    )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)

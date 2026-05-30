@@ -195,6 +195,136 @@ export async function uploadReportAudio(
   return res.json() as Promise<AudioUploadResponse>
 }
 
+export type ReportPhoto = {
+  id: string
+  filename: string
+  originalFilename?: string | null
+  contentType?: string | null
+  sizeBytes?: number | null
+  uploadedAt?: string | null
+  url: string | null
+}
+
+export type ReportPhotosResponse = {
+  photos: ReportPhoto[]
+  count: number
+  maxPhotos: number
+}
+
+export async function listReportPhotos(reportId: string): Promise<ReportPhotosResponse> {
+  return api<ReportPhotosResponse>(`/api/reports/${encodeURIComponent(reportId)}/photos`)
+}
+
+export async function uploadReportPhoto(reportId: string, file: File): Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'photo.jpg')
+
+  const url = resolveApiUrl(`/api/reports/${encodeURIComponent(reportId)}/photos`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText || 'Foto konnte nicht hochgeladen werden')
+  }
+
+  return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
+}
+
+export async function deleteReportPhoto(reportId: string, photoId: string): Promise<{ ok: boolean; count: number; maxPhotos: number }> {
+  return api<{ ok: boolean; count: number; maxPhotos: number }>(
+    `/api/reports/${encodeURIComponent(reportId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export type SignatureRole = 'customer' | 'employee'
+
+export type ReportSignature = {
+  id: string
+  role: SignatureRole
+  filename: string
+  contentType?: string | null
+  sizeBytes?: number | null
+  signedAt?: string | null
+  signedByLabel?: string | null
+  url: string | null
+}
+
+export type ReportSignaturesResponse = {
+  signatures: {
+    customer: ReportSignature | null
+    employee: ReportSignature | null
+  }
+  count: number
+}
+
+export async function listReportSignatures(reportId: string): Promise<ReportSignaturesResponse> {
+  return api<ReportSignaturesResponse>(`/api/reports/${encodeURIComponent(reportId)}/signatures`)
+}
+
+export async function uploadReportSignature(
+  reportId: string,
+  role: SignatureRole,
+  file: File,
+  signedByLabel?: string,
+): Promise<ReportSignaturesResponse & { ok: boolean; signature: ReportSignature }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'signature.png')
+  if (signedByLabel?.trim()) {
+    fd.append('signedByLabel', signedByLabel.trim())
+  }
+
+  const url = resolveApiUrl(`/api/reports/${encodeURIComponent(reportId)}/signatures/${encodeURIComponent(role)}`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText || 'Unterschrift konnte nicht gespeichert werden')
+  }
+
+  return res.json() as Promise<ReportSignaturesResponse & { ok: boolean; signature: ReportSignature }>
+}
+
+export async function deleteReportSignature(
+  reportId: string,
+  role: SignatureRole,
+): Promise<ReportSignaturesResponse & { ok: boolean }> {
+  return api<ReportSignaturesResponse & { ok: boolean }>(
+    `/api/reports/${encodeURIComponent(reportId)}/signatures/${encodeURIComponent(role)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = resolveApiUrl(path)
   const headers: Record<string, string> = {
@@ -269,6 +399,10 @@ export async function downloadExport(apiPath: string): Promise<void> {
     filename = 'tagesbericht.pdf'
   } else if (apiPath.includes('/export/word')) {
     filename = 'tagesbericht.docx'
+  } else if (apiPath.includes('/export/csv')) {
+    filename = 'stundenkonto.csv'
+  } else if (apiPath.includes('/export/xlsx')) {
+    filename = 'stundenkonto.xlsx'
   }
 
   const blob = await res.blob()

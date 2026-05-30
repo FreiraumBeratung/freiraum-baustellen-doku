@@ -18,6 +18,12 @@ const primaryQuick: { to: string; title: string; description: string; emoji: str
   },
   { to: '/berichte', title: 'Berichte ansehen', description: 'Verlauf & Export.', emoji: '📋' },
   {
+    to: '/stunden',
+    title: 'Stundenkonto',
+    description: 'Saldo & Buchungen pro Mitarbeiter.',
+    emoji: '⏱️',
+  },
+  {
     to: '/baustellen',
     title: 'Baustellen verwalten',
     description: 'Projekte im Blick.',

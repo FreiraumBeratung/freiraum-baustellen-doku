@@ -2,6 +2,13 @@ import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, downloadExport, resolveBackendPublicUrl } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { ReportPhotosSection } from '../components/ReportPhotosSection'
+import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
+import {
+  clearReportPreviewPersist,
+  loadReportPreviewPersist,
+  saveReportPreviewPersist,
+} from '../utils/reportPreviewPersist'
 import type { ReportPreviewState, StructuredPayload } from './ReportNew'
 
 const inputClass =
@@ -56,6 +63,54 @@ function structuredEqual(a: StructuredPayload, b: StructuredPayload): boolean {
     arraysEqual(a.problems, b.problems) &&
     arraysEqual(a.openItems, b.openItems)
   )
+}
+
+function defaultBreakMinutes(st: ReportPreviewState): number {
+  const n = st.breakMinutes
+  return typeof n === 'number' && n >= 0 ? n : 45
+}
+
+function defaultEmployeeIds(st: ReportPreviewState): string[] {
+  return Array.isArray(st.employeeIds) ? st.employeeIds : []
+}
+
+function formatHoursDe(h: number | null | undefined): string {
+  if (h == null || Number.isNaN(h)) return '—'
+  return `${String(h).replace('.', ',')} h`
+}
+
+function timeBookingMessage(booking: {
+  created?: number
+  hoursPerEmployee?: number | null
+  skippedNames?: string[]
+  reason?: string | null
+} | null | undefined): { ok: string; warn: string } {
+  if (!booking) return { ok: '', warn: '' }
+  const created = booking.created ?? 0
+  if (created > 0) {
+    const per = formatHoursDe(booking.hoursPerEmployee)
+    return {
+      ok: `Stunden gebucht: ${created} Mitarbeiter à je ${per}.`,
+      warn: '',
+    }
+  }
+  if (booking.reason === 'invalid_work_time') {
+    return { ok: '', warn: 'Arbeitszeit ungültig — keine Stunden gebucht.' }
+  }
+  if (booking.reason === 'no_employees') {
+    return { ok: '', warn: 'Keine Mitarbeiter gewählt — keine Stunden gebucht.' }
+  }
+  const skipped = booking.skippedNames ?? []
+  if (skipped.length) {
+    return {
+      ok: '',
+      warn: `Stunden nicht gebucht — unbekannte Mitarbeiter: ${skipped.join(', ')}`,
+    }
+  }
+  if (booking.reason === 'no_matched_employees') {
+    return { ok: '', warn: 'Keine passenden Mitarbeiter — keine Stunden gebucht.' }
+  }
+  return { ok: '', warn: '' }
 }
 
 function buildPlainText(companyName: string, st: ReportPreviewState, structured: StructuredPayload) {
@@ -291,6 +346,8 @@ function ReportPreviewInner({
   saveBusy,
   saveErr,
   saveMsg,
+  timeBookingMsg,
+  timeBookingWarn,
   dirty,
   restoreDisabled,
   onRestoreSuggestion,
@@ -304,6 +361,8 @@ function ReportPreviewInner({
   saveBusy: boolean
   saveErr: string
   saveMsg: string
+  timeBookingMsg: string
+  timeBookingWarn: string
   dirty: boolean
   restoreDisabled: boolean
   onRestoreSuggestion: () => void
@@ -316,6 +375,7 @@ function ReportPreviewInner({
   const [officeBusy, setOfficeBusy] = useState(false)
   const [officeMsg, setOfficeMsg] = useState('')
   const [officeErr, setOfficeErr] = useState('')
+  const [pageWakeKey, setPageWakeKey] = useState(0)
 
   useEffect(() => {
     api<{ companyName: string; officeEmail: string; logoUrl: string | null }>('/api/company-profile').then(
@@ -416,7 +476,7 @@ function ReportPreviewInner({
   }
 
   return (
-    <div className="overflow-x-hidden">
+    <div key={`preview-wake-${pageWakeKey}`} className="overflow-x-hidden">
       <PageTitle title="Tagesbericht" subtitle="Vorschau vor dem Speichern" />
       <p className="mb-2 text-center text-sm text-zinc-500">
         Bitte prüfen und bei Bedarf anpassen, bevor der Bericht gespeichert wird.
@@ -462,6 +522,7 @@ function ReportPreviewInner({
             <span className="text-zinc-500 shrink-0">Arbeitszeit</span>
             <span className="min-w-0 whitespace-pre-wrap text-right text-white">
               {st.startTime} – {st.endTime}
+              {`\nPause: ${defaultBreakMinutes(st)} Min.`}
               {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
             </span>
           </div>
@@ -584,6 +645,19 @@ function ReportPreviewInner({
           <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Rohtext</h3>
           <p className="mt-2 whitespace-pre-wrap text-zinc-400">{st.rawText}</p>
         </section>
+
+        <ReportPhotosSection
+          reportId={savedReportId}
+          enabled={Boolean(savedReportId)}
+          iosGalleryRedirect
+          onUploadComplete={() => setPageWakeKey((k) => k + 1)}
+        />
+
+        <ReportSignaturesSection
+          reportId={savedReportId}
+          enabled={Boolean(savedReportId)}
+          customerName={st.customerName}
+        />
       </Card>
 
       <div className="mt-6 space-y-3">
@@ -595,6 +669,9 @@ function ReportPreviewInner({
           {savedReportId ? 'Gespeichert' : saveBusy ? '…' : 'Bericht speichern und abschließen'}
         </BigButton>
         {saveErr ? <p className="text-center text-sm text-red-400">{saveErr}</p> : null}
+        {saveMsg ? <p className="text-center text-sm text-orange-300">{saveMsg}</p> : null}
+        {timeBookingMsg ? <p className="text-center text-sm text-emerald-400/90">{timeBookingMsg}</p> : null}
+        {timeBookingWarn ? <p className="text-center text-sm text-amber-400/90">{timeBookingWarn}</p> : null}
         {officeMsg ? <p className="text-center text-sm text-orange-300">{officeMsg}</p> : null}
         {officeErr ? <p className="text-center text-sm text-red-400">{officeErr}</p> : null}
         <BigButton variant="secondary" type="button" onClick={() => onCopy(companyName, draftStructured)}>
@@ -643,6 +720,37 @@ function ReportPreviewInner({
   )
 }
 
+function ReportPhotoRecoveryPage({ reportId }: { reportId: string }) {
+  const nav = useNavigate()
+  const [pageWakeKey, setPageWakeKey] = useState(0)
+
+  return (
+    <div key={`photo-recovery-wake-${pageWakeKey}`} className="overflow-x-hidden">
+      <PageTitle title="Baustellenfotos" subtitle="Bericht gespeichert — Fotos hier anfügen" />
+      <p className="mb-4 text-center text-sm text-zinc-500">
+        Nach der Kamera kehrt die App manchmal hierher zurück. Ihr Bericht ist gespeichert.
+      </p>
+      <Card>
+        <ReportPhotosSection
+          reportId={reportId}
+          enabled
+          iosGalleryRedirect
+          onUploadComplete={() => setPageWakeKey((k) => k + 1)}
+        />
+        <ReportSignaturesSection reportId={reportId} enabled embedded initialOpen />
+      </Card>
+      <div className="mt-6 space-y-3">
+        <BigButton variant="secondary" type="button" onClick={() => nav(`/berichte/${reportId}`)}>
+          Zum Bericht
+        </BigButton>
+        <BigButton variant="secondary" type="button" onClick={() => nav('/berichte')}>
+          Alle Berichte
+        </BigButton>
+      </div>
+    </div>
+  )
+}
+
 export function ReportPreviewPage() {
   const nav = useNavigate()
   const location = useLocation()
@@ -650,7 +758,7 @@ export function ReportPreviewPage() {
 
   const reportSyncKey =
     st
-      ? `${st.projectId}|${st.date}|${st.startTime}|${st.endTime}|${st.exportFormat}|${st.rawText.length}|${JSON.stringify(st.structured)}`
+      ? `${st.projectId}|${st.date}|${st.startTime}|${st.endTime}|${defaultBreakMinutes(st)}|${defaultEmployeeIds(st).join(',')}|${st.exportFormat}|${st.rawText.length}|${JSON.stringify(st.structured)}`
       : ''
 
   const snapshotRef = useRef<StructuredPayload | null>(null)
@@ -666,6 +774,8 @@ export function ReportPreviewPage() {
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [saveMsg, setSaveMsg] = useState('')
+  const [timeBookingMsg, setTimeBookingMsg] = useState('')
+  const [timeBookingWarn, setTimeBookingWarn] = useState('')
 
   useLayoutEffect(() => {
     if (!st || !reportSyncKey) return
@@ -675,9 +785,19 @@ export function ReportPreviewPage() {
     snapshotRef.current = c
     setDraftStructured(c)
     setSavedBaseline(c)
-    setSavedReportId(null)
     setSaveMsg('')
     setSaveErr('')
+
+    const persisted = loadReportPreviewPersist()
+    if (persisted?.reportSyncKey === reportSyncKey && persisted.savedReportId) {
+      setSavedReportId(persisted.savedReportId)
+      setSaveMsg('Bericht gespeichert')
+    } else {
+      setSavedReportId(null)
+      if (persisted && persisted.reportSyncKey !== reportSyncKey) {
+        clearReportPreviewPersist()
+      }
+    }
   }, [reportSyncKey, st])
 
   const dirty = useMemo(
@@ -697,6 +817,8 @@ export function ReportPreviewPage() {
     if (!st) return
     setSaveErr('')
     setSaveMsg('')
+    setTimeBookingMsg('')
+    setTimeBookingWarn('')
     setSaveBusy(true)
     try {
       const s = draftStructured
@@ -709,8 +831,10 @@ export function ReportPreviewPage() {
         customerName: st.customerName,
         date: st.date,
         employees: st.employees,
+        employeeIds: defaultEmployeeIds(st),
         startTime: st.startTime,
         endTime: st.endTime,
+        breakMinutes: defaultBreakMinutes(st),
         exportFormat: st.exportFormat,
         rawText: st.rawText,
         structured: {
@@ -725,13 +849,27 @@ export function ReportPreviewPage() {
           customerTalk: s.customerTalk,
         } satisfies StructuredPayload,
       }
-      const doc = await api<{ id: string }>('/api/reports', {
+      const doc = await api<{
+        id: string
+        timeBooking?: {
+          created?: number
+          hoursPerEmployee?: number | null
+          skippedNames?: string[]
+          reason?: string | null
+        }
+      }>('/api/reports', {
         method: 'POST',
         body: JSON.stringify(payload),
       })
       setSavedReportId(doc.id)
       setSavedBaseline(cloneStructured(draftStructured))
       setSaveMsg('Bericht gespeichert')
+      const tb = timeBookingMessage(doc.timeBooking)
+      setTimeBookingMsg(tb.ok)
+      setTimeBookingWarn(tb.warn)
+      if (reportSyncKey) {
+        saveReportPreviewPersist({ reportSyncKey, savedReportId: doc.id })
+      }
     } catch {
       setSaveErr('Bericht konnte nicht gespeichert werden.')
     } finally {
@@ -746,6 +884,10 @@ export function ReportPreviewPage() {
   }
 
   if (!st) {
+    const persisted = loadReportPreviewPersist()
+    if (persisted?.savedReportId) {
+      return <ReportPhotoRecoveryPage reportId={persisted.savedReportId} />
+    }
     return (
       <div>
         <PageTitle title="Vorschau" subtitle="Kein Bericht geladen" />
@@ -765,6 +907,8 @@ export function ReportPreviewPage() {
       saveBusy={saveBusy}
       saveErr={saveErr}
       saveMsg={saveMsg}
+      timeBookingMsg={timeBookingMsg}
+      timeBookingWarn={timeBookingWarn}
       dirty={dirty}
       restoreDisabled={restoreDisabled}
       onRestoreSuggestion={onRestoreSuggestion}

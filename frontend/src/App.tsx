@@ -14,6 +14,7 @@ import { ReportNewPage } from './pages/ReportNew'
 import { ReportPreviewPage } from './pages/ReportPreview'
 import { ReportsListPage } from './pages/ReportsList'
 import { ReportDetailPage } from './pages/ReportDetail'
+import { TimeAccountsPage } from './pages/TimeAccounts'
 
 function ProtectedOutlet() {
   const { token, ready } = useRequireAuth()
@@ -58,6 +59,7 @@ export default function App() {
             <Route path="/bericht/vorschau" element={<ReportPreviewPage />} />
             <Route path="/berichte" element={<ReportsListPage />} />
             <Route path="/berichte/:id" element={<ReportDetailPage />} />
+            <Route path="/stunden" element={<TimeAccountsPage />} />
           </Route>
         </Route>
       </Route>

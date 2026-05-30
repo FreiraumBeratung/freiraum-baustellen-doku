@@ -16,7 +16,8 @@
       "id": "70d13c48-b15a-4c68-a011-73b09b4a2dc1",
       "name": "Endrit",
       "role": "Vorarbeiter",
-      "active": true
+      "active": true,
+      "hoursBalanceStart": 0.0
     }
   ]
 }
