@@ -34,6 +34,7 @@ print(f"[smoke] using tmp data dir: {_TMP_DIR}")
 
 import main  # noqa: E402
 from app.services import mail_autodiscover, mail_store  # noqa: E402
+from app.services.password_security import verify_password  # noqa: E402
 from app.services.mail_autodiscover import SmtpCandidate, SmtpVerifyResult  # noqa: E402
 from app.services.tenant_storage import TenantStore  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -165,7 +166,9 @@ _expect(res.status_code == 200, f"login-sync erwartete 200, war {res.status_code
 _expect(res.json().get("mail", {}).get("synced_password") is True, "synced_password flag fehlt")
 # Lokales Passwort sollte jetzt das neue sein.
 user = main.find_user_by_email(TEST_EMAIL)
-_expect(user is not None and user["password"] == "neues-mail-pw", "lokales pw nicht synchronisiert")
+_expect(user is not None and verify_password("neues-mail-pw", user), "lokales pw nicht synchronisiert")
+_expect(user.get("passwordHash"), "passwordHash fehlt nach sync")
+_expect("password" not in user, "legacy password field should be removed")
 cfg = mail_store.get_mail_config(TEST_EMAIL)
 _expect(cfg is not None and cfg["password"] == "neues-mail-pw", "mail-store nicht synchronisiert")
 

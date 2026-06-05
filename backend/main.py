@@ -32,6 +32,12 @@ from app.services.mail_store import (
     has_mail_config,
     save_mail_config,
 )
+from app.services.password_security import (
+    apply_password_hash_to_user,
+    hash_password,
+    user_needs_password_migration,
+    verify_password,
+)
 from app.services.admin_users import (
     bootstrap_admin_from_env,
     delete_user_account,
@@ -155,7 +161,7 @@ def _guess_audio_extension(content_type: str | None, original_name: str) -> str:
     return "webm"
 
 
-# --- Auth (V1: Klartext-Passwort — TODO Produktiv: Hashing) ---
+# --- Auth (M4: bcrypt passwordHash, Lazy-Migration von legacy password) ---
 class RegisterBody(BaseModel):
     companyName: str = Field(..., min_length=1)
     entrepreneurName: str = Field(..., min_length=1)
@@ -178,9 +184,23 @@ class LoginBody(BaseModel):
         return str(v).strip().lower()
 
 
-def hash_password_plain_v1(password: str) -> str:
-    # TODO: Passwort-Hashing für Produktivbetrieb ergänzen (bcrypt/argon2)
-    return password
+def _persist_user_password(email_norm: str, plain: str) -> None:
+    users = get_users()
+    for u in users:
+        if str(u.get("email", "")).lower() == email_norm:
+            apply_password_hash_to_user(u, plain)
+            save_users(users)
+            return
+
+
+def _migrate_user_password_if_needed(email_norm: str, plain: str) -> None:
+    users = get_users()
+    for u in users:
+        if str(u.get("email", "")).lower() == email_norm:
+            if user_needs_password_migration(u):
+                apply_password_hash_to_user(u, plain)
+                save_users(users)
+            return
 
 
 def _format_smtp_error_message(
@@ -503,7 +523,7 @@ def register(body: RegisterBody):
             ),
         )
 
-    pwd_store = hash_password_plain_v1(body.password)
+    pwd_hash = hash_password(body.password)
     user_id = str(uuid.uuid4())
     user = {
         "id": user_id,
@@ -511,7 +531,7 @@ def register(body: RegisterBody):
         "companyName": body.companyName,
         "entrepreneurName": body.entrepreneurName,
         "email": email_norm,
-        "password": pwd_store,
+        "passwordHash": pwd_hash,
         "licenseActive": True,
         "isAdmin": False,
         "createdAt": datetime.now(timezone.utc).isoformat(),
@@ -567,7 +587,7 @@ def login(body: LoginBody):
         # bei Passwort-Fehlern und lassen das Frontend auf "Registrieren" leiten.
         raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
 
-    local_pw_ok = user.get("password") == hash_password_plain_v1(body.password)
+    local_pw_ok = verify_password(body.password, user)
 
     if not local_pw_ok:
         # Fallback: Vielleicht wurde das Mail-Passwort beim Provider geaendert.
@@ -583,12 +603,7 @@ def login(body: LoginBody):
                     smtp_status.get("provider_hint"),
                 ),
             )
-        users = get_users()
-        for u in users:
-            if u.get("email", "").lower() == email_norm:
-                u["password"] = hash_password_plain_v1(body.password)
-                break
-        save_users(users)
+        _persist_user_password(email_norm, body.password)
         return {
             "access_token": user["id"],
             "token_type": "bearer",
@@ -603,7 +618,10 @@ def login(body: LoginBody):
             },
         }
 
-    # Lokales Passwort stimmt. SMTP wird best-effort verifiziert/aktualisiert -
+    # Lokales Passwort stimmt. Legacy-Klartext bei Bedarf migrieren.
+    _migrate_user_password_if_needed(email_norm, body.password)
+
+    # SMTP wird best-effort verifiziert/aktualisiert -
     # ein Fehler hier blockiert den App-Login NICHT, damit der User auch offline
     # oder bei kurzzeitigen Provider-Problemen weiterarbeiten kann.
     smtp_status = _verify_and_store_smtp(email_norm, body.password)
