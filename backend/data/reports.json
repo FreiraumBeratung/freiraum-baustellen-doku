@@ -75,6 +75,77 @@
         }
       },
       "createdAt": "2026-05-30T17:00:52.906349+00:00"
+    },
+    {
+      "id": "a96fc5f3-a798-4ade-a807-f65ed6bf0ed6",
+      "companyId": "local-company",
+      "companyName": "Freiraum Beratung",
+      "companyLogoUrl": "/uploads/logos/45b8bcbaff4640c58ad83091bfffcd96.png",
+      "officeEmail": "zlatan95@web.de",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "customerName": "Denis Bytyqi",
+      "date": "2026-05-30",
+      "employees": [
+        "Endrit"
+      ],
+      "employeeIds": [
+        "70d13c48-b15a-4c68-a011-73b09b4a2dc1"
+      ],
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "breakMinutes": 60,
+      "exportFormat": "PDF",
+      "rawText": "Heute haben wir 50 m² Pflaster verlegt",
+      "structured": {
+        "summary": "30.05.2026: Auf der Baustelle wurden 50 m² Pflaster verlegt.",
+        "activities": [
+          "50 m² Pflaster verlegt"
+        ],
+        "materials": [
+          "Pflastersteine"
+        ],
+        "materialSuggestions": [
+          "Splitt benutzt?",
+          "Schotter benutzt?",
+          "Fugensand benutzt?"
+        ],
+        "machineSuggestions": [],
+        "machineHours": [],
+        "problems": [],
+        "openItems": [],
+        "customerTalk": "Keine Angabe"
+      },
+      "photos": [
+        {
+          "id": "1c77b19e-4151-47f4-975a-2e8fa0b8a5fc",
+          "filename": "photo_20260530193944_1c77b19e-4151-47f4-975a-2e8fa0b8a5fc.jpg",
+          "originalFilename": "baustelle-1780169983904.jpg",
+          "contentType": "image/jpeg",
+          "sizeBytes": 151296,
+          "uploadedAt": "2026-05-30T19:39:44.888659+00:00"
+        }
+      ],
+      "signatures": {
+        "customer": {
+          "id": "62363371-4a52-46d0-86ed-2c6b735bbc42",
+          "role": "customer",
+          "filename": "sig_20260530193953_customer_62363371-4a52-46d0-86ed-2c6b735bbc42.png",
+          "contentType": "image/png",
+          "sizeBytes": 38827,
+          "signedAt": "2026-05-30T19:39:53.774871+00:00",
+          "signedByLabel": "Denis Bytyqi"
+        },
+        "employee": {
+          "id": "3d8269e5-bc2f-43b3-97eb-2cc8745119dd",
+          "role": "employee",
+          "filename": "sig_20260530193956_employee_3d8269e5-bc2f-43b3-97eb-2cc8745119dd.png",
+          "contentType": "image/png",
+          "sizeBytes": 41596,
+          "signedAt": "2026-05-30T19:39:56.729279+00:00"
+        }
+      },
+      "createdAt": "2026-05-30T19:39:38.112884+00:00"
     }
   ]
 }

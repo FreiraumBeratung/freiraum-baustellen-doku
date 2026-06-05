@@ -22,14 +22,11 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="freiraum_photo_smoke_"))
 print(f"[smoke] using tmp data dir: {_TMP_DIR}")
 
 import main  # noqa: E402
+from app.services.tenant_storage import TenantStore  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from smoke_isolation import isolate_smoke_data  # noqa: E402
 
-main.DATA_DIR = _TMP_DIR
-main.REPORTS_FILE = _TMP_DIR / "reports.json"
-main.USERS_FILE = _TMP_DIR / "users.json"
-main.COMPANY_FILE = _TMP_DIR / "company_profile.json"
-main.PHOTOS_UPLOAD_DIR = _TMP_DIR / "photos"
-main.PHOTOS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+isolate_smoke_data(_TMP_DIR)
 
 # 1x1 PNG
 MINI_PNG = (
@@ -44,13 +41,14 @@ def _expect(cond: bool, msg: str) -> None:
         raise SystemExit(f"FAIL: {msg}")
 
 
-def _auth_headers(client: TestClient) -> dict[str, str]:
+def _auth_headers(client: TestClient) -> tuple[dict[str, str], str]:
     email = f"photo-smoke-{uuid.uuid4().hex[:8]}@example.com"
     user_id = str(uuid.uuid4())
     main.save_users(
         [
             {
                 "id": user_id,
+                "tenantId": user_id,
                 "companyName": "Smoke GmbH",
                 "entrepreneurName": "Tester",
                 "email": email,
@@ -59,13 +57,17 @@ def _auth_headers(client: TestClient) -> dict[str, str]:
             }
         ]
     )
-    return {"Authorization": f"Bearer {user_id}"}
+    return {"Authorization": f"Bearer {user_id}"}, user_id
 
 
-def _create_min_report(client: TestClient, headers: dict[str, str]) -> str:
+def _photos_dir(user_id: str) -> Path:
+    return _TMP_DIR / "uploads" / "tenants" / user_id / "photos"
+
+
+def _create_min_report(store: TenantStore) -> str:
     rid = str(uuid.uuid4())
-    main._write_json(
-        main.REPORTS_FILE,
+    store.write_json(
+        "reports.json",
         {
             "reports": [
                 {
@@ -92,8 +94,10 @@ def _upload_png(client: TestClient, rid: str, headers: dict[str, str], name: str
 
 
 client = TestClient(main.app)
-hdrs = _auth_headers(client)
-report_id = _create_min_report(client, hdrs)
+hdrs, user_id = _auth_headers(client)
+store = TenantStore(user_id)
+report_id = _create_min_report(store)
+photos_dir = _photos_dir(user_id)
 
 # Leere Liste
 res = client.get(f"/api/reports/{report_id}/photos", headers=hdrs)
@@ -107,12 +111,12 @@ _expect(res.status_code == 200, f"upload: {res.status_code} {res.text}")
 photo = res.json().get("photo") or {}
 photo_id = photo.get("id")
 _expect(photo_id, "photo id missing")
-_expect(photo.get("url", "").startswith("/uploads/photos/"), "url missing")
+_expect(photo.get("url", "").startswith("/uploads/tenants/"), "url missing")
 _expect(res.json().get("count") == 1, "count after upload should be 1")
 
 # Datei auf Disk
 fn = photo.get("filename")
-_expect(fn and (main.PHOTOS_UPLOAD_DIR / fn).is_file(), "photo file not on disk")
+_expect(fn and (photos_dir / fn).is_file(), "photo file not on disk")
 
 # Liste mit Eintrag
 res = client.get(f"/api/reports/{report_id}/photos", headers=hdrs)
@@ -125,7 +129,7 @@ _expect(isinstance(rep.get("photos"), list) and len(rep["photos"]) == 1, "report
 # Delete einzelnes Foto
 res = client.delete(f"/api/reports/{report_id}/photos/{photo_id}", headers=hdrs)
 _expect(res.status_code == 200 and res.json().get("count") == 0, f"delete photo: {res.text}")
-_expect(not (main.PHOTOS_UPLOAD_DIR / fn).exists(), "photo file should be removed from disk")
+_expect(not (photos_dir / fn).exists(), "photo file should be removed from disk")
 
 # 10er-Limit
 for i in range(10):
@@ -144,10 +148,10 @@ _expect(len(filenames) == 10, "should have 10 photos before report delete")
 res = client.delete(f"/api/reports/{report_id}", headers=hdrs)
 _expect(res.status_code == 200, "delete report")
 for fn in filenames:
-    _expect(not (main.PHOTOS_UPLOAD_DIR / fn).exists(), f"orphan file after report delete: {fn}")
+    _expect(not (photos_dir / fn).exists(), f"orphan file after report delete: {fn}")
 
 # Ungueltiger Typ
-report_id2 = _create_min_report(client, hdrs)
+report_id2 = _create_min_report(store)
 res = client.post(
     f"/api/reports/{report_id2}/photos",
     headers=hdrs,

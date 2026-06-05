@@ -20,16 +20,11 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="freiraum_time_smoke_"))
 print(f"[smoke] using tmp data dir: {_TMP_DIR}")
 
 import main  # noqa: E402
-from app.services import time_account  # noqa: E402
+from app.services.tenant_storage import TenantStore  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from smoke_isolation import isolate_smoke_data  # noqa: E402
 
-main.DATA_DIR = _TMP_DIR
-main.EMPLOYEES_FILE = _TMP_DIR / "employees.json"
-main.REPORTS_FILE = _TMP_DIR / "reports.json"
-main.TIME_ENTRIES_FILE = _TMP_DIR / "time_entries.json"
-main.USERS_FILE = _TMP_DIR / "users.json"
-main.COMPANY_FILE = _TMP_DIR / "company_profile.json"
-time_account.configure(main.TIME_ENTRIES_FILE)
+isolate_smoke_data(_TMP_DIR)
 
 
 def _expect(cond: bool, msg: str) -> None:
@@ -37,12 +32,13 @@ def _expect(cond: bool, msg: str) -> None:
         raise SystemExit(f"FAIL: {msg}")
 
 
-def _auth_headers() -> dict[str, str]:
+def _auth_headers() -> tuple[dict[str, str], TenantStore]:
     user_id = str(uuid.uuid4())
     main.save_users(
         [
             {
                 "id": user_id,
+                "tenantId": user_id,
                 "companyName": "Smoke GmbH",
                 "entrepreneurName": "Tester",
                 "email": f"time-smoke-{uuid.uuid4().hex[:6]}@example.com",
@@ -51,7 +47,7 @@ def _auth_headers() -> dict[str, str]:
             }
         ]
     )
-    return {"Authorization": f"Bearer {user_id}"}
+    return {"Authorization": f"Bearer {user_id}"}, TenantStore(user_id)
 
 
 def _structured_payload() -> dict:
@@ -69,7 +65,7 @@ def _structured_payload() -> dict:
 
 
 client = TestClient(main.app)
-hdrs = _auth_headers()
+hdrs, store = _auth_headers()
 
 denis = client.post("/api/employees", headers=hdrs, json={"name": "Denis", "role": "", "active": True}).json()
 matthias = client.post(
@@ -80,6 +76,8 @@ matthias = client.post(
 denis_id = denis["id"]
 matthias_id = matthias["id"]
 _expect(bool(denis_id and matthias_id), "employees missing")
+
+from app.services import time_account  # noqa: E402
 
 _expect(time_account.compute_booked_hours("08:00", "16:30", 45) == 7.75, "7.75h expected")
 _expect(time_account.compute_booked_hours("16:30", "08:00", 45) is None, "invalid range expected")
@@ -125,8 +123,8 @@ employees = client.get("/api/employees", headers=hdrs).json().get("employees") o
 sync2 = time_account.sync_entries_for_report(
     report,
     employees,
-    read_json=main._read_json,
-    write_json=main._write_json,
+    read_json=store.time_account_read_json,
+    write_json=store.time_account_write_json,
 )
 _expect(sync2.get("created") == 2, "resync should replace with 2 entries")
 entries2 = client.get("/api/time-entries", headers=hdrs).json().get("entries") or []

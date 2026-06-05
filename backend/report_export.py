@@ -6,7 +6,7 @@ import re
 import unicodedata
 from io import BytesIO
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 from urllib.parse import urlparse
 
 from docx import Document
@@ -29,6 +29,9 @@ SECTION_HEX = HexColor("#1f2937")
 LOGO_DIR = Path(__file__).resolve().parent / "uploads" / "logos"
 SIGNATURES_DIR = Path(__file__).resolve().parent / "uploads" / "signatures"
 SIGNATURE_ROLES = ("customer", "employee")
+
+LogoPathResolver = Callable[[dict[str, Any], dict[str, Any]], Path | None]
+SignaturePathResolver = Callable[[str], Path | None]
 
 
 def sanitize_export_slug(s: str) -> str:
@@ -108,6 +111,14 @@ def _candidate_logo_paths(report: dict[str, Any], company_profile: dict[str, Any
             filename = Path(path_only.split(marker, 1)[1]).name
             if filename:
                 out.append(LOGO_DIR / filename)
+        tenant_marker = "/uploads/tenants/"
+        if tenant_marker in path_only:
+            rest = path_only.split(tenant_marker, 1)[1]
+            parts = rest.strip("/").split("/")
+            if len(parts) >= 3 and parts[1] == "logos":
+                out.append(
+                    Path(__file__).resolve().parent / "uploads" / "tenants" / parts[0] / "logos" / parts[2]
+                )
 
     logo_fn = str(company_profile.get("logoFilename") or "").strip()
     if logo_fn:
@@ -123,7 +134,16 @@ def _candidate_logo_paths(report: dict[str, Any], company_profile: dict[str, Any
     return unique
 
 
-def _resolve_logo_path(report: dict[str, Any], company_profile: dict[str, Any]) -> Path | None:
+def _resolve_logo_path(
+    report: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+) -> Path | None:
+    if resolve_logo is not None:
+        custom = resolve_logo(report, company_profile)
+        if custom is not None and custom.is_file():
+            return custom
     for p in _candidate_logo_paths(report, company_profile):
         if p.is_file():
             return p
@@ -158,10 +178,18 @@ def _report_signatures_doc(report: dict[str, Any]) -> dict[str, dict[str, Any] |
     return out
 
 
-def _safe_signature_path(filename: str) -> Path | None:
+def _safe_signature_path(
+    filename: str,
+    *,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> Path | None:
     fn = str(filename or "")
     if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
         return None
+    if resolve_signature is not None:
+        resolved = resolve_signature(fn)
+        if resolved is not None and resolved.is_file():
+            return resolved
     base = SIGNATURES_DIR.resolve()
     path = (SIGNATURES_DIR / fn).resolve()
     try:
@@ -206,10 +234,11 @@ def _pdf_signature_cell(
     col_width: float,
     info_label_style: ParagraphStyle,
     meta_style: ParagraphStyle,
+    resolve_signature: SignaturePathResolver | None = None,
 ) -> list[Any]:
     if not isinstance(entry, dict):
         return [Spacer(1, 1)]
-    path = _safe_signature_path(str(entry.get("filename") or ""))
+    path = _safe_signature_path(str(entry.get("filename") or ""), resolve_signature=resolve_signature)
     if path is None:
         return [Spacer(1, 1)]
 
@@ -236,12 +265,17 @@ def _append_pdf_signatures(
     section_head: ParagraphStyle,
     info_label_style: ParagraphStyle,
     meta_style: ParagraphStyle,
+    resolve_signature: SignaturePathResolver | None = None,
 ) -> None:
     sigs = _report_signatures_doc(report)
     customer = sigs.get("customer")
     employee = sigs.get("employee")
-    has_customer = isinstance(customer, dict) and _safe_signature_path(str(customer.get("filename") or ""))
-    has_employee = isinstance(employee, dict) and _safe_signature_path(str(employee.get("filename") or ""))
+    has_customer = isinstance(customer, dict) and _safe_signature_path(
+        str(customer.get("filename") or ""), resolve_signature=resolve_signature
+    )
+    has_employee = isinstance(employee, dict) and _safe_signature_path(
+        str(employee.get("filename") or ""), resolve_signature=resolve_signature
+    )
     if not has_customer and not has_employee:
         return
 
@@ -261,6 +295,7 @@ def _append_pdf_signatures(
                     col_width=col_w,
                     info_label_style=info_label_style,
                     meta_style=meta_style,
+                    resolve_signature=resolve_signature,
                 ),
                 _pdf_signature_cell(
                     employee if has_employee else None,
@@ -269,6 +304,7 @@ def _append_pdf_signatures(
                     col_width=col_w,
                     info_label_style=info_label_style,
                     meta_style=meta_style,
+                    resolve_signature=resolve_signature,
                 ),
             ]
         ],
@@ -291,7 +327,13 @@ def _append_pdf_signatures(
     story.append(sig_tbl)
 
 
-def build_pdf_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> bytes:
+def build_pdf_bytes(
+    report: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> bytes:
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
         buf,
@@ -398,7 +440,7 @@ def build_pdf_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> 
         canv.restoreState()
 
     story: list[Any] = []
-    logo_path = _resolve_logo_path(report, company_profile)
+    logo_path = _resolve_logo_path(report, company_profile, resolve_logo=resolve_logo)
     logo_img = _logo_image_for_pdf(logo_path, max_width_cm=5.0, max_height_cm=2.9) if logo_path else None
 
     company_lines: list[Any] = [Paragraph(_xml_para_text(company_name), company_style)]
@@ -495,6 +537,7 @@ def build_pdf_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> 
         section_head=section_head,
         info_label_style=info_label_style,
         meta_style=meta_style,
+        resolve_signature=resolve_signature,
     )
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
@@ -520,7 +563,12 @@ def _section_list_docx(document: Document, title: str, items: list[str]) -> None
         run.font.size = Pt(10)
 
 
-def build_docx_bytes(report: dict[str, Any], company_profile: dict[str, Any]) -> bytes:
+def build_docx_bytes(
+    report: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+) -> bytes:
     st = _structured(report)
     d = Document()
 
@@ -533,7 +581,7 @@ def build_docx_bytes(report: dict[str, Any], company_profile: dict[str, Any]) ->
     company_name = str(report.get("companyName") or company_profile.get("companyName") or "Firma")
     email = str(report.get("officeEmail") or company_profile.get("officeEmail") or "")
     phone = str(company_profile.get("phone") or "")
-    logo_path = _resolve_logo_path(report, company_profile)
+    logo_path = _resolve_logo_path(report, company_profile, resolve_logo=resolve_logo)
 
     head_tbl = d.add_table(rows=1, cols=2)
     head_tbl.autofit = True

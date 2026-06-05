@@ -15,7 +15,18 @@ backend/.env
 backend/uploads/
 !backend/uploads/.gitkeep
 
-# Mail-Verschlüsselungsschlüssel + verschlüsselte Mail-Konfigurationen
+# Mandanten-Daten (M1)
+backend/data/tenants/
+backend/data/.tenant_migration_m1.done
+backend/data/legacy_pre_m1_backup/
+backend/data/users.json
+backend/data/reports.json
+backend/data/employees.json
+backend/data/company_profile.json
+backend/data/time_entries.json
+backend/data/projects.json
+backend/data/audio_uploads.json
+backend/data/trade_intelligence_cases.json
 # (niemals committen, gerätelokal pro Backend-Instanz)
 backend/data/.mail_key
 backend/data/mail_configs.json

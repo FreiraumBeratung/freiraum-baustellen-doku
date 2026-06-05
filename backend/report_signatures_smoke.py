@@ -23,14 +23,11 @@ _TMP_DIR = Path(tempfile.mkdtemp(prefix="freiraum_signature_smoke_"))
 print(f"[smoke] using tmp data dir: {_TMP_DIR}")
 
 import main  # noqa: E402
+from app.services.tenant_storage import TenantStore  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from smoke_isolation import isolate_smoke_data  # noqa: E402
 
-main.DATA_DIR = _TMP_DIR
-main.REPORTS_FILE = _TMP_DIR / "reports.json"
-main.USERS_FILE = _TMP_DIR / "users.json"
-main.COMPANY_FILE = _TMP_DIR / "company_profile.json"
-main.SIGNATURES_UPLOAD_DIR = _TMP_DIR / "signatures"
-main.SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+isolate_smoke_data(_TMP_DIR)
 
 
 def _expect(cond: bool, msg: str) -> None:
@@ -55,13 +52,14 @@ def _make_png_bytes(width: int = 32, height: int = 32) -> bytes:
 SIG_PNG = _make_png_bytes()
 
 
-def _auth_headers(client: TestClient) -> dict[str, str]:
+def _auth_headers(client: TestClient) -> tuple[dict[str, str], str]:
     email = f"sig-smoke-{uuid.uuid4().hex[:8]}@example.com"
     user_id = str(uuid.uuid4())
     main.save_users(
         [
             {
                 "id": user_id,
+                "tenantId": user_id,
                 "companyName": "Smoke GmbH",
                 "entrepreneurName": "Tester",
                 "email": email,
@@ -70,13 +68,17 @@ def _auth_headers(client: TestClient) -> dict[str, str]:
             }
         ]
     )
-    return {"Authorization": f"Bearer {user_id}"}
+    return {"Authorization": f"Bearer {user_id}"}, user_id
 
 
-def _create_min_report(client: TestClient, headers: dict[str, str]) -> str:
+def _signatures_dir(user_id: str) -> Path:
+    return _TMP_DIR / "uploads" / "tenants" / user_id / "signatures"
+
+
+def _create_min_report(store: TenantStore) -> str:
     rid = str(uuid.uuid4())
-    main._write_json(
-        main.REPORTS_FILE,
+    store.write_json(
+        "reports.json",
         {
             "reports": [
                 {
@@ -108,8 +110,10 @@ def _upload_sig(client: TestClient, rid: str, role: str, headers: dict[str, str]
 
 
 client = TestClient(main.app)
-hdrs = _auth_headers(client)
-report_id = _create_min_report(client, hdrs)
+hdrs, user_id = _auth_headers(client)
+store = TenantStore(user_id)
+signatures_dir = _signatures_dir(user_id)
+report_id = _create_min_report(store)
 
 # Leere Liste
 res = client.get(f"/api/reports/{report_id}/signatures", headers=hdrs)
@@ -127,8 +131,8 @@ sig_id = sig.get("id")
 fn = sig.get("filename")
 _expect(sig.get("role") == "customer", "role customer")
 _expect(sig.get("signedByLabel") == "Herr Meier", "label missing")
-_expect(sig.get("url", "").startswith("/uploads/signatures/"), "url missing")
-_expect(fn and (main.SIGNATURES_UPLOAD_DIR / fn).is_file(), "signature file not on disk")
+_expect(sig.get("url", "").startswith("/uploads/tenants/"), "url missing")
+_expect(fn and (signatures_dir / fn).is_file(), "signature file not on disk")
 _expect(res.json().get("count") == 1, "count after customer upload")
 
 # Bericht enthaelt signatures
@@ -147,8 +151,8 @@ res = _upload_sig(client, report_id, "customer", hdrs)
 _expect(res.status_code == 200, "replace customer signature")
 new_fn = (res.json().get("signature") or {}).get("filename")
 _expect(new_fn and new_fn != old_fn, "filename should change on replace")
-_expect(not (main.SIGNATURES_UPLOAD_DIR / old_fn).exists(), "old signature file should be removed")
-_expect((main.SIGNATURES_UPLOAD_DIR / new_fn).is_file(), "new signature file missing")
+_expect(not (signatures_dir / old_fn).exists(), "old signature file should be removed")
+_expect((signatures_dir / new_fn).is_file(), "new signature file missing")
 
 # Ungueltige Rolle
 res = client.post(
@@ -171,7 +175,7 @@ res = client.delete(f"/api/reports/{report_id}/signatures/employee", headers=hdr
 _expect(res.status_code == 200 and res.json().get("count") == 1, f"delete employee: {res.text}")
 
 # Cleanup beim Bericht-Delete
-files_before = list(main.SIGNATURES_UPLOAD_DIR.glob("sig_*.png"))
+files_before = list(signatures_dir.glob("sig_*.png"))
 _expect(len(files_before) >= 1, "should have signature files before report delete")
 
 res = client.delete(f"/api/reports/{report_id}", headers=hdrs)

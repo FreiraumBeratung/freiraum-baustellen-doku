@@ -64,6 +64,22 @@
       "hours": 7.75,
       "createdAt": "2026-05-30T17:00:52.908156+00:00",
       "updatedAt": "2026-05-30T17:00:52.908156+00:00"
+    },
+    {
+      "id": "f2b02eda-0515-4982-8c98-7a3a78677328",
+      "source": "report",
+      "reportId": "a96fc5f3-a798-4ade-a807-f65ed6bf0ed6",
+      "employeeId": "70d13c48-b15a-4c68-a011-73b09b4a2dc1",
+      "employeeName": "Endrit",
+      "date": "2026-05-30",
+      "projectId": "13852be8-d2c8-415a-a0cd-235f11059fa8",
+      "projectName": "Denis Garten",
+      "startTime": "08:00",
+      "endTime": "16:30",
+      "breakMinutes": 60,
+      "hours": 7.5,
+      "createdAt": "2026-05-30T19:39:38.115615+00:00",
+      "updatedAt": "2026-05-30T19:39:38.115615+00:00"
     }
   ]
 }

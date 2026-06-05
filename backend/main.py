@@ -31,7 +31,11 @@ from app.services.mail_store import (
     has_mail_config,
     save_mail_config,
 )
-from app.services.quality_filter import apply_quality_filter
+from app.services.tenant_storage import (
+    TenantStore,
+    migrate_legacy_data_if_needed,
+    tenant_id_for_user,
+)
 from services.ai_report_service import structure_report_with_ai
 from services.trade_language_service import (
     build_professional_summary,
@@ -46,24 +50,17 @@ from services.transcription_service import transcribe_audio
 BASE_DIR = Path(__file__).resolve().parent
 load_dotenv(BASE_DIR / ".env")
 DATA_DIR = BASE_DIR / "data"
-UPLOADS_DIR = BASE_DIR / "uploads" / "logos"
 USERS_FILE = DATA_DIR / "users.json"
-COMPANY_FILE = DATA_DIR / "company_profile.json"
-EMPLOYEES_FILE = DATA_DIR / "employees.json"
-PROJECTS_FILE = DATA_DIR / "projects.json"
-REPORTS_FILE = DATA_DIR / "reports.json"
-TIME_ENTRIES_FILE = DATA_DIR / "time_entries.json"
-AUDIO_UPLOAD_DIR = BASE_DIR / "uploads" / "audio"
-AUDIO_UPLOADS_FILE = DATA_DIR / "audio_uploads.json"
+# Legacy-Pfade (nur Migration); Laufzeit-Daten liegen unter data/tenants/{tenantId}/
+UPLOADS_DIR = BASE_DIR / "uploads" / "logos"
 PHOTOS_UPLOAD_DIR = BASE_DIR / "uploads" / "photos"
 SIGNATURES_UPLOAD_DIR = BASE_DIR / "uploads" / "signatures"
+AUDIO_UPLOAD_DIR = BASE_DIR / "uploads" / "audio"
 
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 AUDIO_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 PHOTOS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-
-time_account.configure(TIME_ENTRIES_FILE)
 
 MAX_PHOTOS_PER_REPORT = 10
 MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024
@@ -121,13 +118,13 @@ def _write_json(path: Path, data: Any) -> None:
 MAX_AUDIO_UPLOAD_BYTES = 25 * 1024 * 1024
 
 
-def _get_audio_uploads_list() -> list[dict[str, Any]]:
-    data = _read_json(AUDIO_UPLOADS_FILE, [])
+def _get_audio_uploads_list(store: TenantStore) -> list[dict[str, Any]]:
+    data = store.read_json("audio_uploads.json", [])
     return data if isinstance(data, list) else []
 
 
-def _save_audio_uploads_list(items: list[dict[str, Any]]) -> None:
-    _write_json(AUDIO_UPLOADS_FILE, items)
+def _save_audio_uploads_list(store: TenantStore, items: list[dict[str, Any]]) -> None:
+    store.write_json("audio_uploads.json", items)
 
 
 def _guess_audio_extension(content_type: str | None, original_name: str) -> str:
@@ -251,6 +248,37 @@ def require_bearer(authorization: str | None = Header(default=None)) -> str:
     if not user:
         raise HTTPException(status_code=401, detail="Ungültiges Token")
     return token
+
+
+@app.on_event("startup")
+def _startup_m1_tenant_migration() -> None:
+    migrate_legacy_data_if_needed(read_users=get_users, save_users=save_users)
+
+
+def get_tenant_store(user_id: str = Depends(require_bearer)) -> TenantStore:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    return TenantStore(tenant_id_for_user(user))
+
+
+def _logo_public_url(store: TenantStore, logo_fn: str | None) -> str | None:
+    if not logo_fn:
+        return None
+    return f"/uploads/tenants/{store.tenant_id}/logos/{logo_fn}"
+
+
+def _company_profile_response(store: TenantStore) -> dict[str, Any]:
+    prof = store.read_json("company_profile.json", {})
+    logo_fn = prof.get("logoFilename")
+    logo_url = None
+    if logo_fn:
+        fn = str(logo_fn)
+        if store.resolve_upload_file("logos", fn):
+            logo_url = _logo_public_url(store, fn)
+        elif (UPLOADS_DIR / fn).is_file():
+            logo_url = f"/uploads/logos/{fn}"
+    return {**prof, "logoUrl": logo_url}
 
 
 # --- Company ---
@@ -394,6 +422,7 @@ def register(body: RegisterBody):
     user_id = str(uuid.uuid4())
     user = {
         "id": user_id,
+        "tenantId": user_id,
         "companyName": body.companyName,
         "entrepreneurName": body.entrepreneurName,
         "email": email_norm,
@@ -404,8 +433,9 @@ def register(body: RegisterBody):
     users.append(user)
     save_users(users)
 
-    prof = _read_json(
-        COMPANY_FILE,
+    store = TenantStore(user_id)
+    prof = store.read_json(
+        "company_profile.json",
         {
             "companyName": "",
             "contactPerson": "",
@@ -422,7 +452,7 @@ def register(body: RegisterBody):
         prof["contactPerson"] = body.entrepreneurName
         prof["officeEmail"] = email_norm
         prof["defaultRecipientEmail"] = email_norm
-        _write_json(COMPANY_FILE, prof)
+        store.write_json("company_profile.json", prof)
 
     return {
         "access_token": user_id,
@@ -516,28 +546,20 @@ def logout(_user: str = Depends(require_bearer)):
 
 
 @app.get("/api/company-profile")
-def get_company_profile(_user: str = Depends(require_bearer)):
-    _ = _user
-    prof = _read_json(COMPANY_FILE, {})
-    logo_fn = prof.get("logoFilename")
-    logo_url = None
-    if logo_fn:
-        logo_url = f"/uploads/logos/{logo_fn}"
-    return {**prof, "logoUrl": logo_url}
+def get_company_profile(store: TenantStore = Depends(get_tenant_store)):
+    return _company_profile_response(store)
 
 
 @app.post("/api/company-profile")
-def post_company_profile(body: CompanyProfileBody, _user: str = Depends(require_bearer)):
-    _ = _user
-    existing = _read_json(COMPANY_FILE, {})
+def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(get_tenant_store)):
+    existing = store.read_json("company_profile.json", {})
     merged = {**existing, **body.model_dump()}
-    _write_json(COMPANY_FILE, merged)
-    return get_company_profile()
+    store.write_json("company_profile.json", merged)
+    return _company_profile_response(store)
 
 
 @app.post("/api/company-logo")
-async def upload_logo(file: UploadFile = File(...), _user: str = Depends(require_bearer)):
-    _ = _user
+async def upload_logo(file: UploadFile = File(...), store: TenantStore = Depends(get_tenant_store)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Keine Datei")
 
@@ -546,24 +568,25 @@ async def upload_logo(file: UploadFile = File(...), _user: str = Depends(require
         raise HTTPException(status_code=400, detail="Nur Bilddateien erlaubt")
 
     new_name = f"{uuid.uuid4().hex}{ext}"
-    dest = UPLOADS_DIR / new_name
+    logos_dir = store.uploads_dir("logos")
+    dest = logos_dir / new_name
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
     dest.write_bytes(content)
 
-    prof = _read_json(COMPANY_FILE, {})
+    prof = store.read_json("company_profile.json", {})
     old = prof.get("logoFilename")
     if old:
-        old_path = UPLOADS_DIR / old
-        if old_path.exists():
-            try:
-                old_path.unlink()
-            except OSError:
-                pass
+        for old_path in (logos_dir / old, UPLOADS_DIR / old):
+            if old_path.exists():
+                try:
+                    old_path.unlink()
+                except OSError:
+                    pass
     prof["logoFilename"] = new_name
-    _write_json(COMPANY_FILE, prof)
-    return {"logoFilename": new_name, "logoUrl": f"/uploads/logos/{new_name}"}
+    store.write_json("company_profile.json", prof)
+    return {"logoFilename": new_name, "logoUrl": _logo_public_url(store, new_name)}
 
 
 @app.post("/api/audio/upload")
@@ -572,10 +595,9 @@ async def upload_audio(
     reportDraftId: str | None = Form(default=None),
     projectId: str | None = Form(default=None),
     date: str | None = Form(default=None),
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
     """Audio-Rohtrack speichern; Transkription separat unter /api/audio/{id}/transcribe."""
-    _ = _user
     content = await file.read()
     n = len(content)
     if n > MAX_AUDIO_UPLOAD_BYTES:
@@ -587,7 +609,7 @@ async def upload_audio(
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     ext = _guess_audio_extension(file.content_type, file.filename or "")
     safe_name = f"audio_{ts}_{aid}.{ext}"
-    dest = AUDIO_UPLOAD_DIR / safe_name
+    dest = store.uploads_dir("audio") / safe_name
     dest.write_bytes(content)
 
     draft = (reportDraftId or "").strip()
@@ -608,9 +630,9 @@ async def upload_audio(
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
 
-    uploads = list(_get_audio_uploads_list())
+    uploads = list(_get_audio_uploads_list(store))
     uploads.append(rec)
-    _save_audio_uploads_list(uploads)
+    _save_audio_uploads_list(store, uploads)
 
     return {
         "ok": True,
@@ -620,54 +642,52 @@ async def upload_audio(
     }
 
 
-def _resolve_audio_upload_path(rec: dict[str, Any]) -> Path:
+def _resolve_audio_upload_path(store: TenantStore, rec: dict[str, Any]) -> Path:
     fn = rec.get("filename")
     if not isinstance(fn, str) or not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
         raise HTTPException(status_code=400, detail="Ungültiger Audiodateiname")
-    base = AUDIO_UPLOAD_DIR.resolve()
-    path = (AUDIO_UPLOAD_DIR / fn).resolve()
-    try:
-        path.relative_to(base)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Audiodatei nicht gefunden")
-    if not path.is_file():
-        raise HTTPException(status_code=404, detail="Audiodatei nicht gefunden")
+    path = store.resolve_upload_file("audio", fn)
+    if path is None:
+        base = AUDIO_UPLOAD_DIR.resolve()
+        legacy = (AUDIO_UPLOAD_DIR / fn).resolve()
+        try:
+            legacy.relative_to(base)
+        except ValueError:
+            raise HTTPException(status_code=404, detail="Audiodatei nicht gefunden")
+        if not legacy.is_file():
+            raise HTTPException(status_code=404, detail="Audiodatei nicht gefunden")
+        return legacy
     return path
 
 
 @app.post("/api/audio/{audio_id}/transcribe")
-def transcribe_stored_audio(audio_id: str, _user: str = Depends(require_bearer)):
+def transcribe_stored_audio(audio_id: str, store: TenantStore = Depends(get_tenant_store)):
     """Transkription eines zuvor hochgeladenen Tracks (V1: Dummy-Text)."""
-    _ = _user
-    uploads = _get_audio_uploads_list()
+    uploads = _get_audio_uploads_list(store)
     rec = next((u for u in uploads if isinstance(u, dict) and str(u.get("id")) == audio_id), None)
     if not rec:
         raise HTTPException(status_code=404, detail="Audio nicht gefunden")
-    path = _resolve_audio_upload_path(rec)
+    path = _resolve_audio_upload_path(store, rec)
     text = transcribe_audio(str(path))
     return {"ok": True, "audioId": audio_id, "transcript": text}
 
 
 @app.get("/api/audio/uploads")
-def list_audio_uploads(_user: str = Depends(require_bearer)):
+def list_audio_uploads(store: TenantStore = Depends(get_tenant_store)):
     """Chronologie der gespeicherten Audio-Tracks (JSON-Liste)."""
-    _ = _user
-    uploads = list(_get_audio_uploads_list())
+    uploads = list(_get_audio_uploads_list(store))
     uploads_sorted = sorted(uploads, key=lambda x: str(x.get("createdAt", "")), reverse=True)
     return {"uploads": uploads_sorted}
 
 
 @app.get("/api/employees")
-def list_employees(_user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(EMPLOYEES_FILE, {"employees": []})
-    return data
+def list_employees(store: TenantStore = Depends(get_tenant_store)):
+    return store.read_json("employees.json", {"employees": []})
 
 
 @app.post("/api/employees")
-def create_employee(body: EmployeeCreate, _user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(EMPLOYEES_FILE, {"employees": []})
+def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenant_store)):
+    data = store.read_json("employees.json", {"employees": []})
     emp = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
@@ -682,14 +702,13 @@ def create_employee(body: EmployeeCreate, _user: str = Depends(require_bearer)):
     if start_date:
         emp["hoursBalanceStartDate"] = start_date
     data.setdefault("employees", []).append(emp)
-    _write_json(EMPLOYEES_FILE, data)
+    store.write_json("employees.json", data)
     return emp
 
 
 @app.patch("/api/employees/{employee_id}")
-def patch_employee(employee_id: str, body: EmployeePatch, _user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(EMPLOYEES_FILE, {"employees": []})
+def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = Depends(get_tenant_store)):
+    data = store.read_json("employees.json", {"employees": []})
     for e in data.get("employees", []):
         if e.get("id") == employee_id:
             if body.name is not None:
@@ -714,7 +733,7 @@ def patch_employee(employee_id: str, body: EmployeePatch, _user: str = Depends(r
                 raise HTTPException(status_code=400, detail="Stand zum Datum erforderlich bei Startsaldo ungleich 0")
             if hours_start == 0:
                 e.pop("hoursBalanceStartDate", None)
-            _write_json(EMPLOYEES_FILE, data)
+            store.write_json("employees.json", data)
             return e
     raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
 
@@ -723,11 +742,10 @@ def patch_employee(employee_id: str, body: EmployeePatch, _user: str = Depends(r
 def list_time_entries_endpoint(
     employeeId: str | None = None,
     month: str | None = None,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
     entries = time_account.list_time_entries(
-        read_json=_read_json,
+        read_json=store.time_account_read_json,
         employee_id=employeeId,
         month=month,
     )
@@ -735,9 +753,8 @@ def list_time_entries_endpoint(
 
 
 @app.post("/api/time-entries")
-def create_time_entry_endpoint(body: TimeEntryCreate, _user: str = Depends(require_bearer)):
-    _ = _user
-    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+def create_time_entry_endpoint(body: TimeEntryCreate, store: TenantStore = Depends(get_tenant_store)):
+    employees_data = store.read_json("employees.json", {"employees": []})
     try:
         entry = time_account.create_manual_time_entry(
             employee_id=body.employeeId,
@@ -745,8 +762,8 @@ def create_time_entry_endpoint(body: TimeEntryCreate, _user: str = Depends(requi
             hours=body.hours,
             note=body.note,
             employees=list(employees_data.get("employees") or []),
-            read_json=_read_json,
-            write_json=_write_json,
+            read_json=store.time_account_read_json,
+            write_json=store.time_account_write_json,
         )
     except ValueError as exc:
         code = str(exc)
@@ -762,9 +779,12 @@ def create_time_entry_endpoint(body: TimeEntryCreate, _user: str = Depends(requi
 
 
 @app.delete("/api/time-entries/{entry_id}")
-def delete_time_entry_endpoint(entry_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    removed = time_account.delete_time_entry(entry_id, read_json=_read_json, write_json=_write_json)
+def delete_time_entry_endpoint(entry_id: str, store: TenantStore = Depends(get_tenant_store)):
+    removed = time_account.delete_time_entry(
+        entry_id,
+        read_json=store.time_account_read_json,
+        write_json=store.time_account_write_json,
+    )
     if not removed:
         raise HTTPException(status_code=404, detail="Buchung nicht gefunden")
     return {"ok": True}
@@ -773,32 +793,30 @@ def delete_time_entry_endpoint(entry_id: str, _user: str = Depends(require_beare
 @app.get("/api/time-accounts")
 def list_time_accounts_endpoint(
     month: str | None = None,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
-    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    employees_data = store.read_json("employees.json", {"employees": []})
     return time_account.list_time_accounts(
         list(employees_data.get("employees") or []),
-        read_json=_read_json,
+        read_json=store.time_account_read_json,
         month=month,
     )
 
 
-def _time_export_payload(month: str | None) -> dict[str, Any]:
+def _time_export_payload(store: TenantStore, month: str | None) -> dict[str, Any]:
     month_prefix = str(month or datetime.now(timezone.utc).strftime("%Y-%m")).strip()[:7]
     if not re.match(r"^\d{4}-\d{2}$", month_prefix):
         raise HTTPException(status_code=400, detail="Ungültiger Monat (YYYY-MM)")
 
-    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
-    employees = list(employees_data.get("employees") or [])
-    entries = time_account.list_time_entries(read_json=_read_json, month=month_prefix)
-    reports_data = _read_json(REPORTS_FILE, {"reports": []})
+    employees = list(store.read_json("employees.json", {"employees": []}).get("employees") or [])
+    entries = time_account.list_time_entries(read_json=store.time_account_read_json, month=month_prefix)
+    reports_data = store.read_json("reports.json", {"reports": []})
     reports_by_id = {
         str(r.get("id") or ""): r for r in (reports_data.get("reports") or []) if isinstance(r, dict) and r.get("id")
     }
     entries = time_account.enrich_entries_for_export(entries, reports_by_id)
-    accounts_doc = time_account.list_time_accounts(employees, read_json=_read_json, month=month_prefix)
-    company = _read_json(COMPANY_FILE, {})
+    accounts_doc = time_account.list_time_accounts(employees, read_json=store.time_account_read_json, month=month_prefix)
+    company = store.read_json("company_profile.json", {})
     company_name = str(company.get("companyName") or "")
 
     return {
@@ -812,10 +830,9 @@ def _time_export_payload(month: str | None) -> dict[str, Any]:
 @app.get("/api/time-accounts/export/csv")
 def export_time_accounts_csv(
     month: str | None = None,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
-    payload = _time_export_payload(month)
+    payload = _time_export_payload(store, month)
     blob = time_account.build_time_export_csv(**payload)
     ascii_fn = f"stundenkonto_{payload['month']}.csv"
     return Response(
@@ -830,10 +847,9 @@ def export_time_accounts_csv(
 @app.get("/api/time-accounts/export/xlsx")
 def export_time_accounts_xlsx(
     month: str | None = None,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
-    payload = _time_export_payload(month)
+    payload = _time_export_payload(store, month)
     try:
         blob = time_account.build_time_export_xlsx(**payload)
     except Exception as exc:
@@ -849,15 +865,13 @@ def export_time_accounts_xlsx(
 
 
 @app.get("/api/projects")
-def list_projects(_user: str = Depends(require_bearer)):
-    _ = _user
-    return _read_json(PROJECTS_FILE, {"projects": []})
+def list_projects(store: TenantStore = Depends(get_tenant_store)):
+    return store.read_json("projects.json", {"projects": []})
 
 
 @app.post("/api/projects")
-def create_project(body: ProjectCreate, _user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(PROJECTS_FILE, {"projects": []})
+def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_store)):
+    data = store.read_json("projects.json", {"projects": []})
     proj = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
@@ -868,14 +882,13 @@ def create_project(body: ProjectCreate, _user: str = Depends(require_bearer)):
         "status": body.status if body.status in {"aktiv", "pausiert", "abgeschlossen"} else "aktiv",
     }
     data.setdefault("projects", []).append(proj)
-    _write_json(PROJECTS_FILE, data)
+    store.write_json("projects.json", data)
     return proj
 
 
 @app.patch("/api/projects/{project_id}")
-def patch_project(project_id: str, body: ProjectPatch, _user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(PROJECTS_FILE, {"projects": []})
+def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depends(get_tenant_store)):
+    data = store.read_json("projects.json", {"projects": []})
     for p in data.get("projects", []):
         if p.get("id") == project_id:
             if body.name is not None:
@@ -891,7 +904,7 @@ def patch_project(project_id: str, body: ProjectPatch, _user: str = Depends(requ
             if body.status is not None:
                 if body.status in {"aktiv", "pausiert", "abgeschlossen"}:
                     p["status"] = body.status
-            _write_json(PROJECTS_FILE, data)
+            store.write_json("projects.json", data)
             return p
     raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
 
@@ -952,9 +965,8 @@ def _ensure_clean_structured_final(structured: dict[str, Any]) -> dict[str, Any]
 
 
 @app.post("/api/structure-report")
-def api_structure_report(body: StructureReportBody, _user: str = Depends(require_bearer)):
-    _ = _user
-    prof = _read_json(COMPANY_FILE, {})
+def api_structure_report(body: StructureReportBody, store: TenantStore = Depends(get_tenant_store)):
+    prof = store.read_json("company_profile.json", {})
     company_nm = str(prof.get("companyName") or "").strip()
     normalized_raw = normalize_trade_language(body.rawText)
 
@@ -1041,10 +1053,9 @@ def api_structure_report(body: StructureReportBody, _user: str = Depends(require
 def list_reports(
     projectId: str | None = None,
     month: str | None = None,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
-    data = _read_json(REPORTS_FILE, {"reports": []})
+    data = store.read_json("reports.json", {"reports": []})
     reports = list(data.get("reports", []))
     reports.sort(key=lambda r: r.get("createdAt", ""), reverse=True)
 
@@ -1058,21 +1069,21 @@ def list_reports(
 
 
 @app.post("/api/reports")
-def create_report(body: ReportCreateBody, _user: str = Depends(require_bearer)):
-    _ = _user
-    prof = _read_json(COMPANY_FILE, {})
+def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenant_store)):
+    prof = store.read_json("company_profile.json", {})
     logo_fn = prof.get("logoFilename")
-    base = "http://localhost:30610"
-    company_logo_url = None
-    if logo_fn:
-        company_logo_url = f"{base}/uploads/logos/{logo_fn}"
+    company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None
+    if logo_fn and not company_logo_url:
+        legacy_logo = UPLOADS_DIR / str(logo_fn)
+        if legacy_logo.is_file():
+            company_logo_url = f"/uploads/logos/{logo_fn}"
     if body.companyLogoUrl:
         company_logo_url = body.companyLogoUrl
 
     rid = str(uuid.uuid4())
     doc = {
         "id": rid,
-        "companyId": "local-company",
+        "companyId": store.tenant_id,
         "companyName": body.companyName,
         "companyLogoUrl": company_logo_url,
         "officeEmail": body.officeEmail or prof.get("officeEmail", ""),
@@ -1092,25 +1103,25 @@ def create_report(body: ReportCreateBody, _user: str = Depends(require_bearer)):
         "signatures": {"customer": None, "employee": None},
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
-    _write_json_reports(doc)
-    employees_data = _read_json(EMPLOYEES_FILE, {"employees": []})
+    _write_json_reports(store, doc)
+    employees_data = store.read_json("employees.json", {"employees": []})
     doc["timeBooking"] = time_account.sync_entries_for_report(
         doc,
         list(employees_data.get("employees") or []),
-        read_json=_read_json,
-        write_json=_write_json,
+        read_json=store.time_account_read_json,
+        write_json=store.time_account_write_json,
     )
     return doc
 
 
-def _write_json_reports(new_report: dict) -> None:
-    data = _read_json(REPORTS_FILE, {"reports": []})
+def _write_json_reports(store: TenantStore, new_report: dict) -> None:
+    data = store.read_json("reports.json", {"reports": []})
     data.setdefault("reports", []).append(new_report)
-    _write_json(REPORTS_FILE, data)
+    store.write_json("reports.json", data)
 
 
-def _find_report_doc(report_id: str) -> dict[str, Any]:
-    data = _read_json(REPORTS_FILE, {"reports": []})
+def _find_report_doc(store: TenantStore, report_id: str) -> dict[str, Any]:
+    data = store.read_json("reports.json", {"reports": []})
     for r in data.get("reports", []):
         if r.get("id") == report_id:
             return r
@@ -1124,12 +1135,19 @@ def _report_photos_list(report: dict[str, Any]) -> list[dict[str, Any]]:
     return [p for p in raw if isinstance(p, dict)]
 
 
-def _photo_public_url(filename: str) -> str:
-    return f"/uploads/photos/{filename}"
+def _photo_public_url(store: TenantStore, filename: str) -> str:
+    return f"/uploads/tenants/{store.tenant_id}/photos/{filename}"
 
 
-def _photo_api_item(entry: dict[str, Any]) -> dict[str, Any]:
+def _photo_api_item(store: TenantStore, entry: dict[str, Any]) -> dict[str, Any]:
     fn = str(entry.get("filename") or "")
+    url = None
+    if fn:
+        url = _photo_public_url(store, fn)
+        if not store.resolve_upload_file("photos", fn):
+            legacy = PHOTOS_UPLOAD_DIR / fn
+            if legacy.is_file():
+                url = f"/uploads/photos/{fn}"
     return {
         "id": entry.get("id"),
         "filename": fn,
@@ -1137,23 +1155,26 @@ def _photo_api_item(entry: dict[str, Any]) -> dict[str, Any]:
         "contentType": entry.get("contentType"),
         "sizeBytes": entry.get("sizeBytes"),
         "uploadedAt": entry.get("uploadedAt"),
-        "url": _photo_public_url(fn) if fn else None,
+        "url": url,
     }
 
 
-def _resolve_photo_path(filename: str) -> Path:
+def _resolve_photo_path(store: TenantStore, filename: str) -> Path:
     fn = str(filename or "")
     if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
         raise HTTPException(status_code=400, detail="Ungültiger Fotodateiname")
+    path = store.resolve_upload_file("photos", fn)
+    if path is not None:
+        return path
     base = PHOTOS_UPLOAD_DIR.resolve()
-    path = (PHOTOS_UPLOAD_DIR / fn).resolve()
+    legacy = (PHOTOS_UPLOAD_DIR / fn).resolve()
     try:
-        path.relative_to(base)
+        legacy.relative_to(base)
     except ValueError:
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
-    if not path.is_file():
+    if not legacy.is_file():
         raise HTTPException(status_code=404, detail="Foto nicht gefunden")
-    return path
+    return legacy
 
 
 def _guess_photo_extension(content_type: str | None, filename: str) -> str:
@@ -1172,23 +1193,23 @@ def _guess_photo_extension(content_type: str | None, filename: str) -> str:
     return "jpg"
 
 
-def _save_report_photos(report_id: str, photos: list[dict[str, Any]]) -> None:
-    data = _read_json(REPORTS_FILE, {"reports": []})
+def _save_report_photos(store: TenantStore, report_id: str, photos: list[dict[str, Any]]) -> None:
+    data = store.read_json("reports.json", {"reports": []})
     for r in data.get("reports", []):
         if r.get("id") == report_id:
             r["photos"] = photos
-            _write_json(REPORTS_FILE, data)
+            store.write_json("reports.json", data)
             return
     raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
 
 
-def _delete_report_photo_files(report: dict[str, Any]) -> None:
+def _delete_report_photo_files(store: TenantStore, report: dict[str, Any]) -> None:
     for entry in _report_photos_list(report):
         fn = entry.get("filename")
         if not isinstance(fn, str) or not fn:
             continue
         try:
-            path = _resolve_photo_path(fn)
+            path = _resolve_photo_path(store, fn)
             path.unlink(missing_ok=True)
         except HTTPException:
             pass
@@ -1212,16 +1233,21 @@ def _report_signatures_doc(report: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _signature_public_url(filename: str) -> str:
-    return f"/uploads/signatures/{filename}"
+def _signature_public_url(store: TenantStore, filename: str) -> str:
+    return f"/uploads/tenants/{store.tenant_id}/signatures/{filename}"
 
 
-def _signature_api_item(role: str, entry: dict[str, Any] | None) -> dict[str, Any] | None:
+def _signature_api_item(store: TenantStore, role: str, entry: dict[str, Any] | None) -> dict[str, Any] | None:
     if not isinstance(entry, dict):
         return None
     fn = str(entry.get("filename") or "")
     if not fn:
         return None
+    url = _signature_public_url(store, fn)
+    if not store.resolve_upload_file("signatures", fn):
+        legacy = SIGNATURES_UPLOAD_DIR / fn
+        if legacy.is_file():
+            url = f"/uploads/signatures/{fn}"
     return {
         "id": entry.get("id"),
         "role": role,
@@ -1230,23 +1256,26 @@ def _signature_api_item(role: str, entry: dict[str, Any] | None) -> dict[str, An
         "sizeBytes": entry.get("sizeBytes"),
         "signedAt": entry.get("signedAt"),
         "signedByLabel": entry.get("signedByLabel"),
-        "url": _signature_public_url(fn),
+        "url": url,
     }
 
 
-def _resolve_signature_path(filename: str) -> Path:
+def _resolve_signature_path(store: TenantStore, filename: str) -> Path:
     fn = str(filename or "")
     if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
         raise HTTPException(status_code=400, detail="Ungültiger Signaturdateiname")
+    path = store.resolve_upload_file("signatures", fn)
+    if path is not None:
+        return path
     base = SIGNATURES_UPLOAD_DIR.resolve()
-    path = (SIGNATURES_UPLOAD_DIR / fn).resolve()
+    legacy = (SIGNATURES_UPLOAD_DIR / fn).resolve()
     try:
-        path.relative_to(base)
+        legacy.relative_to(base)
     except ValueError:
         raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
-    if not path.is_file():
+    if not legacy.is_file():
         raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
-    return path
+    return legacy
 
 
 def _validate_signature_role(role: str) -> str:
@@ -1266,31 +1295,31 @@ def _validate_signature_png(content: bytes) -> None:
         raise HTTPException(status_code=400, detail="Nur PNG-Signaturen erlaubt.")
 
 
-def _save_report_signatures(report_id: str, signatures: dict[str, Any]) -> None:
-    data = _read_json(REPORTS_FILE, {"reports": []})
+def _save_report_signatures(store: TenantStore, report_id: str, signatures: dict[str, Any]) -> None:
+    data = store.read_json("reports.json", {"reports": []})
     for r in data.get("reports", []):
         if r.get("id") == report_id:
             r["signatures"] = signatures
-            _write_json(REPORTS_FILE, data)
+            store.write_json("reports.json", data)
             return
     raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
 
 
-def _delete_signature_file(filename: str | None) -> None:
+def _delete_signature_file(store: TenantStore, filename: str | None) -> None:
     if not isinstance(filename, str) or not filename:
         return
     try:
-        _resolve_signature_path(filename).unlink(missing_ok=True)
+        _resolve_signature_path(store, filename).unlink(missing_ok=True)
     except HTTPException:
         pass
     except OSError:
         pass
 
 
-def _delete_report_signature_files(report: dict[str, Any]) -> None:
+def _delete_report_signature_files(store: TenantStore, report: dict[str, Any]) -> None:
     for entry in _report_signatures_doc(report).values():
         if isinstance(entry, dict):
-            _delete_signature_file(entry.get("filename"))
+            _delete_signature_file(store, entry.get("filename"))
 
 
 def _content_disposition_attachment(ascii_filename: str, utf8_filename: str) -> str:
@@ -1299,33 +1328,34 @@ def _content_disposition_attachment(ascii_filename: str, utf8_filename: str) -> 
 
 
 @app.get("/api/reports/{report_id}")
-def get_report(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    return _find_report_doc(report_id)
+def get_report(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    return _find_report_doc(store, report_id)
 
 
 @app.delete("/api/reports/{report_id}")
-def delete_report(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    data = _read_json(REPORTS_FILE, {"reports": []})
+def delete_report(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    data = store.read_json("reports.json", {"reports": []})
     reports_list = list(data.get("reports", []))
     target = next((r for r in reports_list if r.get("id") == report_id), None)
     if target is None:
         raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
-    _delete_report_photo_files(target)
-    _delete_report_signature_files(target)
-    time_account.delete_entries_for_report(report_id, read_json=_read_json, write_json=_write_json)
+    _delete_report_photo_files(store, target)
+    _delete_report_signature_files(store, target)
+    time_account.delete_entries_for_report(
+        report_id,
+        read_json=store.time_account_read_json,
+        write_json=store.time_account_write_json,
+    )
     next_list = [r for r in reports_list if r.get("id") != report_id]
     data["reports"] = next_list
-    _write_json(REPORTS_FILE, data)
+    store.write_json("reports.json", data)
     return {"ok": True}
 
 
 @app.get("/api/reports/{report_id}/photos")
-def list_report_photos(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    report = _find_report_doc(report_id)
-    photos = [_photo_api_item(p) for p in _report_photos_list(report)]
+def list_report_photos(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    report = _find_report_doc(store, report_id)
+    photos = [_photo_api_item(store, p) for p in _report_photos_list(report)]
     return {
         "photos": photos,
         "count": len(photos),
@@ -1337,11 +1367,10 @@ def list_report_photos(report_id: str, _user: str = Depends(require_bearer)):
 async def upload_report_photo(
     report_id: str,
     file: UploadFile = File(...),
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
     """Baustellenfoto zu einem gespeicherten Tagesbericht hochladen (max. 10 pro Bericht)."""
-    _ = _user
-    report = _find_report_doc(report_id)
+    report = _find_report_doc(store, report_id)
     photos = _report_photos_list(report)
     if len(photos) >= MAX_PHOTOS_PER_REPORT:
         raise HTTPException(
@@ -1369,7 +1398,7 @@ async def upload_report_photo(
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     file_ext = _guess_photo_extension(file.content_type, file.filename or "")
     safe_name = f"photo_{ts}_{photo_id}.{file_ext}"
-    dest = PHOTOS_UPLOAD_DIR / safe_name
+    dest = store.uploads_dir("photos") / safe_name
     dest.write_bytes(content)
 
     original = file.filename if file.filename else ""
@@ -1383,11 +1412,11 @@ async def upload_report_photo(
         "uploadedAt": datetime.now(timezone.utc).isoformat(),
     }
     photos.append(entry)
-    _save_report_photos(report_id, photos)
+    _save_report_photos(store, report_id, photos)
 
     return {
         "ok": True,
-        "photo": _photo_api_item(entry),
+        "photo": _photo_api_item(store, entry),
         "count": len(photos),
         "maxPhotos": MAX_PHOTOS_PER_REPORT,
     }
@@ -1397,10 +1426,9 @@ async def upload_report_photo(
 def delete_report_photo(
     report_id: str,
     photo_id: str,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
-    report = _find_report_doc(report_id)
+    report = _find_report_doc(store, report_id)
     photos = _report_photos_list(report)
     kept: list[dict[str, Any]] = []
     removed: dict[str, Any] | None = None
@@ -1415,13 +1443,13 @@ def delete_report_photo(
     fn = removed.get("filename")
     if isinstance(fn, str) and fn:
         try:
-            _resolve_photo_path(fn).unlink(missing_ok=True)
+            _resolve_photo_path(store, fn).unlink(missing_ok=True)
         except HTTPException:
             pass
         except OSError:
             pass
 
-    _save_report_photos(report_id, kept)
+    _save_report_photos(store, report_id, kept)
     return {
         "ok": True,
         "count": len(kept),
@@ -1429,19 +1457,18 @@ def delete_report_photo(
     }
 
 
-def _signatures_api_payload(report: dict[str, Any]) -> dict[str, Any]:
+def _signatures_api_payload(store: TenantStore, report: dict[str, Any]) -> dict[str, Any]:
     doc = _report_signatures_doc(report)
     return {
-        role: _signature_api_item(role, doc.get(role))
+        role: _signature_api_item(store, role, doc.get(role))
         for role in sorted(SIGNATURE_ROLES)
     }
 
 
 @app.get("/api/reports/{report_id}/signatures")
-def list_report_signatures(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    report = _find_report_doc(report_id)
-    signatures = _signatures_api_payload(report)
+def list_report_signatures(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    report = _find_report_doc(store, report_id)
+    signatures = _signatures_api_payload(store, report)
     count = sum(1 for v in signatures.values() if v is not None)
     return {"signatures": signatures, "count": count}
 
@@ -1452,12 +1479,11 @@ async def upload_report_signature(
     role: str,
     file: UploadFile = File(...),
     signedByLabel: str | None = Form(None),
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
     """Unterschrift fuer Kunde oder Mitarbeiter speichern (PNG, max. eine pro Rolle)."""
-    _ = _user
     sig_role = _validate_signature_role(role)
-    report = _find_report_doc(report_id)
+    report = _find_report_doc(store, report_id)
 
     if not file.filename:
         raise HTTPException(status_code=400, detail="Keine Datei")
@@ -1468,12 +1494,12 @@ async def upload_report_signature(
     signatures = _report_signatures_doc(report)
     previous = signatures.get(sig_role)
     if isinstance(previous, dict):
-        _delete_signature_file(previous.get("filename"))
+        _delete_signature_file(store, previous.get("filename"))
 
     sig_id = str(uuid.uuid4())
     ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     safe_name = f"sig_{ts}_{sig_role}_{sig_id}.png"
-    dest = SIGNATURES_UPLOAD_DIR / safe_name
+    dest = store.uploads_dir("signatures") / safe_name
     dest.write_bytes(content)
 
     label = str(signedByLabel or "").strip()[:120] or None
@@ -1489,32 +1515,40 @@ async def upload_report_signature(
         entry["signedByLabel"] = label
 
     signatures[sig_role] = entry
-    _save_report_signatures(report_id, signatures)
+    _save_report_signatures(store, report_id, signatures)
 
-    item = _signature_api_item(sig_role, entry)
+    item = _signature_api_item(store, sig_role, entry)
     count = sum(1 for v in signatures.values() if isinstance(v, dict))
-    return {"ok": True, "signature": item, "signatures": _signatures_api_payload({"signatures": signatures}), "count": count}
+    return {
+        "ok": True,
+        "signature": item,
+        "signatures": _signatures_api_payload(store, {"signatures": signatures}),
+        "count": count,
+    }
 
 
 @app.delete("/api/reports/{report_id}/signatures/{role}")
 def delete_report_signature(
     report_id: str,
     role: str,
-    _user: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ):
-    _ = _user
     sig_role = _validate_signature_role(role)
-    report = _find_report_doc(report_id)
+    report = _find_report_doc(store, report_id)
     signatures = _report_signatures_doc(report)
     previous = signatures.get(sig_role)
     if not isinstance(previous, dict):
         raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
 
-    _delete_signature_file(previous.get("filename"))
+    _delete_signature_file(store, previous.get("filename"))
     signatures[sig_role] = None
-    _save_report_signatures(report_id, signatures)
+    _save_report_signatures(store, report_id, signatures)
     count = sum(1 for v in signatures.values() if isinstance(v, dict))
-    return {"ok": True, "signatures": _signatures_api_payload({"signatures": signatures}), "count": count}
+    return {
+        "ok": True,
+        "signatures": _signatures_api_payload(store, {"signatures": signatures}),
+        "count": count,
+    }
 
 
 class SendOfficeResponse(BaseModel):
@@ -1526,10 +1560,11 @@ class SendOfficeResponse(BaseModel):
 @app.post("/api/reports/{report_id}/send-office", response_model=SendOfficeResponse)
 def send_report_to_office_endpoint(
     report_id: str,
-    _user: str = Depends(require_bearer),
+    user_id: str = Depends(require_bearer),
+    store: TenantStore = Depends(get_tenant_store),
 ) -> SendOfficeResponse:
-    rep = _find_report_doc(report_id)
-    prof = _read_json(COMPANY_FILE, {})
+    rep = _find_report_doc(store, report_id)
+    prof = store.read_json("company_profile.json", {})
     office = str(prof.get("officeEmail") or "").strip()
     if not office:
         raise HTTPException(
@@ -1537,10 +1572,9 @@ def send_report_to_office_endpoint(
             detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.",
         )
 
-    # SMTP-Daten aus dem verschluesselten User-Store laden. Token = user_id.
     sender_email = ""
     for u in get_users():
-        if u.get("id") == _user:
+        if u.get("id") == user_id:
             sender_email = str(u.get("email", "")).strip().lower()
             break
     if not sender_email:
@@ -1563,20 +1597,41 @@ def send_report_to_office_endpoint(
         prof,
         office,
         mail_config=mail_config,
-        photos_upload_dir=PHOTOS_UPLOAD_DIR,
+        photos_upload_dir=store.uploads_dir("photos"),
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 
+def _export_resolve_logo(store: TenantStore):
+    def resolve(_report: dict[str, Any], prof: dict[str, Any]) -> Path | None:
+        logo_fn = str(prof.get("logoFilename") or "").strip()
+        if logo_fn:
+            return store.resolve_upload_file("logos", logo_fn)
+        return None
+
+    return resolve
+
+
+def _export_resolve_signature(store: TenantStore):
+    def resolve(filename: str) -> Path | None:
+        return store.resolve_upload_file("signatures", filename)
+
+    return resolve
+
+
 @app.get("/api/reports/{report_id}/export/pdf")
-def export_report_pdf(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    rep = _find_report_doc(report_id)
-    prof = _read_json(COMPANY_FILE, {})
+def export_report_pdf(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    rep = _find_report_doc(store, report_id)
+    prof = store.read_json("company_profile.json", {})
     try:
-        blob = build_pdf_bytes(rep, prof)
+        blob = build_pdf_bytes(
+            rep,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_signature=_export_resolve_signature(store),
+        )
     except Exception:
         raise HTTPException(
             status_code=500,
@@ -1593,12 +1648,11 @@ def export_report_pdf(report_id: str, _user: str = Depends(require_bearer)):
 
 
 @app.get("/api/reports/{report_id}/export/word")
-def export_report_word(report_id: str, _user: str = Depends(require_bearer)):
-    _ = _user
-    rep = _find_report_doc(report_id)
-    prof = _read_json(COMPANY_FILE, {})
+def export_report_word(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+    rep = _find_report_doc(store, report_id)
+    prof = store.read_json("company_profile.json", {})
     try:
-        blob = build_docx_bytes(rep, prof)
+        blob = build_docx_bytes(rep, prof, resolve_logo=_export_resolve_logo(store))
     except Exception:
         raise HTTPException(
             status_code=500,

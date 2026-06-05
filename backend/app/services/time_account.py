@@ -13,6 +13,7 @@ from typing import Any, Callable
 
 DEFAULT_BREAK_MINUTES = 45
 _ENTRIES_FILE: Path | None = None
+_ENTRIES_SENTINEL = Path("__tenant_store__")
 
 
 def configure(entries_file: Path) -> None:
@@ -21,9 +22,7 @@ def configure(entries_file: Path) -> None:
 
 
 def _entries_path() -> Path:
-    if _ENTRIES_FILE is None:
-        raise RuntimeError("time_account.configure() was not called")
-    return _ENTRIES_FILE
+    return _ENTRIES_FILE or _ENTRIES_SENTINEL
 
 
 def _read_entries_doc(read_json: Callable[..., Any]) -> dict[str, Any]:

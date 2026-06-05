@@ -35,14 +35,11 @@ print(f"[smoke] using tmp data dir: {_TMP_DIR}")
 import main  # noqa: E402
 from app.services import mail_autodiscover, mail_store  # noqa: E402
 from app.services.mail_autodiscover import SmtpCandidate, SmtpVerifyResult  # noqa: E402
+from app.services.tenant_storage import TenantStore  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
+from smoke_isolation import isolate_smoke_data  # noqa: E402
 
-# Pfade in main + mail_store auf Temp-Verzeichnis umlenken.
-main.DATA_DIR = _TMP_DIR
-main.USERS_FILE = _TMP_DIR / "users.json"
-main.COMPANY_FILE = _TMP_DIR / "company_profile.json"
-main.REPORTS_FILE = _TMP_DIR / "reports.json"
-mail_store._DATA_DIR = _TMP_DIR
+isolate_smoke_data(_TMP_DIR)
 mail_store._KEY_FILE = _TMP_DIR / ".mail_key"
 mail_store._STORE_FILE = _TMP_DIR / "mail_configs.json"
 
@@ -170,16 +167,18 @@ _expect("App-Passwort" in detail, f"Provider-Hinweis fehlt im 401-detail: {detai
 mail_store.delete_mail_config(TEST_EMAIL)
 
 report_id = "smoke-report-" + uuid.uuid4().hex[:8]
-reports_doc = main._read_json(main.REPORTS_FILE, {"reports": []})
+user = main.find_user_by_email(TEST_EMAIL)
+_expect(user is not None, "user for send-office test missing")
+store = TenantStore(str(user.get("tenantId") or user["id"]))
+reports_doc = store.read_json("reports.json", {"reports": []})
 reports_doc.setdefault("reports", []).append(
     {"id": report_id, "projectName": "Smoke", "date": "2026-05-25", "exportFormat": "PDF"}
 )
-main._write_json(main.REPORTS_FILE, reports_doc)
+store.write_json("reports.json", reports_doc)
 
-# Buero-Mail im Profile setzen, damit der Endpoint nicht vorher abbricht.
-prof = main._read_json(main.COMPANY_FILE, {})
+prof = store.read_json("company_profile.json", {})
 prof["officeEmail"] = "office@example.com"
-main._write_json(main.COMPANY_FILE, prof)
+store.write_json("company_profile.json", prof)
 
 # Aktueller Token ist noch der vom Register-Schritt.
 res = client.post(
