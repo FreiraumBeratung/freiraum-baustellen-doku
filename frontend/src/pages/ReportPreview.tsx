@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, downloadExport, resolveBackendPublicUrl } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import {
@@ -367,6 +368,7 @@ function ReportPreviewInner({
   restoreDisabled: boolean
   onRestoreSuggestion: () => void
 }) {
+  const { writeBlocked } = useWriteBlocked()
   const [companyName, setCompanyName] = useState('')
   const [officeEmail, setOfficeEmail] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
@@ -663,7 +665,7 @@ function ReportPreviewInner({
       <div className="mt-6 space-y-3">
         <BigButton
           type="button"
-          disabled={Boolean(savedReportId) || saveBusy}
+          disabled={writeBlocked || Boolean(savedReportId) || saveBusy}
           onClick={() => onSave(logoUrl, companyName, officeEmail)}
         >
           {savedReportId ? 'Gespeichert' : saveBusy ? '…' : 'Bericht speichern und abschließen'}
@@ -699,7 +701,7 @@ function ReportPreviewInner({
             <BigButton
               variant="secondary"
               type="button"
-              disabled={officeBusy || dlBusy}
+              disabled={writeBlocked || officeBusy || dlBusy}
               onClick={() => void sendOffice()}
             >
               {officeBusy ? '…' : 'Ans Büro senden'}

@@ -2,6 +2,7 @@ import { RotateCcw } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type Project = {
   id: string
@@ -27,6 +28,7 @@ const statusTone: Record<Project['status'], string> = {
 }
 
 export function ProjectsPage() {
+  const { writeBlocked } = useWriteBlocked()
   const [rows, setRows] = useState<Project[]>([])
   const [name, setName] = useState('')
   const [customer, setCustomer] = useState('')
@@ -45,7 +47,7 @@ export function ProjectsPage() {
 
   async function add(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim() || writeBlocked) return
     await api<Project>('/api/projects', {
       method: 'POST',
       body: JSON.stringify({
@@ -66,6 +68,7 @@ export function ProjectsPage() {
   }
 
   async function cycleStatus(p: Project) {
+    if (writeBlocked) return
     const order: Project['status'][] = ['aktiv', 'pausiert', 'abgeschlossen']
     const idx = order.indexOf(p.status)
     const next = order[(idx + 1) % order.length]
@@ -123,7 +126,7 @@ export function ProjectsPage() {
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
-          <BigButton type="submit">Baustelle anlegen</BigButton>
+          <BigButton type="submit" disabled={writeBlocked}>Baustelle anlegen</BigButton>
         </form>
       </Card>
 
@@ -153,8 +156,9 @@ export function ProjectsPage() {
 
               <button
                 type="button"
+                disabled={writeBlocked}
                 onClick={() => cycleStatus(p)}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.7rem] text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-orange-400/98 ring-1 ring-white/[0.08] transition hover:bg-black/60 active:scale-[0.99]"
+                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.7rem] text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-orange-400/98 ring-1 ring-white/[0.08] transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
               >
                 <RotateCcw strokeWidth={2} className="h-4 w-4 opacity-95" aria-hidden />
                 nächsten Status wählen

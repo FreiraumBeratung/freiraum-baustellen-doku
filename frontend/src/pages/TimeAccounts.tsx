@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, downloadExport } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type TimeAccount = {
   employeeId: string
@@ -80,6 +81,7 @@ function StartBalanceEditor({
   onSaved: () => void
   onCancel?: () => void
 }) {
+  const { writeBlocked } = useWriteBlocked()
   const [draft, setDraft] = useState<StartBalanceDraft>(() => ({
     hours: hoursToInput(acct.hoursBalanceStart),
     date: acct.hoursBalanceStartDate ?? '',
@@ -100,6 +102,7 @@ function StartBalanceEditor({
   async function save(e: React.FormEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (writeBlocked) return
     setMsg('')
     setErr('')
     const hours = parseHoursInput(draft.hours)
@@ -166,7 +169,7 @@ function StartBalanceEditor({
       {err ? <p className="mt-2 text-xs text-red-400">{err}</p> : null}
       {msg ? <p className="mt-2 text-xs text-emerald-400">{msg}</p> : null}
       <div className="mt-3 flex flex-col gap-2">
-        <BigButton type="submit" className="min-h-11 text-sm" disabled={busy}>
+        <BigButton type="submit" className="min-h-11 text-sm" disabled={busy || writeBlocked}>
           {busy ? 'Speichern…' : 'Startsaldo speichern'}
         </BigButton>
         {onCancel ? (
@@ -226,6 +229,7 @@ function ManualCorrectionForm({
   acct: TimeAccount
   onSaved: () => void
 }) {
+  const { writeBlocked } = useWriteBlocked()
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<CorrectionDraft>({ hours: '', date: '', note: '' })
   const [busy, setBusy] = useState(false)
@@ -234,6 +238,7 @@ function ManualCorrectionForm({
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     e.stopPropagation()
+    if (writeBlocked) return
     setErr('')
     const hours = parseHoursInput(draft.hours)
     if (hours === null || hours === 0) {
@@ -273,7 +278,8 @@ function ManualCorrectionForm({
     return (
       <button
         type="button"
-        className="mb-4 w-full rounded-xl border border-dashed border-zinc-700 py-2.5 text-sm text-zinc-400 hover:border-orange-500/40 hover:text-orange-300"
+        disabled={writeBlocked}
+        className="mb-4 w-full rounded-xl border border-dashed border-zinc-700 py-2.5 text-sm text-zinc-400 hover:border-orange-500/40 hover:text-orange-300 disabled:opacity-40"
         onClick={(e) => {
           e.stopPropagation()
           setOpen(true)
@@ -339,7 +345,7 @@ function ManualCorrectionForm({
       </div>
       {err ? <p className="mt-2 text-xs text-red-400">{err}</p> : null}
       <div className="mt-3 flex flex-col gap-2">
-        <BigButton type="submit" className="min-h-11 text-sm" disabled={busy}>
+        <BigButton type="submit" className="min-h-11 text-sm" disabled={busy || writeBlocked}>
           {busy ? 'Speichern…' : 'Korrektur buchen'}
         </BigButton>
         <button
@@ -361,10 +367,12 @@ function TimeEntryRow({
   entry: TimeEntry
   onDelete: () => void
 }) {
+  const { writeBlocked } = useWriteBlocked()
   const [busy, setBusy] = useState(false)
   const isReport = entry.source === 'report' && entry.reportId
 
   async function remove() {
+    if (writeBlocked) return
     const msg = isReport
       ? 'Buchung aus Tagesbericht entfernen? Der Bericht behält die ursprüngliche Arbeitszeit.'
       : 'Korrektur wirklich entfernen?'
@@ -420,7 +428,7 @@ function TimeEntryRow({
           type="button"
           className="shrink-0 rounded-lg border border-zinc-700 p-2 text-zinc-500 hover:border-red-500/40 hover:text-red-400 disabled:opacity-40"
           aria-label="Buchung entfernen"
-          disabled={busy}
+          disabled={busy || writeBlocked}
           onClick={remove}
         >
           <Trash2 className="h-4 w-4" aria-hidden />

@@ -1,4 +1,10 @@
+import {
+  isLicenseSuspendedDetail,
+  LICENSE_SUSPENDED_EVENT,
+} from '../constants/license'
+
 const TOKEN_KEY = 'freiraum_baustellen_token'
+const LICENSE_ACTIVE_KEY = 'freiraum_baustellen_license_active'
 
 function viteApiBaseOverride(): string | undefined {
   const t = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/$/, '')
@@ -66,6 +72,32 @@ export function setToken(t: string) {
 
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
+  clearLicenseActive()
+}
+
+/** true = aktiv; fehlender Eintrag gilt als aktiv (bestehende Sessions). */
+export function getLicenseActive(): boolean {
+  const raw = localStorage.getItem(LICENSE_ACTIVE_KEY)
+  if (raw === null) return true
+  return raw !== '0' && raw !== 'false'
+}
+
+export function setLicenseActive(active: boolean) {
+  localStorage.setItem(LICENSE_ACTIVE_KEY, active ? '1' : '0')
+}
+
+export function clearLicenseActive() {
+  localStorage.removeItem(LICENSE_ACTIVE_KEY)
+}
+
+function notifyLicenseSuspendedIfNeeded(detail: string | null | undefined) {
+  if (!isLicenseSuspendedDetail(detail)) return
+  setLicenseActive(false)
+  window.dispatchEvent(new Event(LICENSE_SUSPENDED_EVENT))
+}
+
+function parseApiDetail(err: ApiError, fallback: string): string {
+  return typeof err.detail === 'string' ? err.detail : fallback
 }
 
 type ApiError = { detail?: string }
@@ -100,7 +132,12 @@ export class LoginRequestError extends Error {
   }
 }
 
-export async function postAuthLogin(email: string, password: string): Promise<{ access_token: string }> {
+export type AuthLoginResponse = {
+  access_token: string
+  licenseActive?: boolean
+}
+
+export async function postAuthLogin(email: string, password: string): Promise<AuthLoginResponse> {
   const dbg = apiAuthDebugOriginLabel()
   const url = resolveApiUrl('/api/auth/login')
   let res: Response
@@ -118,7 +155,9 @@ export async function postAuthLogin(email: string, password: string): Promise<{ 
   }
 
   if (res.ok) {
-    return res.json() as Promise<{ access_token: string }>
+    const data = (await res.json()) as AuthLoginResponse
+    setLicenseActive(data.licenseActive !== false)
+    return data
   }
 
   const err = (await res.json().catch(() => ({}))) as ApiError
@@ -189,7 +228,9 @@ export async function uploadReportAudio(
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as ApiError
-    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText || 'Übermittlung fehlgeschlagen')
+    const detail = parseApiDetail(err, res.statusText || 'Übermittlung fehlgeschlagen')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
   }
 
   return res.json() as Promise<AudioUploadResponse>
@@ -239,7 +280,9 @@ export async function uploadReportPhoto(reportId: string, file: File): Promise<R
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as ApiError
-    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText || 'Foto konnte nicht hochgeladen werden')
+    const detail = parseApiDetail(err, res.statusText || 'Foto konnte nicht hochgeladen werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
   }
 
   return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
@@ -309,7 +352,9 @@ export async function uploadReportSignature(
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as ApiError
-    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText || 'Unterschrift konnte nicht gespeichert werden')
+    const detail = parseApiDetail(err, res.statusText || 'Unterschrift konnte nicht gespeichert werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
   }
 
   return res.json() as Promise<ReportSignaturesResponse & { ok: boolean; signature: ReportSignature }>
@@ -357,7 +402,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
 
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as ApiError
-    throw new Error(typeof err.detail === 'string' ? err.detail : res.statusText)
+    const detail = parseApiDetail(err, res.statusText)
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
   }
 
   if (res.status === 204) return undefined as T

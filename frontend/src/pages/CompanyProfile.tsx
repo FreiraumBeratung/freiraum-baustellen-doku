@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { BigButton, Card, PageTitle, PoweredBy } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type CompanyProfile = {
   companyName: string
@@ -18,6 +19,7 @@ type CompanyProfile = {
 export function CompanyProfilePage() {
   const nav = useNavigate()
   const { logout } = useAuth()
+  const { writeBlocked } = useWriteBlocked()
   const [prof, setProf] = useState<CompanyProfile | null>(null)
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(true)
@@ -30,7 +32,7 @@ export function CompanyProfilePage() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
-    if (!prof) return
+    if (!prof || writeBlocked) return
     setMsg('')
     try {
       const next = await api<CompanyProfile>('/api/company-profile', {
@@ -53,7 +55,7 @@ export function CompanyProfilePage() {
   }
 
   async function onLogo(f: FileList | null) {
-    if (!f?.[0]) return
+    if (!f?.[0] || writeBlocked) return
     const fd = new FormData()
     fd.append('file', f[0])
     setMsg('')
@@ -154,11 +156,12 @@ export function CompanyProfilePage() {
               accept="image/*"
               className="mt-2 w-full text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-zinc-950"
               onChange={(e) => onLogo(e.target.files)}
+              disabled={writeBlocked}
             />
           </label>
 
           {msg ? <p className="text-sm text-orange-300">{msg}</p> : null}
-          <BigButton type="submit">Speichern</BigButton>
+          <BigButton type="submit" disabled={writeBlocked}>Speichern</BigButton>
         </form>
       </Card>
 

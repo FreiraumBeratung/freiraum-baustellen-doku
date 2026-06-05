@@ -7,6 +7,7 @@ import {
   type ReportPhoto,
 } from '../api/client'
 import { useMobilePwaRepaint } from '../hooks/useMobilePwaRepaint'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { InlineCameraModal } from './InlineCameraModal'
 import { PhotoUploadOverlay, type PhotoUploadOverlayMode } from './PhotoUploadOverlay'
 import { compressImageForUpload } from '../utils/compressImage'
@@ -43,6 +44,8 @@ export function ReportPhotosSection({
   embedded = false,
 }: ReportPhotosSectionProps) {
   useMobilePwaRepaint()
+  const { writeBlocked } = useWriteBlocked()
+  const uploadsEnabled = enabled && !writeBlocked
 
   const [photos, setPhotos] = useState<ReportPhoto[]>([])
   const [maxPhotos, setMaxPhotos] = useState(10)
@@ -181,18 +184,18 @@ export function ReportPhotosSection({
   }, [abortOverlay, beginOverlay, clearPickerCancelTimer])
 
   function openInlineCamera() {
-    if (busy || atLimit) return
+    if (busy || atLimit || writeBlocked) return
     setInlineCameraOpen(true)
   }
 
   function openGalleryPicker() {
-    if (busy || atLimit) return
+    if (busy || atLimit || writeBlocked) return
     pickerPendingRef.current = true
     window.setTimeout(() => galleryRef.current?.click(), 80)
   }
 
   async function processFiles(files: File[], source: PhotoSource) {
-    if (!reportId || !enabled || !files.length || processingRef.current) return
+    if (!reportId || !uploadsEnabled || !files.length || processingRef.current) return
 
     processingRef.current = true
     pickerPendingRef.current = false
@@ -245,7 +248,7 @@ export function ReportPhotosSection({
   }
 
   function handleGalleryFiles(fileList: FileList | null) {
-    if (!reportId || !enabled || processingRef.current) return
+    if (!reportId || !uploadsEnabled || processingRef.current) return
     if (!fileList?.length) {
       pickerPendingRef.current = false
       clearPickerCancelTimer()
@@ -260,7 +263,7 @@ export function ReportPhotosSection({
   }
 
   async function removePhoto(photoId: string) {
-    if (!reportId || busy) return
+    if (!reportId || busy || writeBlocked) return
     setErr('')
     setStatusLine('')
     beginOverlay('Foto wird entfernt…')
@@ -327,14 +330,14 @@ export function ReportPhotosSection({
                 accept="image/jpeg,image/png,image/webp,image/*"
                 multiple
                 className="sr-only"
-                disabled={busy || atLimit}
+                disabled={busy || atLimit || writeBlocked}
                 onChange={(e) => handleGalleryFiles(e.target.files)}
               />
               <BigButton
                 type="button"
                 variant="secondary"
                 className="!py-2 text-sm"
-                disabled={busy || atLimit}
+                disabled={busy || atLimit || writeBlocked}
                 onClick={openInlineCamera}
               >
                 {busy ? '…' : 'Foto aufnehmen'}
@@ -343,12 +346,16 @@ export function ReportPhotosSection({
                 type="button"
                 variant="secondary"
                 className="!py-2 text-sm"
-                disabled={busy || atLimit}
+                disabled={busy || atLimit || writeBlocked}
                 onClick={openGalleryPicker}
               >
                 {busy ? '…' : 'Aus Galerie'}
               </BigButton>
             </div>
+
+            {writeBlocked ? (
+              <p className="text-xs text-amber-400/90">Neue Fotos sind bei pausiertem Zugang nicht möglich.</p>
+            ) : null}
 
             {atLimit ? (
               <p className="text-xs text-amber-400/90">Maximum erreicht ({maxPhotos} Fotos).</p>
@@ -376,7 +383,7 @@ export function ReportPhotosSection({
                       )}
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || writeBlocked}
                         aria-label="Foto entfernen"
                         className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 text-xs text-zinc-200 hover:bg-red-900/80 disabled:opacity-40"
                         onClick={() => void removePhoto(photo.id)}

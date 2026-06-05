@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { ReportAudioSection } from '../components/ReportAudioSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
 import { getSpeechRecognition, speechRecognitionSupported } from '../utils/speechRecognition'
 
@@ -45,6 +46,7 @@ export type StructuredPayload = {
 
 export function ReportNewPage() {
   const nav = useNavigate()
+  const { writeBlocked } = useWriteBlocked()
   const [reportDraftId] = useState(() =>
     typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
   )
@@ -370,7 +372,7 @@ export function ReportNewPage() {
                 <div className="rounded-[2.1rem] bg-black/35 p-[0.35rem] ring-1 ring-white/[0.07]">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || writeBlocked}
                   onClick={() => toggleVoice()}
                   className={`flex h-[6.85rem] w-[6.85rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/45 ring-offset-4 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
                   aria-pressed={voiceActive}
@@ -445,7 +447,7 @@ export function ReportNewPage() {
         </div>
 
         {err ? <p className="text-sm text-red-400">{err}</p> : null}
-        <BigButton type="button" disabled={busy || !projectId || !rawText.trim()} onClick={() => structure()}>
+        <BigButton type="button" disabled={busy || writeBlocked || !projectId || !rawText.trim()} onClick={() => structure()}>
           {busy ? '…' : 'Bericht strukturieren'}
         </BigButton>
       </div>

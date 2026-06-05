@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type Employee = {
   id: string
@@ -10,6 +11,7 @@ type Employee = {
 }
 
 export function EmployeesPage() {
+  const { writeBlocked } = useWriteBlocked()
   const [rows, setRows] = useState<Employee[]>([])
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -25,7 +27,7 @@ export function EmployeesPage() {
 
   async function add(e: React.FormEvent) {
     e.preventDefault()
-    if (!name.trim()) return
+    if (!name.trim() || writeBlocked) return
     await api<Employee>('/api/employees', {
       method: 'POST',
       body: JSON.stringify({ name: name.trim(), role: role.trim(), active: true }),
@@ -36,6 +38,7 @@ export function EmployeesPage() {
   }
 
   async function toggleActive(emp: Employee) {
+    if (writeBlocked) return
     await api(`/api/employees/${emp.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ active: !emp.active }),
@@ -67,7 +70,7 @@ export function EmployeesPage() {
               placeholder="Vorarbeiter"
             />
           </label>
-          <BigButton type="submit">Mitarbeiter hinzufügen</BigButton>
+          <BigButton type="submit" disabled={writeBlocked}>Mitarbeiter hinzufügen</BigButton>
         </form>
       </Card>
 
@@ -81,7 +84,8 @@ export function EmployeesPage() {
             </div>
             <button
               type="button"
-              className="rounded-xl border border-zinc-600 px-3 py-2 text-sm text-white hover:bg-zinc-800"
+              disabled={writeBlocked}
+              className="rounded-xl border border-zinc-600 px-3 py-2 text-sm text-white hover:bg-zinc-800 disabled:opacity-40"
               onClick={() => toggleActive(emp)}
             >
               {emp.active ? 'Deaktivieren' : 'Aktivieren'}

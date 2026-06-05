@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type ReportRow = {
   id: string
@@ -17,6 +18,7 @@ type ReportRow = {
 type Project = { id: string; name: string }
 
 export function ReportsListPage() {
+  const { writeBlocked } = useWriteBlocked()
   const [reports, setReports] = useState<ReportRow[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [projFilter, setProjFilter] = useState('')
@@ -46,6 +48,7 @@ export function ReportsListPage() {
 
   async function confirmDelete(rep: ReportRow) {
     setMsg('')
+    if (writeBlocked) return
     const ok = window.confirm('Bericht wirklich löschen?')
     if (!ok) return
     try {
@@ -156,8 +159,9 @@ export function ReportsListPage() {
                 </Link>
                 <button
                   type="button"
+                  disabled={writeBlocked}
                   onClick={() => void confirmDelete(rep)}
-                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/28 bg-red-950/35 text-[0.9rem] font-semibold text-red-300 transition hover:bg-red-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/55 active:scale-[0.98]"
+                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/28 bg-red-950/35 text-[0.9rem] font-semibold text-red-300 transition hover:bg-red-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/55 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <Trash2 strokeWidth={2} className="h-4 w-4 shrink-0" aria-hidden /> Löschen
                 </button>

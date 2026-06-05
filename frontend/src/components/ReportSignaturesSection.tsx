@@ -7,6 +7,7 @@ import {
   type ReportSignature,
   type SignatureRole,
 } from '../api/client'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { SignaturePad } from './SignaturePad'
 
 type ReportSignaturesSectionProps = {
@@ -76,6 +77,8 @@ export function ReportSignaturesSection({
   embedded = false,
   initialOpen = false,
 }: ReportSignaturesSectionProps) {
+  const { writeBlocked } = useWriteBlocked()
+  const signaturesEnabled = enabled && !writeBlocked
   const [customer, setCustomer] = useState<ReportSignature | null>(null)
   const [employee, setEmployee] = useState<ReportSignature | null>(null)
   const [open, setOpen] = useState(initialOpen)
@@ -116,7 +119,7 @@ export function ReportSignaturesSection({
   }, [count, enabled])
 
   async function handleUpload(role: SignatureRole, file: File) {
-    if (!reportId || !enabled || busy) return
+    if (!reportId || !signaturesEnabled || busy) return
     setBusy(true)
     setErr('')
     setStatusLine('Unterschrift wird gespeichert…')
@@ -137,7 +140,7 @@ export function ReportSignaturesSection({
   }
 
   async function handleRedo(role: SignatureRole) {
-    if (!reportId || busy) return
+    if (!reportId || busy || writeBlocked) return
     setBusy(true)
     setErr('')
     setStatusLine('')
@@ -183,14 +186,18 @@ export function ReportSignaturesSection({
             Optional — zuerst Kunde, dann Baustellenleitung oder Mitarbeiter. Beide Schritte sind freiwillig.
           </p>
 
+          {writeBlocked ? (
+            <p className="text-xs text-amber-400/90">Neue Unterschriften sind bei pausiertem Zugang nicht möglich.</p>
+          ) : null}
+
           {customer ? (
             <SignaturePreview
               label="Kunde"
               signature={customer}
-              busy={busy}
+              busy={busy || writeBlocked}
               onRedo={() => void handleRedo('customer')}
             />
-          ) : step === 'customer' ? (
+          ) : step === 'customer' && signaturesEnabled ? (
             <SignaturePad
               key={`customer-pad-${padKey}`}
               title="Kundenunterschrift"
@@ -200,7 +207,7 @@ export function ReportSignaturesSection({
             />
           ) : null}
 
-          {customer && !employee && step === 'employee' ? (
+          {customer && !employee && step === 'employee' && signaturesEnabled ? (
             <SignaturePad
               key={`employee-pad-${padKey}`}
               title="Baustellenleitung / Mitarbeiter"
@@ -214,7 +221,7 @@ export function ReportSignaturesSection({
             <SignaturePreview
               label="Baustellenleitung / Mitarbeiter"
               signature={employee}
-              busy={busy}
+              busy={busy || writeBlocked}
               onRedo={() => void handleRedo('employee')}
             />
           ) : null}

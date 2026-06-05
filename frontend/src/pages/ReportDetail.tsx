@@ -4,6 +4,7 @@ import { api, downloadExport } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type ReportDetailNavState = {
   openPhotos?: boolean
@@ -36,6 +37,7 @@ type ReportDoc = {
 
 export function ReportDetailPage() {
   const { id } = useParams()
+  const { writeBlocked } = useWriteBlocked()
   const nav = useNavigate()
   const location = useLocation()
   const navState = (location.state ?? null) as ReportDetailNavState | null
@@ -247,7 +249,7 @@ export function ReportDetailPage() {
         <BigButton
           variant="secondary"
           type="button"
-          disabled={officeBusy || dlBusy}
+          disabled={writeBlocked || officeBusy || dlBusy}
           onClick={() => void sendOffice()}
         >
           {officeBusy ? '…' : 'Ans Büro senden'}

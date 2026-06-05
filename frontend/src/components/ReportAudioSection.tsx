@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, uploadReportAudio } from '../api/client'
+import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { BigButton, Card } from './ui'
 import {
   browserSupportsMediaRecording,
@@ -36,6 +37,7 @@ export function ReportAudioSection({
   compact,
   onApplyTranscript,
 }: Props) {
+  const { writeBlocked } = useWriteBlocked()
   const chunksRef = useRef<BlobPart[]>([])
   const streamRef = useRef<MediaStream | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
@@ -277,7 +279,7 @@ export function ReportAudioSection({
             type="button"
             variant="secondary"
             className={btnClass}
-            disabled={strukturierungBusy || phase === 'recording' || phase === 'uploading'}
+            disabled={writeBlocked || strukturierungBusy || phase === 'recording' || phase === 'uploading'}
             onClick={() => void handleStart()}
           >
             Aufnahme starten
@@ -286,7 +288,7 @@ export function ReportAudioSection({
             type="button"
             variant="secondary"
             className={btnClass}
-            disabled={phase !== 'recording'}
+            disabled={writeBlocked || phase !== 'recording'}
             onClick={() => handleStop()}
           >
             Aufnahme stoppen
@@ -295,7 +297,7 @@ export function ReportAudioSection({
             type="button"
             variant="secondary"
             className={btnClass}
-            disabled={phase === 'uploading' || (phase !== 'recording' && phase !== 'stopped')}
+            disabled={writeBlocked || phase === 'uploading' || (phase !== 'recording' && phase !== 'stopped')}
             onClick={() => handleDiscard()}
           >
             Aufnahme verwerfen
@@ -304,7 +306,7 @@ export function ReportAudioSection({
             type="button"
             variant="secondary"
             className={btnClass}
-            disabled={phase !== 'stopped' || !recordingBlob || uploadBlocked}
+            disabled={writeBlocked || phase !== 'stopped' || !recordingBlob || uploadBlocked}
             onClick={() => void handleUpload()}
           >
             Audio verarbeiten
@@ -314,7 +316,7 @@ export function ReportAudioSection({
               type="button"
               variant="secondary"
               className={btnClass}
-              disabled={strukturierungBusy || transcribeBusy || !uploadedAudioId}
+              disabled={writeBlocked || strukturierungBusy || transcribeBusy || !uploadedAudioId}
               onClick={() => void handleTranscribe()}
             >
               {transcribeBusy ? 'Sprache wird verarbeitet …' : 'Sprache in Text übernehmen'}

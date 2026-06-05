@@ -6,6 +6,7 @@ import {
   User,
 } from 'lucide-react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { LicenseSuspendedBanner } from './LicenseSuspendedBanner'
 
 const nav = [
   { to: '/', label: 'Home', Icon: Home, end: true },
@@ -19,6 +20,7 @@ export function AppShell() {
   return (
     <div className="flex min-h-dvh flex-col overflow-x-hidden pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
       <main className="safe-area-pt-min mx-auto flex w-full max-w-[390px] flex-1 flex-col overflow-x-hidden px-4 pb-6 pt-[max(1.25rem,env(safe-area-inset-top,0px)+0.35rem)]">
+        <LicenseSuspendedBanner />
         <Outlet />
       </main>
       <nav
