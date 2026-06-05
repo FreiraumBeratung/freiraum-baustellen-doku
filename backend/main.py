@@ -32,6 +32,13 @@ from app.services.mail_store import (
     has_mail_config,
     save_mail_config,
 )
+from app.services.admin_users import (
+    bootstrap_admin_from_env,
+    delete_user_account,
+    is_user_admin,
+    list_users_public,
+    set_user_license,
+)
 from app.services.license import LICENSE_SUSPENDED_DETAIL, is_license_active
 from app.services.tenant_storage import (
     TenantStore,
@@ -253,10 +260,32 @@ def require_bearer(authorization: str | None = Header(default=None)) -> str:
     return token
 
 
+def find_user_by_id(user_id: str) -> dict | None:
+    for u in get_users():
+        if u.get("id") == user_id:
+            return u
+    return None
+
+
+def require_admin(user_id: str = Depends(require_bearer)) -> str:
+    user = find_user_by_id(user_id)
+    if not user or not is_user_admin(user):
+        raise HTTPException(status_code=403, detail="Kein Administrator-Zugang")
+    return user_id
+
+
+def _auth_session_fields(user: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "licenseActive": is_license_active(user),
+        "isAdmin": is_user_admin(user),
+    }
+
+
 @app.on_event("startup")
 def _startup_m1_tenant_migration() -> None:
     migrate_legacy_data_if_needed(read_users=get_users, save_users=save_users)
     repair_owner_tenant_from_legacy_backup(read_users=get_users)
+    bootstrap_admin_from_env(read_users=get_users, save_users=save_users)
 
 
 def _normalize_company_profile(prof: dict[str, Any]) -> dict[str, Any]:
@@ -484,6 +513,7 @@ def register(body: RegisterBody):
         "email": email_norm,
         "password": pwd_store,
         "licenseActive": True,
+        "isAdmin": False,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     users = get_users()
@@ -516,6 +546,7 @@ def register(body: RegisterBody):
         "token_type": "bearer",
         "user_id": user_id,
         "licenseActive": True,
+        "isAdmin": False,
         "mail": {
             "configured": True,
             "host": smtp_status.get("host"),
@@ -562,7 +593,7 @@ def login(body: LoginBody):
             "access_token": user["id"],
             "token_type": "bearer",
             "user_id": user["id"],
-            "licenseActive": is_license_active(user),
+            **_auth_session_fields(user),
             "mail": {
                 "configured": True,
                 "host": smtp_status.get("host"),
@@ -580,7 +611,7 @@ def login(body: LoginBody):
         "access_token": user["id"],
         "token_type": "bearer",
         "user_id": user["id"],
-        "licenseActive": is_license_active(user),
+        **_auth_session_fields(user),
         "mail": {
             "configured": bool(smtp_status.get("ok")) or has_mail_config(email_norm),
             "host": smtp_status.get("host"),
@@ -602,6 +633,47 @@ def logout(_user: str = Depends(require_bearer)):
     naechste Login synchronisiert das Passwort bei Bedarf automatisch.
     """
     _ = _user
+    return {"ok": True}
+
+
+# --- Admin (M3): Account-Metadaten, keine Mandantendaten ---
+class AdminLicenseBody(BaseModel):
+    licenseActive: bool
+
+
+@app.get("/api/admin/users")
+def admin_list_users(_admin_id: str = Depends(require_admin)):
+    return {"users": list_users_public(get_users())}
+
+
+@app.patch("/api/admin/users/{target_user_id}/license")
+def admin_set_user_license(
+    target_user_id: str,
+    body: AdminLicenseBody,
+    admin_id: str = Depends(require_admin),
+):
+    if target_user_id == admin_id and not body.licenseActive:
+        raise HTTPException(
+            status_code=400,
+            detail="Der eigene Administrator-Zugang kann nicht pausiert werden.",
+        )
+    users = get_users()
+    updated = set_user_license(users, target_user_id, body.licenseActive)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    save_users(users)
+    return {"ok": True, "user": updated}
+
+
+@app.delete("/api/admin/users/{target_user_id}")
+def admin_delete_user(target_user_id: str, admin_id: str = Depends(require_admin)):
+    if target_user_id == admin_id:
+        raise HTTPException(
+            status_code=400,
+            detail="Der eigene Administrator-Account kann nicht gelöscht werden.",
+        )
+    if not delete_user_account(read_users=get_users, save_users=save_users, user_id=target_user_id):
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     return {"ok": True}
 
 

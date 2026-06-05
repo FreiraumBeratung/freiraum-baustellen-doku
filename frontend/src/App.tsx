@@ -15,6 +15,7 @@ import { ReportPreviewPage } from './pages/ReportPreview'
 import { ReportsListPage } from './pages/ReportsList'
 import { ReportDetailPage } from './pages/ReportDetail'
 import { TimeAccountsPage } from './pages/TimeAccounts'
+import { AdminRoute } from './components/AdminRoute'
 
 function ProtectedOutlet() {
   const { token, ready } = useRequireAuth()
@@ -60,6 +61,7 @@ export default function App() {
             <Route path="/berichte" element={<ReportsListPage />} />
             <Route path="/berichte/:id" element={<ReportDetailPage />} />
             <Route path="/stunden" element={<TimeAccountsPage />} />
+            <Route path="/verwaltung" element={<AdminRoute />} />
           </Route>
         </Route>
       </Route>

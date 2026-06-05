@@ -5,6 +5,7 @@ import {
 
 const TOKEN_KEY = 'freiraum_baustellen_token'
 const LICENSE_ACTIVE_KEY = 'freiraum_baustellen_license_active'
+const IS_ADMIN_KEY = 'freiraum_baustellen_is_admin'
 
 function viteApiBaseOverride(): string | undefined {
   const t = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/$/, '')
@@ -73,6 +74,20 @@ export function setToken(t: string) {
 export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
   clearLicenseActive()
+  clearIsAdmin()
+}
+
+export function getIsAdmin(): boolean {
+  return localStorage.getItem(IS_ADMIN_KEY) === '1'
+}
+
+export function setIsAdmin(isAdmin: boolean) {
+  if (isAdmin) localStorage.setItem(IS_ADMIN_KEY, '1')
+  else localStorage.removeItem(IS_ADMIN_KEY)
+}
+
+export function clearIsAdmin() {
+  localStorage.removeItem(IS_ADMIN_KEY)
 }
 
 /** true = aktiv; fehlender Eintrag gilt als aktiv (bestehende Sessions). */
@@ -135,6 +150,33 @@ export class LoginRequestError extends Error {
 export type AuthLoginResponse = {
   access_token: string
   licenseActive?: boolean
+  isAdmin?: boolean
+}
+
+export type AdminUserRow = {
+  id: string
+  tenantId: string
+  companyName: string
+  entrepreneurName: string
+  email: string
+  createdAt: string
+  licenseActive: boolean
+  isAdmin: boolean
+}
+
+export async function listAdminUsers(): Promise<{ users: AdminUserRow[] }> {
+  return api<{ users: AdminUserRow[] }>('/api/admin/users')
+}
+
+export async function setAdminUserLicense(userId: string, licenseActive: boolean): Promise<{ ok: boolean; user: AdminUserRow }> {
+  return api<{ ok: boolean; user: AdminUserRow }>(`/api/admin/users/${encodeURIComponent(userId)}/license`, {
+    method: 'PATCH',
+    body: JSON.stringify({ licenseActive }),
+  })
+}
+
+export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
 }
 
 export async function postAuthLogin(email: string, password: string): Promise<AuthLoginResponse> {
@@ -157,6 +199,7 @@ export async function postAuthLogin(email: string, password: string): Promise<Au
   if (res.ok) {
     const data = (await res.json()) as AuthLoginResponse
     setLicenseActive(data.licenseActive !== false)
+    setIsAdmin(data.isAdmin === true)
     return data
   }
 

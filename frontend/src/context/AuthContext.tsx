@@ -2,9 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import {
   api,
   clearToken,
+  getIsAdmin,
   getLicenseActive,
   getToken,
   postAuthLogin,
+  setIsAdmin,
   setLicenseActive,
   setToken,
 } from '../api/client'
@@ -13,6 +15,7 @@ import { LICENSE_SUSPENDED_EVENT } from '../constants/license'
 type AuthState = {
   token: string | null
   licenseActive: boolean
+  isAdmin: boolean
   ready: boolean
   login: (email: string, password: string) => Promise<void>
   register: (p: {
@@ -29,11 +32,13 @@ const AuthCtx = createContext<AuthState | null>(null)
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [token, setTok] = useState<string | null>(null)
   const [licenseActive, setLicenseActiveState] = useState(true)
+  const [isAdmin, setIsAdminState] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     setTok(getToken())
     setLicenseActiveState(getLicenseActive())
+    setIsAdminState(getIsAdmin())
     setReady(true)
 
     const onSuspended = () => setLicenseActiveState(false)
@@ -49,6 +54,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const active = r.licenseActive !== false
     setLicenseActive(active)
     setLicenseActiveState(active)
+    const admin = r.isAdmin === true
+    setIsAdmin(admin)
+    setIsAdminState(admin)
   }, [])
 
   const register = useCallback(
@@ -58,18 +66,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       email: string
       password: string
     }) => {
-      const r = await api<{ access_token: string; licenseActive?: boolean }>('/api/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          ...p,
-          email: p.email.trim().toLowerCase(),
-        }),
-      })
+      const r = await api<{ access_token: string; licenseActive?: boolean; isAdmin?: boolean }>(
+        '/api/auth/register',
+        {
+          method: 'POST',
+          body: JSON.stringify({
+            ...p,
+            email: p.email.trim().toLowerCase(),
+          }),
+        },
+      )
       setToken(r.access_token)
       setTok(r.access_token)
       const active = r.licenseActive !== false
       setLicenseActive(active)
       setLicenseActiveState(active)
+      const admin = r.isAdmin === true
+      setIsAdmin(admin)
+      setIsAdminState(admin)
     },
     [],
   )
@@ -78,11 +92,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     clearToken()
     setTok(null)
     setLicenseActiveState(true)
+    setIsAdminState(false)
   }, [])
 
   const val = useMemo(
-    () => ({ token, licenseActive, ready, login, register, logout }),
-    [token, licenseActive, ready, login, register, logout],
+    () => ({ token, licenseActive, isAdmin, ready, login, register, logout }),
+    [token, licenseActive, isAdmin, ready, login, register, logout],
   )
 
   return <AuthCtx.Provider value={val}>{children}</AuthCtx.Provider>
