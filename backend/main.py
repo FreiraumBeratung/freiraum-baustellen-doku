@@ -22,6 +22,7 @@ from office_mail import send_report_to_office
 from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
 from report_structure import structure_report_fields
 from app.services import time_account
+from app.services.quality_filter import apply_quality_filter
 from app.services.mail_autodiscover import (
     provider_hint_for,
     verify_smtp_credentials,
@@ -598,7 +599,10 @@ def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(
     if not payload.get("defaultRecipientEmail", "").strip():
         payload["defaultRecipientEmail"] = payload["officeEmail"].strip()
     merged = {**existing, **payload}
-    merged.pop("logoFilename", None)
+    # logoFilename kommt nicht aus dem Profil-Formular (separater Upload-Endpoint).
+    # Bestehenden Dateinamen bewahren, damit ein vorher hochgeladenes Logo nicht verloren geht.
+    if existing.get("logoFilename"):
+        merged["logoFilename"] = existing["logoFilename"]
     try:
         store.write_json("company_profile.json", merged)
     except OSError as exc:

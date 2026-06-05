@@ -2,9 +2,20 @@ from __future__ import annotations
 
 import json
 import os
+import sys
+import tempfile
+import uuid
 from pathlib import Path
 
-from main import StructureReportBody, api_structure_report
+BACKEND_DIR = Path(__file__).resolve().parent
+sys.path.insert(0, str(BACKEND_DIR))
+
+from main import StructureReportBody, api_structure_report  # noqa: E402
+from app.services.tenant_storage import TenantStore  # noqa: E402
+from smoke_isolation import isolate_smoke_data  # noqa: E402
+
+isolate_smoke_data(Path(tempfile.mkdtemp(prefix="freiraum_trade_smoke_")))
+_SMOKE_STORE = TenantStore(str(uuid.uuid4()))
 
 
 def _contains_any(haystack: list[str], needle: str) -> bool:
@@ -36,7 +47,7 @@ def main() -> int:
             exportFormat="PDF",
             rawText=str(case.get("rawText") or ""),
         )
-        out = api_structure_report(body, _user="smoke")
+        out = api_structure_report(body, store=_SMOKE_STORE)
         structured = out.get("structured") or {}
         acts = [str(x) for x in (structured.get("activities") or [])]
         mats = [str(x) for x in (structured.get("materials") or [])]
