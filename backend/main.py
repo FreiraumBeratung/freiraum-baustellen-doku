@@ -34,6 +34,7 @@ from app.services.mail_store import (
 from app.services.tenant_storage import (
     TenantStore,
     migrate_legacy_data_if_needed,
+    repair_owner_tenant_from_legacy_backup,
     tenant_id_for_user,
 )
 from services.ai_report_service import structure_report_with_ai
@@ -253,6 +254,25 @@ def require_bearer(authorization: str | None = Header(default=None)) -> str:
 @app.on_event("startup")
 def _startup_m1_tenant_migration() -> None:
     migrate_legacy_data_if_needed(read_users=get_users, save_users=save_users)
+    repair_owner_tenant_from_legacy_backup(read_users=get_users)
+
+
+def _normalize_company_profile(prof: dict[str, Any]) -> dict[str, Any]:
+    export_fmt = str(prof.get("defaultExportFormat") or "PDF").strip()
+    if export_fmt.lower() == "pdf":
+        export_fmt = "PDF"
+    elif export_fmt.lower() == "word":
+        export_fmt = "Word"
+    return {
+        "companyName": str(prof.get("companyName") or ""),
+        "contactPerson": str(prof.get("contactPerson") or ""),
+        "officeEmail": str(prof.get("officeEmail") or ""),
+        "phone": str(prof.get("phone") or ""),
+        "address": str(prof.get("address") or ""),
+        "defaultExportFormat": export_fmt,
+        "defaultRecipientEmail": str(prof.get("defaultRecipientEmail") or ""),
+        "logoFilename": prof.get("logoFilename"),
+    }
 
 
 def get_tenant_store(user_id: str = Depends(require_bearer)) -> TenantStore:
@@ -269,7 +289,8 @@ def _logo_public_url(store: TenantStore, logo_fn: str | None) -> str | None:
 
 
 def _company_profile_response(store: TenantStore) -> dict[str, Any]:
-    prof = store.read_json("company_profile.json", {})
+    raw = store.read_json("company_profile.json", {})
+    prof = _normalize_company_profile(raw if isinstance(raw, dict) else {})
     logo_fn = prof.get("logoFilename")
     logo_url = None
     if logo_fn:
@@ -290,6 +311,23 @@ class CompanyProfileBody(BaseModel):
     address: str = ""
     defaultExportFormat: str = "PDF"
     defaultRecipientEmail: str = ""
+
+
+def _validate_company_profile_body(body: CompanyProfileBody) -> None:
+    if not body.companyName.strip():
+        raise HTTPException(status_code=400, detail="Firmenname fehlt")
+    if not body.contactPerson.strip():
+        raise HTTPException(status_code=400, detail="Ansprechpartner fehlt")
+    office = body.officeEmail.strip()
+    if not office or "@" not in office:
+        raise HTTPException(status_code=400, detail="Gültige Büro-E-Mail erforderlich")
+    if not body.phone.strip():
+        raise HTTPException(status_code=400, detail="Telefonnummer fehlt")
+    if not body.address.strip():
+        raise HTTPException(status_code=400, detail="Adresse fehlt")
+    fmt = body.defaultExportFormat.strip()
+    if fmt not in {"PDF", "Word"}:
+        raise HTTPException(status_code=400, detail="Exportformat muss PDF oder Word sein")
 
 
 # --- Employees ---
@@ -552,9 +590,22 @@ def get_company_profile(store: TenantStore = Depends(get_tenant_store)):
 
 @app.post("/api/company-profile")
 def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(get_tenant_store)):
-    existing = store.read_json("company_profile.json", {})
-    merged = {**existing, **body.model_dump()}
-    store.write_json("company_profile.json", merged)
+    _validate_company_profile_body(body)
+    existing_raw = store.read_json("company_profile.json", {})
+    existing = _normalize_company_profile(existing_raw if isinstance(existing_raw, dict) else {})
+    payload = body.model_dump()
+    payload["defaultExportFormat"] = payload["defaultExportFormat"].strip()
+    if not payload.get("defaultRecipientEmail", "").strip():
+        payload["defaultRecipientEmail"] = payload["officeEmail"].strip()
+    merged = {**existing, **payload}
+    merged.pop("logoFilename", None)
+    try:
+        store.write_json("company_profile.json", merged)
+    except OSError as exc:
+        raise HTTPException(
+            status_code=500,
+            detail="Profil konnte nicht gespeichert werden. Bitte Schreibrechte für backend/data/tenants/ auf dem Server prüfen.",
+        ) from exc
     return _company_profile_response(store)
 
 

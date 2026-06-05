@@ -26,7 +26,18 @@ export function OnboardingPage() {
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')
-      .then(setProf)
+      .then((p) =>
+        setProf({
+          companyName: p.companyName ?? '',
+          contactPerson: p.contactPerson ?? '',
+          officeEmail: p.officeEmail ?? '',
+          phone: p.phone ?? '',
+          address: p.address ?? '',
+          defaultExportFormat: p.defaultExportFormat ?? 'PDF',
+          defaultRecipientEmail: p.defaultRecipientEmail ?? '',
+          logoUrl: p.logoUrl ?? null,
+        }),
+      )
       .catch(() => setErr('Profil konnte nicht geladen werden.'))
       .finally(() => setLoading(false))
   }, [])
@@ -69,8 +80,13 @@ export function OnboardingPage() {
       })
       setProf(next)
       nav('/', { replace: true })
-    } catch {
-      setErr('Speichern fehlgeschlagen. Bitte alle Pflichtfelder prüfen.')
+    } catch (ex) {
+      const detail = ex instanceof Error ? ex.message.trim() : ''
+      setErr(
+        detail && detail !== 'Failed to fetch'
+          ? detail
+          : 'Speichern fehlgeschlagen. Bitte Internetverbindung prüfen und erneut versuchen.',
+      )
     } finally {
       setSaving(false)
     }

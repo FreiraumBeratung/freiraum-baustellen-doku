@@ -147,6 +147,58 @@ def _pick_legacy_owner_tenant_id(users: list[dict[str, Any]]) -> str | None:
     return tenant_id_for_user(sorted_users[0])
 
 
+def _is_blank(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str):
+        return not value.strip()
+    return False
+
+
+def repair_owner_tenant_from_legacy_backup(
+    *,
+    read_users: Callable[[], list[dict[str, Any]]] | None = None,
+) -> None:
+    """Fuellt fehlende Mandanten-Dateien/Felder aus legacy_pre_m1_backup (idempotent)."""
+    if not LEGACY_BACKUP_DIR.exists():
+        return
+
+    users = (read_users or _load_users)()
+    owner_id = _pick_legacy_owner_tenant_id(users)
+    if not owner_id:
+        return
+
+    ensure_tenant_dirs(owner_id)
+
+    for name in TENANT_JSON_FILES:
+        dst = tenant_json_path(owner_id, name)
+        src = LEGACY_BACKUP_DIR / name
+        if not src.is_file():
+            continue
+        if not dst.is_file():
+            try:
+                shutil.copy2(src, dst)
+                logger.info("M1 repair: restored %s for tenant %s", name, owner_id)
+            except OSError as exc:
+                logger.warning("M1 repair: could not copy %s: %s", name, exc)
+            continue
+        if name != "company_profile.json":
+            continue
+
+        backup_prof = read_json_file(src, {})
+        tenant_prof = read_json_file(dst, {})
+        merged = dict(backup_prof)
+        for key, value in tenant_prof.items():
+            if not _is_blank(value):
+                merged[key] = value
+        if merged != tenant_prof:
+            try:
+                write_json_file(dst, merged)
+                logger.info("M1 repair: merged company_profile for tenant %s", owner_id)
+            except OSError as exc:
+                logger.warning("M1 repair: could not write company_profile: %s", exc)
+
+
 def migrate_legacy_data_if_needed(
     *,
     read_users: Callable[[], list[dict[str, Any]]] | None = None,

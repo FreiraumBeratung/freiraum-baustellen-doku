@@ -20,12 +20,14 @@ const looseEmailOk = (s: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s)
 export function isCompanyProfileComplete(p: CompanyProfileResponse | null | undefined): boolean {
   if (!p) return false
   const office = (p.officeEmail ?? '').trim()
+  const fmtRaw = (p.defaultExportFormat ?? 'PDF').trim()
+  const fmt = fmtRaw.toLowerCase() === 'word' ? 'Word' : fmtRaw.toLowerCase() === 'pdf' ? 'PDF' : fmtRaw
   return (
     (p.companyName ?? '').trim().length >= 1 &&
     (p.contactPerson ?? '').trim().length >= 1 &&
     looseEmailOk(office) &&
     (p.phone ?? '').trim().length >= 1 &&
     (p.address ?? '').trim().length >= 1 &&
-    ['PDF', 'Word'].includes((p.defaultExportFormat ?? 'PDF').trim())
+    ['PDF', 'Word'].includes(fmt)
   )
 }
