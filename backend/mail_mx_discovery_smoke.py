@@ -28,13 +28,19 @@ _mock_mx({})
 web = mail_autodiscover.discover_smtp_servers("foo@web.de")
 _expect(web[0].source == "preset" and web[0].host == "smtp.web.de", "web.de preset")
 
-# -- 2. IONOS-Firmendomain (MX -> smtp.ionos.de vor Domain-Guess) ------------
+# -- 2. IONOS-Firmendomain (Exchange zuerst, dann klassisch, vor Domain-Guess) -
 _mock_mx({"freiraum-unternehmensberatung.de": ["mx00.ionos.de", "mx01.ionos.de"]})
 ionos_firma = mail_autodiscover.discover_smtp_servers("info@freiraum-unternehmensberatung.de")
-_expect(any(c.source == "mx" and c.host == "smtp.ionos.de" for c in ionos_firma), "IONOS MX fehlt")
+_expect(
+    any(c.source == "mx" and c.host == "smtp.exchange.ionos.eu" for c in ionos_firma),
+    "IONOS Exchange MX fehlt",
+)
+_expect(any(c.source == "mx" and c.host == "smtp.ionos.de" for c in ionos_firma), "IONOS klassisch MX fehlt")
+exchange_idx = next(i for i, c in enumerate(ionos_firma) if c.host == "smtp.exchange.ionos.eu")
 ionos_idx = next(i for i, c in enumerate(ionos_firma) if c.host == "smtp.ionos.de")
 guess_idx = next(i for i, c in enumerate(ionos_firma) if c.source == "guess")
-_expect(ionos_idx < guess_idx, "smtp.ionos.de muss vor Domain-Guess kommen")
+_expect(exchange_idx < ionos_idx, "smtp.exchange.ionos.eu muss vor smtp.ionos.de kommen")
+_expect(exchange_idx < guess_idx, "Exchange-SMTP muss vor Domain-Guess kommen")
 
 # -- 3. Strato-Firmendomain ---------------------------------------------------
 _mock_mx({"mueller-gartenbau.de": ["mx.strato.de"]})
@@ -55,7 +61,9 @@ _expect(all(c.source != "mx" for c in unknown), "ohne MX kein mx-Kandidat")
 # -- 6. Optional: Live-DNS IONOS-Domain (wenn Netzwerk verfügbar) -----------
 mail_autodiscover._mx_lookup_override = None  # type: ignore[attr-defined]
 live = mail_autodiscover.discover_smtp_servers("info@freiraum-unternehmensberatung.de")
-if any(c.source == "mx" and c.host == "smtp.ionos.de" for c in live):
+if any(c.source == "mx" and c.host == "smtp.exchange.ionos.eu" for c in live):
+    print("[smoke] live DNS: freiraum-unternehmensberatung.de -> smtp.exchange.ionos.eu OK")
+elif any(c.source == "mx" and c.host == "smtp.ionos.de" for c in live):
     print("[smoke] live DNS: freiraum-unternehmensberatung.de -> smtp.ionos.de OK")
 else:
     print("[smoke] live DNS: übersprungen oder MX nicht erreichbar (kein harter Fehler)")

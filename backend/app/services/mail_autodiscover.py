@@ -82,20 +82,25 @@ _PRESETS: dict[str, tuple[str, int, bool, bool]] = {
     "mac.com": ("smtp.mail.me.com", 587, True, False),
 }
 
-# MX-Host-Fragment -> SMTP (für Firmendomains wie info@mueller-gartenbau.de bei IONOS/Strato).
-# Reihenfolge: spezifischere Treffer zuerst prüfen.
-_MX_SMTP_HINTS: tuple[tuple[tuple[str, ...], tuple[str, int, bool, bool]], ...] = (
-    (("aspmx.l.google.com", "google.com", "googlemail.com"), ("smtp.gmail.com", 587, True, False)),
-    (("mail.protection.outlook.com", "outlook.com", "microsoft.com"), ("smtp.office365.com", 587, True, False)),
-    (("ionos.de", "ionos.com", "1and1.de", "1und1.de", "ui-dns.de", "kundenserver.de"), ("smtp.ionos.de", 587, True, False)),
-    (("strato.de", "rzone.de"), ("smtp.strato.de", 587, True, False)),
-    (("kasserver.com",), ("smtp.kasserver.com", 587, True, False)),
-    (("secureserver.net",), ("smtpout.secureserver.net", 587, True, False)),
-    (("hosteurope.de", "he.net", "hosting.zone"), ("smtp.hosteurope.de", 587, True, False)),
-    (("mailbox.org",), ("smtp.mailbox.org", 587, True, False)),
-    (("posteo.de", "posteo.net"), ("posteo.de", 587, True, False)),
-    (("netcup.net",), ("mx.netcup.net", 587, True, False)),
-    (("mcdns.net", "mittwald.de"), ("smtp.mittwald.de", 587, True, False)),
+# MX-Host-Fragment -> ein oder mehrere SMTP-Server (Reihenfolge = Priorität).
+_MX_SMTP_HINTS: tuple[tuple[tuple[str, ...], tuple[tuple[str, int, bool, bool], ...]], ...] = (
+    (("aspmx.l.google.com", "google.com", "googlemail.com"), (("smtp.gmail.com", 587, True, False),)),
+    (("mail.protection.outlook.com", "outlook.com", "microsoft.com"), (("smtp.office365.com", 587, True, False),)),
+    (
+        ("exchange.ionos.eu", "ionos.de", "ionos.com", "1and1.de", "1und1.de", "ui-dns.de", "kundenserver.de"),
+        (
+            ("smtp.exchange.ionos.eu", 587, True, False),
+            ("smtp.ionos.de", 587, True, False),
+        ),
+    ),
+    (("strato.de", "rzone.de"), (("smtp.strato.de", 587, True, False),)),
+    (("kasserver.com",), (("smtp.kasserver.com", 587, True, False),)),
+    (("secureserver.net",), (("smtpout.secureserver.net", 587, True, False),)),
+    (("hosteurope.de", "he.net", "hosting.zone"), (("smtp.hosteurope.de", 587, True, False),)),
+    (("mailbox.org",), (("smtp.mailbox.org", 587, True, False),)),
+    (("posteo.de", "posteo.net"), (("posteo.de", 587, True, False),)),
+    (("netcup.net",), (("mx.netcup.net", 587, True, False),)),
+    (("mcdns.net", "mittwald.de"), (("smtp.mittwald.de", 587, True, False),)),
 )
 
 
@@ -184,15 +189,15 @@ def _candidates_from_mx(domain: str) -> list[SmtpCandidate]:
     mx_blob = " ".join(mx_hosts)
     out: list[SmtpCandidate] = []
     seen: set[tuple[str, int]] = set()
-    for needles, smtp in _MX_SMTP_HINTS:
+    for needles, smtp_list in _MX_SMTP_HINTS:
         if not any(needle in mx_blob for needle in needles):
             continue
-        host, port, use_tls, use_ssl = smtp
-        key = (host, port)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source="mx"))
+        for host, port, use_tls, use_ssl in smtp_list:
+            key = (host, port)
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source="mx"))
     return out
 
 
@@ -311,6 +316,7 @@ def verify_smtp_credentials(
         )
 
     last_error: str | None = None
+    last_auth_error: str | None = None
     saw_auth_error = False
     saw_dns_error = False
     for candidate in candidates:
@@ -320,13 +326,20 @@ def verify_smtp_credentials(
         last_error = err
         if err and "Authentifizierung" in err:
             saw_auth_error = True
+            last_auth_error = err
         if err and ("nicht erreichbar (DNS)" in err or "Name or service not known" in err):
             saw_dns_error = True
 
     hint = provider_hint_for(email_norm) if saw_auth_error else None
+    tried_ionos = any(c.host in ("smtp.exchange.ionos.eu", "smtp.ionos.de") for c in candidates)
+    if not hint and saw_auth_error and tried_ionos:
+        hint = (
+            "Bitte das Mail-Passwort prüfen (nicht das IONOS-Kundenlogin). "
+            "Volle E-Mail-Adresse als Benutzername verwenden."
+        )
     if not hint and saw_dns_error and not saw_auth_error:
         hint = (
             "Für Ihre Firmen-Domain konnte kein Mail-Server ermittelt werden. "
             "Bitte prüfen Sie, ob SMTP-Versand bei Ihrem Mail-Provider aktiv ist."
         )
-    return SmtpVerifyResult(ok=False, candidate=None, error=last_error, provider_hint=hint)
+    return SmtpVerifyResult(ok=False, candidate=None, error=last_auth_error or last_error, provider_hint=hint)

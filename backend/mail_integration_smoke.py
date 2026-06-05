@@ -66,6 +66,10 @@ mail_autodiscover._mx_lookup_override = lambda domain: (  # type: ignore[attr-de
 )
 candidates_ionos = mail_autodiscover.discover_smtp_servers("info@freiraum-unternehmensberatung.de")
 _expect(
+    any(c.source == "mx" and c.host == "smtp.exchange.ionos.eu" for c in candidates_ionos),
+    "IONOS-Firmendomain: smtp.exchange.ionos.eu via MX fehlt",
+)
+_expect(
     any(c.source == "mx" and c.host == "smtp.ionos.de" for c in candidates_ionos),
     "IONOS-Firmendomain: smtp.ionos.de via MX fehlt",
 )
