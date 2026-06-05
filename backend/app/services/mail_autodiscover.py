@@ -16,9 +16,12 @@ import smtplib
 import socket
 import ssl
 from dataclasses import dataclass
-from typing import Iterable
+from typing import Callable, Iterable
 
 logger = logging.getLogger(__name__)
+
+# Test-Hook: MX-Hosts mocken (Smoke-Tests ohne echten DNS-Lookup).
+_mx_lookup_override: Callable[[str], list[str]] | None = None
 
 
 @dataclass
@@ -27,7 +30,7 @@ class SmtpCandidate:
     port: int
     use_tls: bool
     use_ssl: bool
-    source: str  # "preset" oder "guess"
+    source: str  # "preset", "mx" oder "guess"
 
 
 @dataclass
@@ -78,6 +81,22 @@ _PRESETS: dict[str, tuple[str, int, bool, bool]] = {
     "me.com": ("smtp.mail.me.com", 587, True, False),
     "mac.com": ("smtp.mail.me.com", 587, True, False),
 }
+
+# MX-Host-Fragment -> SMTP (für Firmendomains wie info@mueller-gartenbau.de bei IONOS/Strato).
+# Reihenfolge: spezifischere Treffer zuerst prüfen.
+_MX_SMTP_HINTS: tuple[tuple[tuple[str, ...], tuple[str, int, bool, bool]], ...] = (
+    (("aspmx.l.google.com", "google.com", "googlemail.com"), ("smtp.gmail.com", 587, True, False)),
+    (("mail.protection.outlook.com", "outlook.com", "microsoft.com"), ("smtp.office365.com", 587, True, False)),
+    (("ionos.de", "ionos.com", "1and1.de", "1und1.de", "ui-dns.de", "kundenserver.de"), ("smtp.ionos.de", 587, True, False)),
+    (("strato.de", "rzone.de"), ("smtp.strato.de", 587, True, False)),
+    (("kasserver.com",), ("smtp.kasserver.com", 587, True, False)),
+    (("secureserver.net",), ("smtpout.secureserver.net", 587, True, False)),
+    (("hosteurope.de", "he.net", "hosting.zone"), ("smtp.hosteurope.de", 587, True, False)),
+    (("mailbox.org",), ("smtp.mailbox.org", 587, True, False)),
+    (("posteo.de", "posteo.net"), ("posteo.de", 587, True, False)),
+    (("netcup.net",), ("mx.netcup.net", 587, True, False)),
+    (("mcdns.net", "mittwald.de"), ("smtp.mittwald.de", 587, True, False)),
+)
 
 
 _PROVIDER_HINTS: dict[str, str] = {
@@ -131,6 +150,68 @@ def _domain_from_email(email_address: str) -> str:
     return s.split("@", 1)[1].strip()
 
 
+def _lookup_mx_hosts(domain: str) -> list[str]:
+    """MX-Records der Domain (Hostnamen, lowercase). Leer bei Fehler/Timeout."""
+    if _mx_lookup_override is not None:
+        return _mx_lookup_override(domain)
+
+    domain = str(domain or "").strip().lower().rstrip(".")
+    if not domain:
+        return []
+
+    try:
+        import dns.resolver
+
+        resolver = dns.resolver.Resolver()
+        resolver.lifetime = 4.0
+        answers = resolver.resolve(domain, "MX")
+        hosts: list[str] = []
+        for rdata in answers:
+            host = str(rdata.exchange).rstrip(".").lower()
+            if host:
+                hosts.append(host)
+        return hosts
+    except Exception:
+        logger.debug("MX lookup failed for domain %s", domain, exc_info=True)
+        return []
+
+
+def _candidates_from_mx(domain: str) -> list[SmtpCandidate]:
+    mx_hosts = _lookup_mx_hosts(domain)
+    if not mx_hosts:
+        return []
+
+    mx_blob = " ".join(mx_hosts)
+    out: list[SmtpCandidate] = []
+    seen: set[tuple[str, int]] = set()
+    for needles, smtp in _MX_SMTP_HINTS:
+        if not any(needle in mx_blob for needle in needles):
+            continue
+        host, port, use_tls, use_ssl = smtp
+        key = (host, port)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source="mx"))
+    return out
+
+
+def _append_candidate(
+    out: list[SmtpCandidate],
+    seen_keys: set[tuple[str, int]],
+    host: str,
+    port: int,
+    use_tls: bool,
+    use_ssl: bool,
+    source: str,
+) -> None:
+    key = (host, port)
+    if key in seen_keys:
+        return
+    seen_keys.add(key)
+    out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source=source))
+
+
 def provider_hint_for(email_address: str) -> str | None:
     """Liefert einen Provider-spezifischen Hinweis (z.B. App-Passwort), wenn
     bekannt. Sonst None."""
@@ -144,33 +225,34 @@ def discover_smtp_servers(email_address: str) -> list[SmtpCandidate]:
     """Liefert eine geordnete Liste von SMTP-Kandidaten für die E-Mail-Adresse.
 
     Reihenfolge:
-    1. Preset (wenn Domain bekannt)
-    2. Domain-Guess: smtp.<domain>:587 STARTTLS
-    3. Domain-Guess: mail.<domain>:587 STARTTLS
-    4. Domain-Guess: smtp.<domain>:465 SSL
+    1. Preset (wenn Domain bekannt, z. B. web.de)
+    2. MX-Inferenz (Firmendomain gehostet bei IONOS, Strato, Microsoft 365, …)
+    3. Domain-Guess: smtp.<domain>:587 STARTTLS
+    4. Domain-Guess: mail.<domain>:587 STARTTLS
+    5. Domain-Guess: smtp.<domain>:465 SSL
     """
     domain = _domain_from_email(email_address)
     out: list[SmtpCandidate] = []
     if not domain:
         return out
 
+    seen_keys: set[tuple[str, int]] = set()
+
     preset = _PRESETS.get(domain)
     if preset:
         host, port, use_tls, use_ssl = preset
-        out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source="preset"))
+        _append_candidate(out, seen_keys, host, port, use_tls, use_ssl, "preset")
+
+    for candidate in _candidates_from_mx(domain):
+        _append_candidate(out, seen_keys, candidate.host, candidate.port, candidate.use_tls, candidate.use_ssl, candidate.source)
 
     guesses: tuple[tuple[str, int, bool, bool], ...] = (
         (f"smtp.{domain}", 587, True, False),
         (f"mail.{domain}", 587, True, False),
         (f"smtp.{domain}", 465, False, True),
     )
-    seen_keys = {(c.host, c.port) for c in out}
     for host, port, use_tls, use_ssl in guesses:
-        key = (host, port)
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        out.append(SmtpCandidate(host=host, port=port, use_tls=use_tls, use_ssl=use_ssl, source="guess"))
+        _append_candidate(out, seen_keys, host, port, use_tls, use_ssl, "guess")
 
     return out
 
@@ -190,6 +272,9 @@ def _try_smtp_login(candidate: SmtpCandidate, username: str, password: str, time
             smtp.login(username, password)
         return True, None
     except (socket.gaierror, socket.timeout, ConnectionError, TimeoutError, OSError) as exc:
+        err_text = str(exc).lower()
+        if "name or service not known" in err_text or "getaddrinfo failed" in err_text:
+            return False, f"Mail-Server {candidate.host} nicht erreichbar (DNS)."
         return False, f"Netzwerkfehler: {exc}"
     except smtplib.SMTPAuthenticationError as exc:
         return False, f"Authentifizierung fehlgeschlagen: {exc.smtp_error.decode(errors='replace') if isinstance(exc.smtp_error, bytes) else exc.smtp_error}"
@@ -227,6 +312,7 @@ def verify_smtp_credentials(
 
     last_error: str | None = None
     saw_auth_error = False
+    saw_dns_error = False
     for candidate in candidates:
         ok, err = _try_smtp_login(candidate, email_norm, password, timeout=timeout)
         if ok:
@@ -234,6 +320,13 @@ def verify_smtp_credentials(
         last_error = err
         if err and "Authentifizierung" in err:
             saw_auth_error = True
+        if err and ("nicht erreichbar (DNS)" in err or "Name or service not known" in err):
+            saw_dns_error = True
 
     hint = provider_hint_for(email_norm) if saw_auth_error else None
+    if not hint and saw_dns_error and not saw_auth_error:
+        hint = (
+            "Für Ihre Firmen-Domain konnte kein Mail-Server ermittelt werden. "
+            "Bitte prüfen Sie, ob SMTP-Versand bei Ihrem Mail-Provider aktiv ist."
+        )
     return SmtpVerifyResult(ok=False, candidate=None, error=last_error, provider_hint=hint)

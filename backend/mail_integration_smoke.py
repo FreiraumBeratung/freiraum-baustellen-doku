@@ -60,6 +60,17 @@ candidates_unknown = mail_autodiscover.discover_smtp_servers("foo@beispielfirma.
 _expect(any(c.host == "smtp.beispielfirma.eu" for c in candidates_unknown), "guess smtp.<domain> fehlt")
 _expect(any(c.host == "mail.beispielfirma.eu" for c in candidates_unknown), "guess mail.<domain> fehlt")
 
+# IONOS-Firmendomain per gemocktem MX (ohne echten SMTP-Login)
+mail_autodiscover._mx_lookup_override = lambda domain: (  # type: ignore[attr-defined]
+    ["mx00.ionos.de", "mx01.ionos.de"] if domain == "freiraum-unternehmensberatung.de" else []
+)
+candidates_ionos = mail_autodiscover.discover_smtp_servers("info@freiraum-unternehmensberatung.de")
+_expect(
+    any(c.source == "mx" and c.host == "smtp.ionos.de" for c in candidates_ionos),
+    "IONOS-Firmendomain: smtp.ionos.de via MX fehlt",
+)
+mail_autodiscover._mx_lookup_override = None  # type: ignore[attr-defined]
+
 _expect(mail_autodiscover.provider_hint_for("foo@gmail.com") is not None, "gmail hint fehlt")
 _expect(mail_autodiscover.provider_hint_for("foo@web.de") is None, "web.de sollte keinen App-Pw-Hinweis haben")
 
