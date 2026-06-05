@@ -32,6 +32,7 @@ from app.services.mail_store import (
     has_mail_config,
     save_mail_config,
 )
+from app.services.license import LICENSE_SUSPENDED_DETAIL, is_license_active
 from app.services.tenant_storage import (
     TenantStore,
     migrate_legacy_data_if_needed,
@@ -283,6 +284,22 @@ def get_tenant_store(user_id: str = Depends(require_bearer)) -> TenantStore:
     return TenantStore(tenant_id_for_user(user))
 
 
+def require_active_license(user_id: str = Depends(require_bearer)) -> str:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    if not is_license_active(user):
+        raise HTTPException(status_code=403, detail=LICENSE_SUSPENDED_DETAIL)
+    return user_id
+
+
+def get_tenant_store_write(user_id: str = Depends(require_active_license)) -> TenantStore:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    return TenantStore(tenant_id_for_user(user))
+
+
 def _logo_public_url(store: TenantStore, logo_fn: str | None) -> str | None:
     if not logo_fn:
         return None
@@ -466,6 +483,7 @@ def register(body: RegisterBody):
         "entrepreneurName": body.entrepreneurName,
         "email": email_norm,
         "password": pwd_store,
+        "licenseActive": True,
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     users = get_users()
@@ -497,6 +515,7 @@ def register(body: RegisterBody):
         "access_token": user_id,
         "token_type": "bearer",
         "user_id": user_id,
+        "licenseActive": True,
         "mail": {
             "configured": True,
             "host": smtp_status.get("host"),
@@ -543,6 +562,7 @@ def login(body: LoginBody):
             "access_token": user["id"],
             "token_type": "bearer",
             "user_id": user["id"],
+            "licenseActive": is_license_active(user),
             "mail": {
                 "configured": True,
                 "host": smtp_status.get("host"),
@@ -560,6 +580,7 @@ def login(body: LoginBody):
         "access_token": user["id"],
         "token_type": "bearer",
         "user_id": user["id"],
+        "licenseActive": is_license_active(user),
         "mail": {
             "configured": bool(smtp_status.get("ok")) or has_mail_config(email_norm),
             "host": smtp_status.get("host"),
@@ -590,7 +611,7 @@ def get_company_profile(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.post("/api/company-profile")
-def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(get_tenant_store)):
+def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(get_tenant_store_write)):
     _validate_company_profile_body(body)
     existing_raw = store.read_json("company_profile.json", {})
     existing = _normalize_company_profile(existing_raw if isinstance(existing_raw, dict) else {})
@@ -614,7 +635,7 @@ def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(
 
 
 @app.post("/api/company-logo")
-async def upload_logo(file: UploadFile = File(...), store: TenantStore = Depends(get_tenant_store)):
+async def upload_logo(file: UploadFile = File(...), store: TenantStore = Depends(get_tenant_store_write)):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Keine Datei")
 
@@ -650,7 +671,7 @@ async def upload_audio(
     reportDraftId: str | None = Form(default=None),
     projectId: str | None = Form(default=None),
     date: str | None = Form(default=None),
-    store: TenantStore = Depends(get_tenant_store),
+    store: TenantStore = Depends(get_tenant_store_write),
 ):
     """Audio-Rohtrack speichern; Transkription separat unter /api/audio/{id}/transcribe."""
     content = await file.read()
@@ -716,7 +737,7 @@ def _resolve_audio_upload_path(store: TenantStore, rec: dict[str, Any]) -> Path:
 
 
 @app.post("/api/audio/{audio_id}/transcribe")
-def transcribe_stored_audio(audio_id: str, store: TenantStore = Depends(get_tenant_store)):
+def transcribe_stored_audio(audio_id: str, store: TenantStore = Depends(get_tenant_store_write)):
     """Transkription eines zuvor hochgeladenen Tracks (V1: Dummy-Text)."""
     uploads = _get_audio_uploads_list(store)
     rec = next((u for u in uploads if isinstance(u, dict) and str(u.get("id")) == audio_id), None)
@@ -741,7 +762,7 @@ def list_employees(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.post("/api/employees")
-def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenant_store)):
+def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenant_store_write)):
     data = store.read_json("employees.json", {"employees": []})
     emp = {
         "id": str(uuid.uuid4()),
@@ -762,7 +783,7 @@ def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenan
 
 
 @app.patch("/api/employees/{employee_id}")
-def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = Depends(get_tenant_store)):
+def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = Depends(get_tenant_store_write)):
     data = store.read_json("employees.json", {"employees": []})
     for e in data.get("employees", []):
         if e.get("id") == employee_id:
@@ -808,7 +829,7 @@ def list_time_entries_endpoint(
 
 
 @app.post("/api/time-entries")
-def create_time_entry_endpoint(body: TimeEntryCreate, store: TenantStore = Depends(get_tenant_store)):
+def create_time_entry_endpoint(body: TimeEntryCreate, store: TenantStore = Depends(get_tenant_store_write)):
     employees_data = store.read_json("employees.json", {"employees": []})
     try:
         entry = time_account.create_manual_time_entry(
@@ -834,7 +855,7 @@ def create_time_entry_endpoint(body: TimeEntryCreate, store: TenantStore = Depen
 
 
 @app.delete("/api/time-entries/{entry_id}")
-def delete_time_entry_endpoint(entry_id: str, store: TenantStore = Depends(get_tenant_store)):
+def delete_time_entry_endpoint(entry_id: str, store: TenantStore = Depends(get_tenant_store_write)):
     removed = time_account.delete_time_entry(
         entry_id,
         read_json=store.time_account_read_json,
@@ -925,7 +946,7 @@ def list_projects(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.post("/api/projects")
-def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_store)):
+def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_store_write)):
     data = store.read_json("projects.json", {"projects": []})
     proj = {
         "id": str(uuid.uuid4()),
@@ -942,7 +963,7 @@ def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_
 
 
 @app.patch("/api/projects/{project_id}")
-def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depends(get_tenant_store)):
+def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depends(get_tenant_store_write)):
     data = store.read_json("projects.json", {"projects": []})
     for p in data.get("projects", []):
         if p.get("id") == project_id:
@@ -1020,7 +1041,7 @@ def _ensure_clean_structured_final(structured: dict[str, Any]) -> dict[str, Any]
 
 
 @app.post("/api/structure-report")
-def api_structure_report(body: StructureReportBody, store: TenantStore = Depends(get_tenant_store)):
+def api_structure_report(body: StructureReportBody, store: TenantStore = Depends(get_tenant_store_write)):
     prof = store.read_json("company_profile.json", {})
     company_nm = str(prof.get("companyName") or "").strip()
     normalized_raw = normalize_trade_language(body.rawText)
@@ -1124,7 +1145,7 @@ def list_reports(
 
 
 @app.post("/api/reports")
-def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenant_store)):
+def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenant_store_write)):
     prof = store.read_json("company_profile.json", {})
     logo_fn = prof.get("logoFilename")
     company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None
@@ -1388,7 +1409,7 @@ def get_report(report_id: str, store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.delete("/api/reports/{report_id}")
-def delete_report(report_id: str, store: TenantStore = Depends(get_tenant_store)):
+def delete_report(report_id: str, store: TenantStore = Depends(get_tenant_store_write)):
     data = store.read_json("reports.json", {"reports": []})
     reports_list = list(data.get("reports", []))
     target = next((r for r in reports_list if r.get("id") == report_id), None)
@@ -1422,7 +1443,7 @@ def list_report_photos(report_id: str, store: TenantStore = Depends(get_tenant_s
 async def upload_report_photo(
     report_id: str,
     file: UploadFile = File(...),
-    store: TenantStore = Depends(get_tenant_store),
+    store: TenantStore = Depends(get_tenant_store_write),
 ):
     """Baustellenfoto zu einem gespeicherten Tagesbericht hochladen (max. 10 pro Bericht)."""
     report = _find_report_doc(store, report_id)
@@ -1481,7 +1502,7 @@ async def upload_report_photo(
 def delete_report_photo(
     report_id: str,
     photo_id: str,
-    store: TenantStore = Depends(get_tenant_store),
+    store: TenantStore = Depends(get_tenant_store_write),
 ):
     report = _find_report_doc(store, report_id)
     photos = _report_photos_list(report)
@@ -1534,7 +1555,7 @@ async def upload_report_signature(
     role: str,
     file: UploadFile = File(...),
     signedByLabel: str | None = Form(None),
-    store: TenantStore = Depends(get_tenant_store),
+    store: TenantStore = Depends(get_tenant_store_write),
 ):
     """Unterschrift fuer Kunde oder Mitarbeiter speichern (PNG, max. eine pro Rolle)."""
     sig_role = _validate_signature_role(role)
@@ -1586,7 +1607,7 @@ async def upload_report_signature(
 def delete_report_signature(
     report_id: str,
     role: str,
-    store: TenantStore = Depends(get_tenant_store),
+    store: TenantStore = Depends(get_tenant_store_write),
 ):
     sig_role = _validate_signature_role(role)
     report = _find_report_doc(store, report_id)
@@ -1615,8 +1636,8 @@ class SendOfficeResponse(BaseModel):
 @app.post("/api/reports/{report_id}/send-office", response_model=SendOfficeResponse)
 def send_report_to_office_endpoint(
     report_id: str,
-    user_id: str = Depends(require_bearer),
-    store: TenantStore = Depends(get_tenant_store),
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
 ) -> SendOfficeResponse:
     rep = _find_report_doc(store, report_id)
     prof = store.read_json("company_profile.json", {})
