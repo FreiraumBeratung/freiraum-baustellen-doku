@@ -20,7 +20,13 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
+from report_export import (
+    LogoPathResolver,
+    SignaturePathResolver,
+    build_attachment_names,
+    build_docx_bytes,
+    build_pdf_bytes,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +181,8 @@ def send_report_to_office(
     *,
     mail_config: dict[str, Any] | None = None,
     photos_upload_dir: Path | str | None = None,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
 ) -> tuple[bool, bool, str]:
     """Sendet den Tagesbericht per SMTP ans Büro.
 
@@ -214,12 +222,17 @@ def send_report_to_office(
     fmt = str(report.get("exportFormat") or "PDF").strip().lower()
     try:
         if fmt == "word":
-            blob = build_docx_bytes(report, profile)
+            blob = build_docx_bytes(report, profile, resolve_logo=resolve_logo)
             ascii_fn, _desc = build_attachment_names(report, "docx")
             main = "application"
             sub = "vnd.openxmlformats-officedocument.wordprocessingml.document"
         else:
-            blob = build_pdf_bytes(report, profile)
+            blob = build_pdf_bytes(
+                report,
+                profile,
+                resolve_logo=resolve_logo,
+                resolve_signature=resolve_signature,
+            )
             ascii_fn, _desc = build_attachment_names(report, "pdf")
             main = "application"
             sub = "pdf"

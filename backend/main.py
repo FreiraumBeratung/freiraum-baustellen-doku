@@ -1764,6 +1764,8 @@ def send_report_to_office_endpoint(
         office,
         mail_config=mail_config,
         photos_upload_dir=store.uploads_dir("photos"),
+        resolve_logo=_export_resolve_logo(store),
+        resolve_signature=_export_resolve_signature(store),
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")

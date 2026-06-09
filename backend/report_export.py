@@ -28,6 +28,7 @@ TEXT_DARK_HEX = HexColor("#111827")
 SECTION_HEX = HexColor("#1f2937")
 LOGO_DIR = Path(__file__).resolve().parent / "uploads" / "logos"
 SIGNATURES_DIR = Path(__file__).resolve().parent / "uploads" / "signatures"
+TENANTS_UPLOADS_DIR = Path(__file__).resolve().parent / "uploads" / "tenants"
 SIGNATURE_ROLES = ("customer", "employee")
 
 LogoPathResolver = Callable[[dict[str, Any], dict[str, Any]], Path | None]
@@ -178,10 +179,39 @@ def _report_signatures_doc(report: dict[str, Any]) -> dict[str, dict[str, Any] |
     return out
 
 
+def _report_tenant_id(report: dict[str, Any]) -> str | None:
+    tid = str(report.get("companyId") or "").strip()
+    return tid or None
+
+
+def _candidate_signature_paths(filename: str, *, tenant_id: str | None = None) -> list[Path]:
+    fn = str(filename or "").strip()
+    if not fn:
+        return []
+    out: list[Path] = []
+    if tenant_id:
+        out.append(TENANTS_UPLOADS_DIR / tenant_id / "signatures" / fn)
+    out.append(SIGNATURES_DIR / fn)
+    if not tenant_id and TENANTS_UPLOADS_DIR.is_dir():
+        for tenant_dir in TENANTS_UPLOADS_DIR.iterdir():
+            if tenant_dir.is_dir():
+                out.append(tenant_dir / "signatures" / fn)
+    unique: list[Path] = []
+    seen: set[str] = set()
+    for path in out:
+        key = str(path)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
 def _safe_signature_path(
     filename: str,
     *,
     resolve_signature: SignaturePathResolver | None = None,
+    tenant_id: str | None = None,
 ) -> Path | None:
     fn = str(filename or "")
     if not fn or "/" in fn or "\\" in fn or fn.strip() != fn:
@@ -190,15 +220,15 @@ def _safe_signature_path(
         resolved = resolve_signature(fn)
         if resolved is not None and resolved.is_file():
             return resolved
-    base = SIGNATURES_DIR.resolve()
-    path = (SIGNATURES_DIR / fn).resolve()
-    try:
-        path.relative_to(base)
-    except ValueError:
-        return None
-    if not path.is_file():
-        return None
-    return path
+    for path in _candidate_signature_paths(fn, tenant_id=tenant_id):
+        try:
+            resolved = path.resolve()
+            resolved.relative_to(path.parent.resolve())
+        except ValueError:
+            continue
+        if resolved.is_file():
+            return resolved
+    return None
 
 
 def _format_signed_at_de(signed_at: Any, fallback_date: Any = None) -> str:
@@ -235,10 +265,15 @@ def _pdf_signature_cell(
     info_label_style: ParagraphStyle,
     meta_style: ParagraphStyle,
     resolve_signature: SignaturePathResolver | None = None,
+    tenant_id: str | None = None,
 ) -> list[Any]:
     if not isinstance(entry, dict):
         return [Spacer(1, 1)]
-    path = _safe_signature_path(str(entry.get("filename") or ""), resolve_signature=resolve_signature)
+    path = _safe_signature_path(
+        str(entry.get("filename") or ""),
+        resolve_signature=resolve_signature,
+        tenant_id=tenant_id,
+    )
     if path is None:
         return [Spacer(1, 1)]
 
@@ -270,11 +305,22 @@ def _append_pdf_signatures(
     sigs = _report_signatures_doc(report)
     customer = sigs.get("customer")
     employee = sigs.get("employee")
-    has_customer = isinstance(customer, dict) and _safe_signature_path(
-        str(customer.get("filename") or ""), resolve_signature=resolve_signature
+    tenant_id = _report_tenant_id(report)
+    has_customer = bool(
+        isinstance(customer, dict)
+        and _safe_signature_path(
+            str(customer.get("filename") or ""),
+            resolve_signature=resolve_signature,
+            tenant_id=tenant_id,
+        )
     )
-    has_employee = isinstance(employee, dict) and _safe_signature_path(
-        str(employee.get("filename") or ""), resolve_signature=resolve_signature
+    has_employee = bool(
+        isinstance(employee, dict)
+        and _safe_signature_path(
+            str(employee.get("filename") or ""),
+            resolve_signature=resolve_signature,
+            tenant_id=tenant_id,
+        )
     )
     if not has_customer and not has_employee:
         return
@@ -296,6 +342,7 @@ def _append_pdf_signatures(
                     info_label_style=info_label_style,
                     meta_style=meta_style,
                     resolve_signature=resolve_signature,
+                    tenant_id=tenant_id,
                 ),
                 _pdf_signature_cell(
                     employee if has_employee else None,
@@ -305,6 +352,7 @@ def _append_pdf_signatures(
                     info_label_style=info_label_style,
                     meta_style=meta_style,
                     resolve_signature=resolve_signature,
+                    tenant_id=tenant_id,
                 ),
             ]
         ],

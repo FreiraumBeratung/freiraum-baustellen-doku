@@ -134,4 +134,39 @@ pdf_missing = build_pdf_bytes(report_missing_file, PROFILE)
 _expect(pdf_missing.startswith(b"%PDF"), "pdf with missing signature file should still build")
 _expect(abs(len(pdf_missing) - plain_len) < 512, "missing signature should not add block")
 
+# -- 5. Mandanten-Pfad (M1) ohne expliziten Resolver --------------------------------
+tenant_id = f"tenant-{uuid.uuid4().hex[:8]}"
+tenant_sig_dir = _TMP_DIR / "uploads" / "tenants" / tenant_id / "signatures"
+tenant_sig_dir.mkdir(parents=True, exist_ok=True)
+report_export.TENANTS_UPLOADS_DIR = _TMP_DIR / "uploads" / "tenants"
+
+cust_tenant_fn = f"sig_tenant_customer_{uuid.uuid4().hex}.png"
+(tenant_sig_dir / cust_tenant_fn).write_bytes(_make_png_bytes())
+emp_tenant_fn = f"sig_tenant_employee_{uuid.uuid4().hex}.png"
+(tenant_sig_dir / emp_tenant_fn).write_bytes(_make_png_bytes())
+
+report_tenant_sigs = {
+    **BASE_REPORT,
+    "companyId": tenant_id,
+    "signatures": {
+        "customer": {
+            "id": str(uuid.uuid4()),
+            "role": "customer",
+            "filename": cust_tenant_fn,
+            "signedAt": "2026-05-25T14:30:00+00:00",
+            "signedByLabel": "Mandant Kunde",
+        },
+        "employee": {
+            "id": str(uuid.uuid4()),
+            "role": "employee",
+            "filename": emp_tenant_fn,
+            "signedAt": "2026-05-25T14:31:00+00:00",
+        },
+    },
+}
+
+pdf_tenant = build_pdf_bytes(report_tenant_sigs, PROFILE)
+_expect(pdf_tenant.startswith(b"%PDF"), "tenant pdf magic missing")
+_expect(len(pdf_tenant) > plain_len, "tenant signed pdf should be larger than plain pdf")
+
 print("REPORT-PDF-SIGNATURES-SMOKE (S4): OK")
