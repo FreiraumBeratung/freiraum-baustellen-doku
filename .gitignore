@@ -34,6 +34,9 @@ backend/data/mail_configs.json
 # mkcert Dev-Zertifikate (niemals committen)
 config/certs/*.pem
 
+# Lokale Backup-Archive (Skripte committen, Archive nicht)
+backups/
+
 # OS / IDE
 .DS_Store
 Thumbs.db
