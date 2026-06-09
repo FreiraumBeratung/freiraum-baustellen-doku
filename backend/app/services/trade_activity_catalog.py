@@ -25,7 +25,7 @@ _GALABAU_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("rasenkantensteine_gesetzt", "Randsteine gesetzt", 84.0, (r"\b(rasenkantenstein(e|en)?|rasenkanten|randstein(e|en)?|kantenstein(e|en)?|bordstein(e|en)?)\b", r"\b(gesetzt|gestellt|verlegt|gelegt|benutzt|verbaut|verarbeitet|montiert|eingebaut|gebaut)\b")),
     _CatalogRule("rasen_gemaeht", "Rasen gemäht", 78.0, (r"\brasen\b", r"\b(gemäht|gemaeht|gemacht|mähen|maehen|geschnitten)\b")),
     _CatalogRule("rasen_getrimmt", "Rasen getrimmt", 77.0, (r"\b(rasen|rasenkanten)\b", r"\b(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)\b")),
-    _CatalogRule("unkraut_entfernt", "Unkraut entfernt", 74.0, (r"\bunkraut\b", r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|durchgeführt|durchgefuehrt|gerupft)\b")),
+    _CatalogRule("unkraut_entfernt", "Unkraut entfernt", 74.0, (r"\bunkraut\b", r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|weg gemacht|weg|durchgeführt|durchgefuehrt|gerupft)\b")),
     _CatalogRule("laub_entfernt", "Laub entfernt", 72.0, (r"\blaub\b", r"\b(entfernt|gefegt|geräumt|geraeumt|beseitigt|gemacht|aufgesammelt)\b")),
     _CatalogRule("pflanzen_gepflanzt", "Pflanzen gesetzt", 74.0, (r"\b(pflanzen|bäume|baeume|sträucher|straeucher)\b", r"\b(gesetzt|gepflanzt|eingepflanzt|bepflanzt)\b")),
     _CatalogRule("rasen_verlegt", "Rasen verlegt", 73.0, (r"\b(rollrasen|rasen)\b", r"\b(verlegt|gelegt|eingebracht)\b")),

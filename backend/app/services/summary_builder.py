@@ -168,6 +168,11 @@ def _first_sentence(main: str, *, raw_text: str, project_name: str, second_main:
         second_is_singular = _is_singular_secondary(second_phrase)
         # "und" wirkt natürlicher, wenn ein Singular-Subjekt im Spiel ist.
         connector = "und" if (main_is_singular or second_is_singular) else "sowie"
+        if main_is_singular and second_is_singular:
+            if main_phrase.casefold().startswith(("der ", "die ", "das ")) and second_phrase.casefold().startswith(
+                ("der ", "die ", "das ")
+            ):
+                prefix = prefix.replace("wurden", "wurde")
         # Bei zwei Subjekten bleibt das Hilfsverb in der Regel im Plural ("wurden").
         return f"{prefix} {main_phrase} {connector} {second_phrase}.".replace("  ", " ")
 
@@ -331,6 +336,7 @@ _ARTICLE_FOR_SINGLE_MODE: tuple[tuple[str, str], ...] = (
     ("hecke geschnitten", "die Hecke geschnitten"),
     ("rasen gemäht", "der Rasen gemäht"),
     ("rasen getrimmt", "der Rasen getrimmt"),
+    ("rasen verlegt", "der Rasen verlegt"),
     ("unkraut entfernt", "Unkraut entfernt"),
     ("laub entfernt", "Laub entfernt"),
     ("decke abgehängt", "die Decke abgehängt"),

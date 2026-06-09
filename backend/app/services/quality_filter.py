@@ -750,7 +750,7 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
         if re.search(r"\b(fertiggestellt|befüllt|befuellt|gesetzt|gestellt)\b", raw_probe):
             out.append("Pflanzkübel fertiggestellt")
     if "schotter" in mats_probe and "schotter" not in acts_probe and re.search(r"\bschotter\b", raw_probe):
-        if re.search(r"\b(eingebaut|eingebracht|verarbeitet|verwendet)\b", raw_probe):
+        if re.search(r"\b(eingebaut|eingebracht|verarbeitet|verwendet|reingemacht|rein gemacht|rein)\b", raw_probe):
             out.append("Schotter eingebaut")
     if "splitt" in mats_probe and "splitt" not in acts_probe and re.search(r"\bsplitt|split\b", raw_probe):
         if re.search(r"\b(eingebaut|verarbeitet|eingebracht|verwendet)\b", raw_probe):
@@ -1182,7 +1182,14 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
             and re.search(r"(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)", raw, flags=re.IGNORECASE)
         )
     if "unkraut entfernt" in low:
-        return bool(re.search(r"\bunkraut\b", raw, flags=re.IGNORECASE))
+        return bool(
+            re.search(r"\bunkraut\b", raw, flags=re.IGNORECASE)
+            and re.search(
+                r"(entfernt|gejätet|gejaetet|gezupft|zupfen|weg gemacht|weg|gemacht|gehackt|gerupft|beseitigt)",
+                raw,
+                flags=re.IGNORECASE,
+            )
+        )
     if "laub entfernt" in low:
         return bool(re.search(r"\blaub\b", raw, flags=re.IGNORECASE))
 
@@ -1244,6 +1251,13 @@ def _summary_fragment(activity: str, *, raw_text: str = "") -> str:
     return a
 
 
+def _drop_conflicting_pipe_activities(activities: list[str]) -> list[str]:
+    probe = " | ".join(str(a or "") for a in activities).casefold()
+    if "kg-rohre" in probe or "ht-rohre" in probe:
+        return [a for a in activities if "wasserleitungen" not in str(a or "").casefold()]
+    return list(activities)
+
+
 def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any]) -> dict[str, Any]:
     result = dict(structured)
     activities_raw = [str(x) for x in (result.get("activities") or [])]
@@ -1254,6 +1268,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
 
     raw_text = str(input_data.get("rawText") or "")
     activities = canonicalize_activities(activities_raw, raw_text=raw_text)
+    activities = _drop_conflicting_pipe_activities(activities)
     activities = _context_gate_activities(activities, raw_text)
     activities = _evidence_gate_activities(activities, raw_text)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)

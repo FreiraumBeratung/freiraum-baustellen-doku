@@ -59,6 +59,10 @@ TRADE_PROFILES: dict[str, dict[str, object]] = {
             "unkraut gejaetet": "Unkraut entfernt",
             "rasen trimmen": "Rasen getrimmt",
             "freischneiden": "Rasen getrimmt",
+            "schotter reingemacht": "Schotter eingebaut",
+            "unkraut weg gemacht": "Unkraut entfernt",
+            "garten freigeschnitten": "Rasen getrimmt",
+            "ganzen garten freigeschnitten": "Rasen getrimmt",
         },
     },
     "trockenbau": {
@@ -136,6 +140,9 @@ TRADE_PROFILES: dict[str, dict[str, object]] = {
         "normalization": {
             "graben gezogen": "Graben ausgehoben",
             "boden verdichtet": "Verdichtungsarbeiten durchgeführt",
+            "kg-rohre gelegt": "KG-Rohre verlegt",
+            "kg rohre gelegt": "KG-Rohre verlegt",
+            "ht-rohre gelegt": "HT-Rohre verlegt",
         },
     },
     "sanierung": {

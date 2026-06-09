@@ -188,9 +188,9 @@ function EditableArraySection({
         {items.length ? (
           items.map((value, i) => (
             <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-start">
-              <input
-                type="text"
-                className={`${inputClass} sm:flex-1`}
+              <textarea
+                rows={2}
+                className={`${textareaClass} sm:flex-1 !mt-0 !min-h-[3rem]`}
                 value={value}
                 disabled={disabled}
                 onChange={(e) => setIdx(i, e.target.value)}

@@ -14,6 +14,8 @@ TRADE_PHRASE_MEMORY: dict[str, dict[str, object]] = {
             (r"\brasen gemacht\b", "Rasen gemäht"),
             (r"\brasse gemacht\b", "Rasen gemäht"),
             (r"\bunkraut zupfen\b", "Unkraut entfernt"),
+            (r"\bunkraut weg gemacht\b", "Unkraut entfernt"),
+            (r"\bschotter reingemacht\b", "Schotter eingebaut"),
         ),
     },
     "trockenbau": {

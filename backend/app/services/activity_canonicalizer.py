@@ -33,7 +33,11 @@ def canonicalize_activities(raw_activities: list[str], *, raw_text: str = "") ->
         if prev is None or _is_better(c, prev):
             selected[c.intent] = c
 
-    ordered = sorted(selected.values(), key=lambda x: x.priority + (2.0 if x.has_quantity else 0.0), reverse=True)
+    ordered = sorted(
+        selected.values(),
+        key=lambda x: x.priority + (4.0 if x.has_quantity else 0.0),
+        reverse=True,
+    )
     return _compact_activity_items([x.text for x in ordered])
 
 
@@ -44,7 +48,12 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"[;!?]", ".", t)
     t = re.sub(r"\bwir haben\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaben wir\b", ".", t, flags=re.IGNORECASE)
-    t = re.sub(r"\b(?:dann noch|dann|anschließend|anschliessend|sowie|und dann)\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(?:dann noch|dann|anschließend|anschliessend|sowie|und dann|zwischendurch)\b",
+        ".",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bdabei\b", ".", t, flags=re.IGNORECASE)
     # Whisper-Verhoerer: "um" steht haeufig faelschlich fuer "und" direkt vor
     # einer Mengenangabe (z.B. "verlegt um 4 Kubik Beton eingebracht").
@@ -326,6 +335,11 @@ def _normalize_for_match(text: str) -> str:
     )
     out = re.sub(r"\brasen gemacht\b", "rasen gemäht", out)
     out = re.sub(r"\brasse gemacht\b", "rasen gemäht", out)
+    out = re.sub(r"\bschotter reingemacht\b", "schotter eingebaut", out)
+    out = re.sub(r"\bunkraut weg gemacht\b", "unkraut entfernt", out)
+    out = re.sub(r"\bunkraut weg\b", "unkraut entfernt", out)
+    out = re.sub(r"\bgarten freigeschnitten\b", "rasen getrimmt", out)
+    out = re.sub(r"\bganzen garten freigeschnitten\b", "rasen getrimmt", out)
     # Whisper-Verhoerer: "Bewaehrung/Bewahrung/Bewährung(sstahl)" auf
     # "Bewehrung(sstahl)" vereinheitlichen. Wichtig: auch das Wortbestandteil
     # "bewährungsstahl" wird erfasst, damit Dedupe spaeter greift.
@@ -412,7 +426,9 @@ def _extract_qty_m2(text: str) -> str | None:
     if m:
         return m.group(1)
     w = re.search(
-        r"\b(eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf)\s*(m²|quadratmeter)\b",
+        r"\b(eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf|"
+        r"zwanzig|dreißig|dreissig|vierzig|fünfzig|fuenfzig|sechzig|siebzig|achtzig|neunzig|hundert)\s*"
+        r"(m²|m2|qm|quadratmeter)\b",
         text,
         flags=re.IGNORECASE,
     )
@@ -424,7 +440,9 @@ def _extract_qty_m3(text: str) -> str | None:
     if m:
         return m.group(1)
     w = re.search(
-        r"\b(eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf)\s*(m³|kubikmeter|kubik)\b",
+        r"\b(eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf|"
+        r"zwanzig|dreißig|dreissig|vierzig|fünfzig|fuenfzig|sechzig|siebzig|achtzig|neunzig|hundert)\s*"
+        r"(m³|m3|kubikmeter|kubik)\b",
         text,
         flags=re.IGNORECASE,
     )
@@ -460,7 +478,18 @@ def _extract_piece_count(text: str) -> str | None:
 
 def _extract_qty_lfm(text: str) -> str | None:
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(lfm|laufende meter|meter)\b", text, flags=re.IGNORECASE)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    w = re.search(
+        r"\b("
+        r"eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf|"
+        r"zwanzig|dreißig|dreissig|vierzig|fünfzig|fuenfzig|sechzig|siebzig|achtzig|neunzig|"
+        r"fünfundzwanzig|funfundzwanzig|dreiunddreißig|dreiunddreissig|vierundzwanzig"
+        r")\s*(lfm|laufende meter)\b",
+        text,
+        flags=re.IGNORECASE,
+    )
+    return _word_to_number(w.group(1)) if w else None
 
 
 def _extract_dn(text: str, *, kind: str) -> str | None:
@@ -564,8 +593,13 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("fliesen_verfugt", "Fliesen verfugt", 56.0, False)
 
     # GaLaBau
-    if ("hecke" in t or "hecken" in t) and re.search(r"\b(geschnitten|zurückgeschnitten|getrimmt)\b", t):
+    if ("hecke" in t or "hecken" in t) and re.search(
+        r"\b(geschnitten|zurückgeschnitten|zurueckgeschnitten|getrimmt)\b",
+        t,
+    ):
         return CanonicalActivity("hecke_geschnitten", "Hecke geschnitten", 76.0, False)
+    if re.search(r"\bgarten\b", t) and re.search(r"\b(freigeschnitten|freischneiden|getrimmt)\b", t):
+        return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
     # Rand-/Rasenkantensteine MUSS vor "rasen" geprüft werden, damit
     # "Rasenkantensteine" nicht versehentlich als "Rasen verlegt" interpretiert wird.
     if re.search(
@@ -605,7 +639,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     ):
         return CanonicalActivity("pflanzen_gepflanzt", "Pflanzen gesetzt", 74.0, False)
     if "unkraut" in t and re.search(
-        r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|durchgeführt|durchgefuehrt|gerupft)\b",
+        r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|weg gemacht|weg|durchgeführt|durchgefuehrt|gerupft)\b",
         t,
     ):
         return CanonicalActivity("unkraut_entfernt", "Unkraut entfernt", 74.0, False)
@@ -627,7 +661,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Gartenmauer gebaut" if qty else "Gartenmauer gebaut"
         return CanonicalActivity("gartenmauer_gebaut", text, 95.0, bool(qty))
-    if "schotter" in t and re.search(r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|rein|verwendet)\b", t):
+    if "schotter" in t and re.search(
+        r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet)\b",
+        t,
+    ):
         qty = _extract_qty_m3(t)
         text = f"{qty} m³ Schotter eingebaut" if qty else "Schotter eingebaut"
         return CanonicalActivity("schotter_eingebaut", text, 82.0, bool(qty))
@@ -669,11 +706,8 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if _is_pflaster_fuge_context(t, raw_text=raw_text):
         return CanonicalActivity("pflasterfugen_verfugt", "Pflasterfugen verfugt", 57.0, False)
 
-    # SHK
-    if "heizungsanschl" in t or ("heizung" in t and "ansch" in t):
-        return CanonicalActivity("heizungsanschluesse_montiert", "Heizungsanschlüsse montiert", 88.0, False)
-    if "wasserleitung" in t or "rohrleitung" in t or "rohre gelegt" in t:
-        return CanonicalActivity("wasserleitungen_verlegt", "Wasserleitungen verlegt", 87.0, False)
+    # SHK / Tiefbau-Rohre — KG/HT vor generischem "Rohre gelegt" (sonst SHK-Fehlmatch).
+    raw_probe = str(raw_text or "").casefold()
     if ("kg rohre" in t or "kg rohr" in t or "kanalrohr" in t or "entwässerungsrohr" in t) and re.search(
         r"\b(verlegt|gelegt|eingebaut|montiert)\b",
         t,
@@ -689,7 +723,12 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         else:
             text = "KG-Rohre verlegt"
         return CanonicalActivity("kg_rohre_verlegt", text, 89.0, bool(qty))
-    raw_probe = str(raw_text or "").casefold()
+    if "heizungsanschl" in t or ("heizung" in t and "ansch" in t):
+        return CanonicalActivity("heizungsanschluesse_montiert", "Heizungsanschlüsse montiert", 88.0, False)
+    if "wasserleitung" in t or "trinkwasser" in t or "rohrleitung" in t:
+        return CanonicalActivity("wasserleitungen_verlegt", "Wasserleitungen verlegt", 87.0, False)
+    if re.search(r"\brohre gelegt\b", t) and not re.search(r"\b(kg|kanal|ht|abwasser)\b", f"{t} {raw_probe}"):
+        return CanonicalActivity("wasserleitungen_verlegt", "Wasserleitungen verlegt", 87.0, False)
     if re.search(r"\babzweig(e)?\b", t) and (
         re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t)
         or re.search(r"\babzweig(e)?\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut)\b", raw_probe)
@@ -857,6 +896,21 @@ def _word_to_number(word: str) -> str | None:
         "elf": "11",
         "zwölf": "12",
         "zwoelf": "12",
+        "zwanzig": "20",
+        "dreißig": "30",
+        "dreissig": "30",
+        "vierzig": "40",
+        "fünfzig": "50",
+        "fuenfzig": "50",
+        "sechzig": "60",
+        "siebzig": "70",
+        "achtzig": "80",
+        "neunzig": "90",
+        "fünfundzwanzig": "25",
+        "funfundzwanzig": "25",
+        "vierundzwanzig": "24",
+        "dreiunddreißig": "33",
+        "dreiunddreissig": "33",
     }
     return mapping.get(key)
 
