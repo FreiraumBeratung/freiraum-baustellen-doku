@@ -109,6 +109,9 @@ _TRANSITION_VERBS = (
     "gegossen",
     "betoniert",
     "fertiggestellt",
+    "gemäht",
+    "gemaeht",
+    "getrimmt",
 )
 
 _FOLLOW_NOUNS = (
@@ -315,6 +318,14 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bht\s*dn\s*\d+\b", "ht rohre", out)
     out = re.sub(r"\brasen[\s-]*kanten[\s-]*steine?\b", "rasenkantensteine", out)
     out = re.sub(r"\brasen[\s-]*kanten\b", "rasenkanten", out)
+    # Whisper-Verhoerer GaLaBau-Pflege: "Rasse" statt "Rasen", "gemacht" statt "gemäht".
+    out = re.sub(
+        r"\brasse\b(?=\s+(?:gemacht|gemäht|gemaeht|mähen|maehen|getrimmt|geschnitten|verlegt|gelegt))",
+        "rasen",
+        out,
+    )
+    out = re.sub(r"\brasen gemacht\b", "rasen gemäht", out)
+    out = re.sub(r"\brasse gemacht\b", "rasen gemäht", out)
     # Whisper-Verhoerer: "Bewaehrung/Bewahrung/Bewährung(sstahl)" auf
     # "Bewehrung(sstahl)" vereinheitlichen. Wichtig: auch das Wortbestandteil
     # "bewährungsstahl" wird erfasst, damit Dedupe spaeter greift.
@@ -572,14 +583,38 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             text = f"{qty_stk} Stück {label} gesetzt"
             return CanonicalActivity("rasenkantensteine_gesetzt", text, 84.0, True)
         return CanonicalActivity("rasenkantensteine_gesetzt", f"{label} gesetzt", 84.0, False)
-    if ("rasen" in t or "rollrasen" in t) and re.search(r"\b(verlegt|gelegt|eingebracht)\b", t):
-        return CanonicalActivity("rasen_verlegt", "Rasen verlegt", 73.0, False)
+    if ("rasen" in t or "rollrasen" in t) and not re.search(r"\brasenkanten", t):
+        if re.search(r"\b(verlegt|gelegt|eingebracht)\b", t):
+            qty = _extract_qty_m2(t)
+            text = f"{_qty_prefix(raw_text)}{qty} m² Rasen verlegt" if qty else "Rasen verlegt"
+            return CanonicalActivity("rasen_verlegt", text, 73.0, bool(qty))
+        if re.search(r"\b(gemäht|gemaeht|gemacht|mähen|maehen|geschnitten)\b", t):
+            qty = _extract_qty_m2(t)
+            text = f"{_qty_prefix(raw_text)}{qty} m² Rasen gemäht" if qty else "Rasen gemäht"
+            return CanonicalActivity("rasen_gemaeht", text, 78.0, bool(qty))
+        if re.search(r"\b(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)\b", t):
+            return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
+    if re.search(r"\b(rasen|rasenkanten)\b", t) and re.search(
+        r"\b(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)\b",
+        t,
+    ):
+        return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
     if ("pflanzen" in t or "bäume" in t or "baeume" in t or "sträucher" in t or "straeucher" in t) and re.search(
         r"\b(gesetzt|gepflanzt|eingepflanzt|bepflanzt)\b",
         t,
     ):
         return CanonicalActivity("pflanzen_gepflanzt", "Pflanzen gesetzt", 74.0, False)
-    if ("unkraut" in t or "laub" in t or "mulch" in t) and re.search(r"\b(entfernt|gemacht|durchgeführt|verteilt)\b", t):
+    if "unkraut" in t and re.search(
+        r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|durchgeführt|durchgefuehrt|gerupft)\b",
+        t,
+    ):
+        return CanonicalActivity("unkraut_entfernt", "Unkraut entfernt", 74.0, False)
+    if "laub" in t and re.search(r"\b(entfernt|gefegt|geräumt|geraeumt|beseitigt|gemacht|aufgesammelt)\b", t):
+        return CanonicalActivity("laub_entfernt", "Laub entfernt", 72.0, False)
+    if ("unkraut" in t or "laub" in t or "mulch" in t) and re.search(
+        r"\b(entfernt|gemacht|durchgeführt|durchgefuehrt|verteilt|geräumt|geraeumt|gestreut)\b",
+        t,
+    ):
         return CanonicalActivity("pflegearbeiten", "Pflegearbeiten durchgeführt", 55.0, False)
     if "pflaster" in t and re.search(r"\b(verlegt|gelegt)\b", t):
         qty = _extract_qty_m2(t)
@@ -848,6 +883,8 @@ def _fallback_activity_from_chunk(norm_text: str) -> CanonicalActivity | None:
         (r"\b(.{4,60}?)\s+(entfernt)\b", "entfernt"),
         (r"\b(.{4,60}?)\s+(aufgebracht|aufgetragen)\b", "aufgebracht"),
         (r"\b(.{4,60}?)\s+(verarbeitet)\b", "verarbeitet"),
+        (r"\b(.{4,60}?)\s+(gemäht|gemaeht)\b", "gemäht"),
+        (r"\b(.{4,60}?)\s+(getrimmt)\b", "getrimmt"),
     )
     for pattern, canon_verb in patterns:
         m = re.search(pattern, t, flags=re.IGNORECASE)

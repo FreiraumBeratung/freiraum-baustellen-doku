@@ -329,6 +329,10 @@ def _should_use_approx(raw_text: str) -> bool:
 _ARTICLE_FOR_SINGLE_MODE: tuple[tuple[str, str], ...] = (
     ("untergrund verdichtet", "der Untergrund verdichtet"),
     ("hecke geschnitten", "die Hecke geschnitten"),
+    ("rasen gemäht", "der Rasen gemäht"),
+    ("rasen getrimmt", "der Rasen getrimmt"),
+    ("unkraut entfernt", "Unkraut entfernt"),
+    ("laub entfernt", "Laub entfernt"),
     ("decke abgehängt", "die Decke abgehängt"),
     ("trockenbauwand geschlossen", "die Trockenbauwand geschlossen"),
     ("gartenmauer gebaut", "die Gartenmauer gebaut"),

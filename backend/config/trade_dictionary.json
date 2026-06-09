@@ -50,13 +50,27 @@
       "pflanzkuebel fertig gemacht": "Pflanzkübel vorbereitet",
       "schotter rein": "Schotter eingebaut",
       "pflanzkübel mit erde bepackt": "Pflanzkübel mit Pflanzsubstrat verfüllt",
-      "pflanzkuebel mit erde bepackt": "Pflanzkübel mit Pflanzsubstrat verfüllt"
+      "pflanzkuebel mit erde bepackt": "Pflanzkübel mit Pflanzsubstrat verfüllt",
+      "rasen gemacht": "Rasen gemäht",
+      "rasse gemacht": "Rasen gemäht",
+      "rasen mähen": "Rasen gemäht",
+      "rasen maehen": "Rasen gemäht",
+      "unkraut zupfen": "Unkraut entfernt",
+      "unkraut gejätet": "Unkraut entfernt",
+      "unkraut gejaetet": "Unkraut entfernt",
+      "rasen trimmen": "Rasen getrimmt",
+      "freischneiden": "Rasen getrimmt"
     },
     "activity_terms": [
       "pflaster verlegt",
       "schotter eingebaut",
       "pflanzkübel vorbereitet",
-      "pflanzkübel mit pflanzsubstrat verfüllt"
+      "pflanzkübel mit pflanzsubstrat verfüllt",
+      "rasen gemäht",
+      "rasen getrimmt",
+      "unkraut entfernt",
+      "hecke geschnitten",
+      "laub entfernt"
     ],
     "material_terms": [
       "pflastersteine",

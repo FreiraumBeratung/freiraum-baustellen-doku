@@ -44,6 +44,14 @@ ACTIVITY_MARKERS = (
     "ausgeführt",
     "gearbeitet",
     "geschraubt",
+    "gemäht",
+    "gemaeht",
+    "geschnitten",
+    "getrimmt",
+    "gejätet",
+    "gejaetet",
+    "gezupft",
+    "gefegt",
 )
 
 # ── Material: nur mit explizitem Materialbezug („Pflaster“ allein ohne Hinweis = nicht automatisch Material) ─

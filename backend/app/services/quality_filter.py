@@ -44,6 +44,8 @@ _ACTIVITY_REWRITE_RULES: tuple[tuple[str, str], ...] = (
     (r"\bfugenmörtel (?:verarbeitet|benutzt|verwendet)\b", "Fliesen verfugt"),
     (r"\bsilikon (?:verarbeitet|gemacht)\b", "Silikonfugen silikoniert"),
     (r"\brasenkantenstein(?:e|en)? (?:verlegt|gelegt|gebaut)\b", "Rasenkantensteine gesetzt"),
+    (r"\brasen gemacht\b", "Rasen gemäht"),
+    (r"\brasse gemacht\b", "Rasen gemäht"),
     (r"\b(randstein(?:e|en)?|kantenstein(?:e|en)?|bordstein(?:e|en)?) (?:verlegt|gelegt|benutzt|verbaut|verarbeitet|gebaut)\b", "Randsteine gesetzt"),
     (r"\b(?:den|die|der)\s+(?:neuen|neue|neuer|alten|alte|alter)\s+oberputz\s+(?:aufgetragen|aufgebracht|verarbeitet)\b", "Oberputz aufgetragen"),
     (r"\boberputz\s+(?:aufgetragen|aufgebracht|verarbeitet)\b", "Oberputz aufgetragen"),
@@ -78,6 +80,9 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bsplitt\b", ("Splitt",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
     (r"\bhecke geschnitten\b", (), ("Heckenschere"), ()),
+    (r"\brasen gemäht\b|\b\d+(?:[.,]\d+)?\s*m²\s*rasen gemäht\b", (), ("Rasenmäher",), ()),
+    (r"\brasen getrimmt\b", (), ("Freischneider",), ()),
+    (r"\bunkraut entfernt\b", (), ("Handwerkzeug"), ()),
     (r"\bpflanzen gesetzt\b", ("Pflanzen",), ("Pflanzsubstrat"), ()),
     (r"\bgraben ausgehoben\b", (), ("Bodenmaterial",), ()),
     (r"\buntergrund verdichtet\b", (), ("Frostschutzmaterial",), ()),
@@ -1116,7 +1121,7 @@ def _context_gate_activities(activities: list[str], raw_text: str) -> list[str]:
 
 
 def _evidence_gate_activities(activities: list[str], raw_text: str) -> list[str]:
-    raw = str(raw_text or "").casefold()
+    raw = normalize_for_match(str(raw_text or ""))
     if not raw.strip():
         return _dedupe(activities)
 
@@ -1166,6 +1171,20 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
         return bool(re.search(r"\bpflanz", raw) and re.search(r"(gesetzt|gepflanzt|bepflanzt|eingepflanzt)", raw))
     if "hecke geschnitten" in low:
         return bool(re.search(r"\bhecke\b", raw) and re.search(r"(geschnitten|getrimmt|zurückgeschnitten|zurueckgeschnitten)", raw))
+    if "rasen gemäht" in low:
+        return bool(
+            re.search(r"\brasen\b", raw)
+            and re.search(r"(gemäht|gemaeht|gemacht|mähen|maehen|geschnitten)", raw, flags=re.IGNORECASE)
+        )
+    if "rasen getrimmt" in low:
+        return bool(
+            re.search(r"\brasen\b", raw)
+            and re.search(r"(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)", raw, flags=re.IGNORECASE)
+        )
+    if "unkraut entfernt" in low:
+        return bool(re.search(r"\bunkraut\b", raw, flags=re.IGNORECASE))
+    if "laub entfernt" in low:
+        return bool(re.search(r"\blaub\b", raw, flags=re.IGNORECASE))
 
     return True
 
@@ -1211,6 +1230,9 @@ def _summary_fragment(activity: str, *, raw_text: str = "") -> str:
     m_schot = re.search(r"(\d+(?:[.,]\d+)?)\s*m³\s*schotter eingebaut", low)
     if m_schot:
         return f"{m_schot.group(1)} m³ Schotter eingebaut"
+    m_rasen = re.search(r"(\d+(?:[.,]\d+)?)\s*m²\s*rasen gemäht", low)
+    if m_rasen:
+        return f"{m_rasen.group(1)} m² Rasen gemäht"
     if low == "spachtelarbeiten durchgeführt":
         return "Spachtelarbeiten durchgeführt"
     if low == "trockenbauwand geschlossen":
