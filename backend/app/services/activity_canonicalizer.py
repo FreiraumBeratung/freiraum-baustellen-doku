@@ -207,6 +207,11 @@ _FOLLOW_NOUNS = (
     "fugenmoertel",
     "fugenspachtel",
     "mulch",
+    "rindenmulch",
+    "palisaden",
+    "palisade",
+    "keramikplatten",
+    "keramikplatte",
     "unkraut",
     "laub",
     "graben",
@@ -427,12 +432,30 @@ def _extract_qty_m2(text: str) -> str | None:
         return m.group(1)
     w = re.search(
         r"\b(eins|eine|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|elf|zwölf|zwoelf|"
-        r"zwanzig|dreißig|dreissig|vierzig|fünfzig|fuenfzig|sechzig|siebzig|achtzig|neunzig|hundert)\s*"
+        r"zwanzig|dreißig|dreissig|vierzig|fünfzig|fuenfzig|sechzig|siebzig|achtzig|neunzig|hundert|"
+        r"fünfundzwanzig|funfundzwanzig|vierundzwanzig|dreiunddreißig|dreiunddreissig)\s*"
         r"(m²|m2|qm|quadratmeter)\b",
         text,
         flags=re.IGNORECASE,
     )
-    return _word_to_number(w.group(1)) if w else None
+    if w:
+        return _word_to_number(w.group(1)) or w.group(1)
+    w_any = re.search(r"\b([a-zäöüß]+)\s*(m²|m2|qm|quadratmeter)\b", text, flags=re.IGNORECASE)
+    if w_any:
+        return _word_to_number(w_any.group(1))
+    return None
+
+
+def _is_keramikterrasse_context(t: str, *, raw_text: str = "") -> bool:
+    probe = f"{t} {raw_text}".casefold()
+    if re.search(r"\bkeramikterrasse\b", probe):
+        return True
+    if re.search(r"\bterrasse\b", probe) and re.search(
+        r"\b(keramik(?:platte(?:n)?)?|keramikplatte|feinsteinzeug(?:platten?)?|platten)\b",
+        probe,
+    ):
+        return True
+    return False
 
 
 def _extract_qty_m3(text: str) -> str | None:
@@ -555,13 +578,30 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if not t:
         return None
 
+    # GaLaBau Keramikterrasse vor generischem Fliesen-Match (Terrasse + Keramikplatten).
+    if _is_keramikterrasse_context(t, raw_text=raw_text) and re.search(
+        r"\b(verlegt|gelegt|gebaut|hergestellt|gemacht|drauf)\b",
+        t,
+    ):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
+        text = f"{_qty_prefix(raw_text)}{qty} m² Keramikterrasse verlegt" if qty else "Keramikterrasse verlegt"
+        return CanonicalActivity("keramikterrasse_verlegt", text, 103.0, bool(qty))
+
     # Fliesenleger
     if "grundierung" in t and re.search(r"\b(aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet)\b", t):
         return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
     if "abdichtung" in t and re.search(r"\b(hergestellt|aufgebracht|eingebaut)\b", t):
         return CanonicalActivity("abdichtung_hergestellt", "Abdichtung hergestellt", 71.0, False)
     if "fliesen" in t and re.search(r"\b(verlegt|gelegt)\b", t):
-        qty = _extract_qty_m2(t)
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
+        text = f"{_qty_prefix(raw_text)}{qty} m² Fliesen verlegt" if qty else "Fliesen verlegt"
+        return CanonicalActivity("fliesen_verlegt", text, 100.0, bool(qty))
+    if re.search(r"\b(platten|mosaik|feinsteinzeug)\b", t) and re.search(r"\b(verlegt|gelegt)\b", t):
+        if _is_keramikterrasse_context(t, raw_text=raw_text):
+            qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
+            text = f"{_qty_prefix(raw_text)}{qty} m² Keramikterrasse verlegt" if qty else "Keramikterrasse verlegt"
+            return CanonicalActivity("keramikterrasse_verlegt", text, 103.0, bool(qty))
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
         text = f"{_qty_prefix(raw_text)}{qty} m² Fliesen verlegt" if qty else "Fliesen verlegt"
         return CanonicalActivity("fliesen_verlegt", text, 100.0, bool(qty))
     # Fliesenkleber/Flexkleber sind eindeutige Fliesen-Kontexte. Generischer
@@ -645,8 +685,35 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("unkraut_entfernt", "Unkraut entfernt", 74.0, False)
     if "laub" in t and re.search(r"\b(entfernt|gefegt|geräumt|geraeumt|beseitigt|gemacht|aufgesammelt)\b", t):
         return CanonicalActivity("laub_entfernt", "Laub entfernt", 72.0, False)
+    if re.search(r"\bpalisad(?:e|en)\b", t) and re.search(
+        r"\b(gesetzt|gestellt|montiert|eingebaut|verlegt|gebaut)\b",
+        t,
+    ):
+        qty_lfm = _extract_qty_lfm(t)
+        if qty_lfm:
+            text = f"{qty_lfm} lfm Palisaden gesetzt"
+            return CanonicalActivity("palisaden_gesetzt", text, 83.0, True)
+        return CanonicalActivity("palisaden_gesetzt", "Palisaden gesetzt", 83.0, False)
+    if re.search(r"\bgemulcht\b", t) and not re.search(r"\b(entfernt|weg|beseitigt)\b", t):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
+        label = "Rindenmulch eingedeckt" if "rindenmulch" in t or "rindenmulch" in raw_text.casefold() else "Fläche mit Mulch eingedeckt"
+        text = f"{_qty_prefix(raw_text)}{qty} m² {label}" if qty else label
+        return CanonicalActivity("mulch_eingedeckt", text, 73.0, bool(qty))
+    if re.search(r"\b(rindenmulch|mulch)\b", t) and re.search(
+        r"\b(eingedeckt|eingebracht|gelegt|verteilt|gestreut|bestreut|eingestreut|aufgebracht|reingemacht|gemacht)\b",
+        t,
+    ) and not re.search(r"\b(entfernt|weg|beseitigt|geräumt|geraeumt)\b", t):
+        qty = _extract_qty_m2(t)
+        label = "Rindenmulch eingedeckt" if "rindenmulch" in t else "Fläche mit Mulch eingedeckt"
+        text = f"{_qty_prefix(raw_text)}{qty} m² {label}" if qty else label
+        return CanonicalActivity("mulch_eingedeckt", text, 73.0, bool(qty))
     if ("unkraut" in t or "laub" in t or "mulch" in t) and re.search(
-        r"\b(entfernt|gemacht|durchgeführt|durchgefuehrt|verteilt|geräumt|geraeumt|gestreut)\b",
+        r"\b(entfernt|durchgeführt|durchgefuehrt|geräumt|geraeumt)\b",
+        t,
+    ):
+        return CanonicalActivity("pflegearbeiten", "Pflegearbeiten durchgeführt", 55.0, False)
+    if ("unkraut" in t or "laub" in t) and re.search(
+        r"\b(gemacht|verteilt|gestreut)\b",
         t,
     ):
         return CanonicalActivity("pflegearbeiten", "Pflegearbeiten durchgeführt", 55.0, False)

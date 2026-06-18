@@ -79,6 +79,9 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bschotter eingebaut\b|\beinbau von\s+\d+(?:[.,]\d+)?\s*m³\s*schotter\b", ("Schotter",), (), ()),
     (r"\bsplitt\b", ("Splitt",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
+    (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
+    (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
+    (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?keramikterrasse verlegt\b", ("Keramikplatten",), ("Stelzlager", "Drainagemörtel", "Einkornmörtel"), ()),
     (r"\bhecke geschnitten\b", (), ("Heckenschere"), ()),
     (r"\brasen gemäht\b|\b\d+(?:[.,]\d+)?\s*m²\s*rasen gemäht\b", (), ("Rasenmäher",), ()),
     (r"\brasen getrimmt\b", (), ("Freischneider",), ()),
@@ -128,6 +131,13 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\br(ü|ue)cklaufverschraubung(en)?\b", "Rücklaufverschraubung"),
     (r"\bpflanzsubstrat\b", "Pflanzsubstrat"),
     (r"\bpflanzkübel\b|\bpflanzkuebel\b", "Pflanzkübel"),
+    (r"\bpalisad(?:e|en)\b", "Palisaden"),
+    (r"\brindenmulch\b", "Rindenmulch"),
+    (r"\bmulch\b", "Mulch"),
+    (r"\bkeramikplatte(?:n)?\b", "Keramikplatten"),
+    (r"\bstelzlag(?:er|ern)?\b", "Stelzlager"),
+    (r"\bdrainage(?:m(?:ö|oe)rtel)?\b", "Drainagemörtel"),
+    (r"\beinkorn(?:m(?:ö|oe)rtel)?\b", "Einkornmörtel"),
     (r"\bfliesenkleber\b", "Fliesenkleber"),
     (r"\bfugenspachtel\b", "Fugenspachtel"),
     (r"\bsteinwolle\b", "Steinwolle"),
@@ -326,6 +336,28 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Bewehrungsstahl benutzt?", r"\bbewehrungs?stahl\b|\bbst\s*500\b"),
             ("Mattenstahl benutzt?", r"\bmattenstahl\b|\bbst[-\s]*matten\b"),
             ("Rödeldraht benutzt?", r"\br(ö|oe)deldraht\b"),
+        ),
+    ),
+    (
+        r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b",
+        (
+            ("Splitt benutzt?", r"\bsplitt\b|\bsplit\b"),
+            ("Beton benutzt?", r"\bbeton\b|\bm(ö|oe)rtel\b"),
+        ),
+    ),
+    (
+        r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b",
+        (
+            ("Rindenmulch benutzt?", r"\brindenmulch\b"),
+            ("Geotextil benutzt?", r"\bgeotextil\b|\btrennvlies\b|\bvlies\b"),
+        ),
+    ),
+    (
+        r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?keramikterrasse verlegt\b",
+        (
+            ("Stelzlager benutzt?", r"\bstelzlag"),
+            ("Drainagemörtel benutzt?", r"\bdrainage(?:m(ö|oe)rtel)?\b"),
+            ("Einkornmörtel benutzt?", r"\beinkorn(?:m(ö|oe)rtel)?\b"),
         ),
     ),
     (
@@ -852,7 +884,83 @@ def _build_material_suggestions(activities: list[str], materials: list[str], raw
                     continue
                 suggestions.append(label)
 
+    suggestions = _append_keramikterrasse_thickness_suggestions(
+        suggestions,
+        acts_probe=acts_probe,
+        mats_probe=mats_probe,
+        raw_probe=raw_probe,
+        material_keys=material_keys,
+    )
+
     return _dedupe(suggestions)
+
+
+def _append_keramikterrasse_thickness_suggestions(
+    suggestions: list[str],
+    *,
+    acts_probe: str,
+    mats_probe: str,
+    raw_probe: str,
+    material_keys: set[str],
+) -> list[str]:
+    if not re.search(r"\bkeramikterrasse\b", acts_probe, flags=re.IGNORECASE):
+        return suggestions
+
+    thin = bool(
+        re.search(
+            r"\b(?:keramik(?:platte(?:n)?)?|platte(?:n)?)\s*(?:zwei|2)\s*(?:cm|zentimeter)\b|"
+            r"\b(?:zwei|2)\s*(?:cm|zentimeter)\s*(?:dick(?:e|r|es)?|keramik|platte(?:n)?)\b",
+            raw_probe,
+            flags=re.IGNORECASE,
+        )
+    )
+    thick = bool(
+        re.search(
+            r"\b(?:keramik(?:platte(?:n)?)?|platte(?:n)?)\s*(?:drei|vier|fünf|funf|3|4|5)\s*(?:cm|zentimeter)\b|"
+            r"\b(?:drei|vier|fünf|funf|3|4|5)\s*(?:cm|zentimeter)\s*(?:dick(?:e|r|es)?|keramik|platte(?:n)?)\b",
+            raw_probe,
+            flags=re.IGNORECASE,
+        )
+    )
+
+    def _maybe_add(label: str, explicit_pattern: str) -> None:
+        normalized = str(label or "").strip()
+        if not normalized:
+            return
+        core = re.sub(r"\s*\?\s*$", "", normalized).casefold()
+        key = _material_key(normalized)
+        if core and (core in mats_probe or core in raw_probe or core in acts_probe):
+            return
+        if key and key in material_keys:
+            return
+        if re.search(explicit_pattern, raw_probe, flags=re.IGNORECASE):
+            return
+        if re.search(explicit_pattern, mats_probe, flags=re.IGNORECASE):
+            return
+        suggestions.append(normalized)
+
+    # Dünne Platten (2 cm): typisch auf Stelzlager.
+    if thin:
+        suggestions = [
+            s
+            for s in suggestions
+            if not re.search(r"^(Drainagemörtel|Einkornmörtel)\s+benutzt\?$", str(s), flags=re.IGNORECASE)
+        ]
+        _maybe_add("Stelzlager benutzt?", r"\bstelzlag")
+        return suggestions
+
+    # Dickere Platten (3 cm+): Bettung statt Stelzlager.
+    if thick:
+        suggestions = [
+            s
+            for s in suggestions
+            if not re.search(r"^Stelzlager\s+benutzt\?$", str(s), flags=re.IGNORECASE)
+        ]
+        _maybe_add("Einkornmörtel benutzt?", r"\beinkorn(?:m(ö|oe)rtel)?\b")
+        _maybe_add("Drainagemörtel benutzt?", r"\bdrainage(?:m(ö|oe)rtel)?\b")
+        return suggestions
+
+    return suggestions
 
 
 def _material_key(value: str) -> str:

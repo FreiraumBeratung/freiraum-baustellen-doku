@@ -4,8 +4,8 @@ import re
 
 TRADE_PHRASE_MEMORY: dict[str, dict[str, object]] = {
     "galabau": {
-        "keywords": ("pflaster", "schotter", "splitt", "pflanzkübel", "pflanzsubstrat", "randstein", "rasen", "unkraut", "hecke", "laub", "pflege"),
-        "preferred_verbs": ("eingebaut", "verlegt", "verdichtet", "gesetzt", "befüllt", "gemäht", "getrimmt", "entfernt", "geschnitten"),
+        "keywords": ("pflaster", "schotter", "splitt", "pflanzkübel", "pflanzsubstrat", "randstein", "rasen", "unkraut", "hecke", "laub", "pflege", "palisade", "palisaden", "mulch", "rindenmulch", "keramik", "terrasse"),
+        "preferred_verbs": ("eingebaut", "verlegt", "verdichtet", "gesetzt", "befüllt", "gemäht", "getrimmt", "entfernt", "geschnitten", "eingedeckt", "gemulcht"),
         "replacements": (
             (r"\bverarbeitung von schotter\b", "Schotter eingebaut"),
             (r"\bdurchführung von pflasterarbeiten\b", "Pflaster verlegt"),
@@ -16,6 +16,9 @@ TRADE_PHRASE_MEMORY: dict[str, dict[str, object]] = {
             (r"\bunkraut zupfen\b", "Unkraut entfernt"),
             (r"\bunkraut weg gemacht\b", "Unkraut entfernt"),
             (r"\bschotter reingemacht\b", "Schotter eingebaut"),
+            (r"\bmulch reingemacht\b", "Fläche mit Mulch eingedeckt"),
+            (r"\brindenmulch reingemacht\b", "Rindenmulch eingedeckt"),
+            (r"\bkeramik drauf gemacht\b", "Keramikterrasse verlegt"),
         ),
     },
     "trockenbau": {
