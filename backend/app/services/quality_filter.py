@@ -97,7 +97,7 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\brasen gedüngt\b", ("Dünger",), (), ()),
     (r"\bfläche bewässert\b", (), ("Bewässerungsmaterial"), ()),
     (r"\bwinterdienst durchgeführt\b", ("Streugut",), (), ()),
-    (r"\bgeotextil verlegt\b", ("Geotextil",), (), ()),
+    (r"\bgeotexti(?:l|el) verlegt\b", ("Geotextil",), (), ()),
     (r"\bhecke geschnitten\b", (), ("Heckenschere"), ()),
     (r"\brasen gemäht\b|\b\d+(?:[.,]\d+)?\s*m²\s*rasen gemäht\b", (), ("Rasenmäher",), ()),
     (r"\brasen getrimmt\b", (), ("Freischneider",), ()),

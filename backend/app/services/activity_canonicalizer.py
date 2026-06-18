@@ -377,8 +377,14 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bganzen garten freigeschnitten\b", "rasen getrimmt", out)
     out = re.sub(r"\bvertikuliert\b|\bvertikulieren\b", "vertikutiert", out)
     out = re.sub(r"\bgedungt\b|\bgeduenght\b", "gedüngt", out)
-    out = re.sub(r"\bbewassert\b|\bbewassert\b", "bewässert", out)
+    out = re.sub(r"\bbewassert\b|\bbewessert\b|\bbewassert\b", "bewässert", out)
     out = re.sub(r"\bstelllager\b|\bstelzlagern\b", "stelzlager", out)
+    out = re.sub(r"\bgeotextiel\b", "geotextil", out)
+    out = re.sub(r"\bschimel\b", "schimmel", out)
+    out = re.sub(r"\bdruckprufung\b", "druckprüfung", out)
+    out = re.sub(r"\becke geschnitten\b", "hecke geschnitten", out)
+    out = re.sub(r"\becke zurückgeschnitten\b|\becke zurueckgeschnitten\b", "hecke zurückgeschnitten", out)
+    out = re.sub(r"\becke getrimmt\b", "hecke getrimmt", out)
     # Whisper-Verhoerer: "Bewaehrung/Bewahrung/Bewährung(sstahl)" auf
     # "Bewehrung(sstahl)" vereinheitlichen. Wichtig: auch das Wortbestandteil
     # "bewährungsstahl" wird erfasst, damit Dedupe spaeter greift.
