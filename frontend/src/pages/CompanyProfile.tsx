@@ -139,25 +139,29 @@ export function CompanyProfilePage() {
               <option value="Word">Word</option>
             </select>
           </label>
-          <label className="block">
-            <span className="text-sm text-zinc-400">Standard-Empfänger (Büro)</span>
-            <input
-              className="mt-1 w-full rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-3 text-white outline-none ring-1 ring-transparent focus:border-orange-500/55 focus:ring-orange-500/42"
-              type="email"
-              value={prof.defaultRecipientEmail}
-              onChange={(e) => setProf({ ...prof, defaultRecipientEmail: e.target.value })}
-            />
-          </label>
 
           <label className="block">
             <span className="text-sm text-zinc-400">Firmenlogo</span>
-            <input
-              type="file"
-              accept="image/*"
-              className="mt-2 w-full text-sm text-zinc-400 file:mr-3 file:rounded-lg file:border-0 file:bg-orange-500 file:px-4 file:py-2 file:text-sm file:font-semibold file:text-zinc-950"
-              onChange={(e) => onLogo(e.target.files)}
-              disabled={writeBlocked}
-            />
+            <div className="mt-3 flex justify-center">
+              <input
+                id="company-logo-upload"
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={(e) => onLogo(e.target.files)}
+                disabled={writeBlocked}
+              />
+              <label
+                htmlFor="company-logo-upload"
+                className={`inline-flex min-h-11 items-center justify-center rounded-lg border border-orange-500 bg-orange-500 px-5 py-2 text-sm font-semibold text-zinc-950 transition ${
+                  writeBlocked
+                    ? 'pointer-events-none cursor-not-allowed opacity-40'
+                    : 'cursor-pointer hover:bg-orange-400'
+                }`}
+              >
+                Datei auswählen
+              </label>
+            </div>
           </label>
 
           {msg ? <p className="text-sm text-orange-300">{msg}</p> : null}

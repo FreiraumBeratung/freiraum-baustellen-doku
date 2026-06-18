@@ -350,8 +350,6 @@ function ReportPreviewInner({
   timeBookingMsg,
   timeBookingWarn,
   dirty,
-  restoreDisabled,
-  onRestoreSuggestion,
 }: {
   st: ReportPreviewState
   draftStructured: StructuredPayload
@@ -365,8 +363,6 @@ function ReportPreviewInner({
   timeBookingMsg: string
   timeBookingWarn: string
   dirty: boolean
-  restoreDisabled: boolean
-  onRestoreSuggestion: () => void
 }) {
   const { writeBlocked } = useWriteBlocked()
   const [companyName, setCompanyName] = useState('')
@@ -536,22 +532,6 @@ function ReportPreviewInner({
       </Card>
 
       <Card className="space-y-6">
-        {!savedReportId ? (
-          <div className="flex flex-col gap-2 border-b border-zinc-800 pb-4 sm:flex-row sm:items-center sm:justify-between">
-            <span className="text-xs text-zinc-500">
-              Ursprungsvorschlag aus diesem Strukturierungslauf wiederherstellen.
-            </span>
-            <button
-              type="button"
-              disabled={restoreDisabled}
-              className="rounded-lg border border-zinc-600 px-3 py-2 text-sm text-orange-400 hover:border-orange-500 disabled:pointer-events-none disabled:opacity-40"
-              onClick={onRestoreSuggestion}
-            >
-              KI-/Struktur-Vorschlag wiederherstellen
-            </button>
-          </div>
-        ) : null}
-
         <section>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">
             Zusammenfassung
@@ -763,7 +743,6 @@ export function ReportPreviewPage() {
       ? `${st.projectId}|${st.date}|${st.startTime}|${st.endTime}|${defaultBreakMinutes(st)}|${defaultEmployeeIds(st).join(',')}|${st.exportFormat}|${st.rawText.length}|${JSON.stringify(st.structured)}`
       : ''
 
-  const snapshotRef = useRef<StructuredPayload | null>(null)
   const lastReportKeyRef = useRef<string>('')
 
   const [draftStructured, setDraftStructured] = useState<StructuredPayload>(() =>
@@ -784,7 +763,6 @@ export function ReportPreviewPage() {
     if (lastReportKeyRef.current === reportSyncKey) return
     lastReportKeyRef.current = reportSyncKey
     const c = cloneStructured(st.structured)
-    snapshotRef.current = c
     setDraftStructured(c)
     setSavedBaseline(c)
     setSaveMsg('')
@@ -806,14 +784,6 @@ export function ReportPreviewPage() {
     () => !structuredEqual(draftStructured, savedBaseline),
     [draftStructured, savedBaseline],
   )
-
-  const restoreDisabled =
-    !snapshotRef.current || structuredEqual(draftStructured, snapshotRef.current)
-
-  function onRestoreSuggestion() {
-    if (!snapshotRef.current) return
-    setDraftStructured(cloneStructured(snapshotRef.current))
-  }
 
   async function saveReport(logoUrl: string | null, companyName: string, officeEmail: string) {
     if (!st) return
@@ -912,8 +882,6 @@ export function ReportPreviewPage() {
       timeBookingMsg={timeBookingMsg}
       timeBookingWarn={timeBookingWarn}
       dirty={dirty}
-      restoreDisabled={restoreDisabled}
-      onRestoreSuggestion={onRestoreSuggestion}
     />
   )
 }
