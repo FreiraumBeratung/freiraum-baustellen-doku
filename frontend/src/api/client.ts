@@ -164,6 +164,8 @@ export type AdminUserRow = {
   isAdmin: boolean
 }
 
+export type FeedbackCategory = 'Problem' | 'Verbesserung' | 'Lob'
+
 export async function listAdminUsers(): Promise<{ users: AdminUserRow[] }> {
   return api<{ users: AdminUserRow[] }>('/api/admin/users')
 }
@@ -177,6 +179,18 @@ export async function setAdminUserLicense(userId: string, licenseActive: boolean
 
 export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
   return api<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
+}
+
+export async function sendFeedback(payload: {
+  category: FeedbackCategory
+  message: string
+  page?: string
+  appVersion?: string
+}): Promise<{ ok: boolean; message: string }> {
+  return api<{ ok: boolean; message: string }>('/api/feedback', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
 }
 
 export async function postAuthLogin(email: string, password: string): Promise<AuthLoginResponse> {

@@ -36,6 +36,7 @@ MSG_NOT_CONFIGURED = (
 )
 MSG_SENT = "Bericht wurde ans Büro gesendet."
 MSG_SENT_WITH_PHOTOS = "Bericht mit {count} Foto(s) wurde ans Büro gesendet."
+MSG_FEEDBACK_SENT = "Feedback wurde gesendet."
 
 
 def _format_date_de(date_raw: Any) -> str:
@@ -282,3 +283,58 @@ def send_report_to_office(
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
     return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT
+
+
+def send_feedback_mail(
+    *,
+    to_email: str,
+    subject: str,
+    body: str,
+    mail_config: dict[str, Any] | None = None,
+) -> tuple[bool, str]:
+    """Sendet eine einfache Text-Feedback-Mail via gespeicherter SMTP-Konfiguration."""
+    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+        return False, MSG_NOT_CONFIGURED
+
+    from_addr = str(mail_config.get("email") or "").strip()
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+
+    if not from_addr or not user or not password or not host or not port:
+        return False, MSG_NOT_CONFIGURED
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.set_content(body)
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Feedback-Versand")
+        return False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Feedback-Versand fehlgeschlagen")
+        return False, "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden."
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Feedback-Versand")
+        return False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+
+    return True, MSG_FEEDBACK_SENT

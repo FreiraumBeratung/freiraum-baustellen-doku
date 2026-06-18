@@ -56,12 +56,22 @@ _ACTIVITY_REWRITE_RULES: tuple[tuple[str, str], ...] = (
     (r"\bein[e]?\s+manschette?\s+montiert\b", "HT-Manschette montiert"),
     (r"\buwe[-\s]*profil\s+montiert\b", "UW-Profil montiert"),
     (r"\bherzk(ö|oe)rper\b", "Heizkörper"),
+    (r"\bwc gesetzt\b|\btoilette eingebaut\b", "WC montiert"),
+    (r"\bwaschbecken angebaut\b", "Waschbecken montiert"),
+    (r"\bdusche angeschlossen\b", "Dusche montiert"),
+    (r"\bausgleichsmasse gezogen\b", "Nivelliermasse aufgetragen"),
+    (r"\bbodenablauf gesetzt\b", "Bodenablauf eingebaut"),
+    (r"\bhausanschluss gemacht\b", "Hausanschluss hergestellt"),
+    (r"\basphalt gemacht\b", "Asphalt eingebaut"),
+    (r"\bsockelputz gemacht\b", "Sockelputz aufgetragen"),
+    (r"\breibputz gemacht\b", "Reibputz aufgetragen"),
+    (r"\bkratzputz gemacht\b", "Kratzputz aufgetragen"),
 )
 
 _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] = (
     (r"\bfliesen(?:arbeiten)? verlegt\b|\b\d+(?:[.,]\d+)?\s*m²\s*fliesen verlegt\b", ("Fliesen",), ("Fliesenkleber", "Fugenmörtel"), ()),
     (r"\bfliesen verfugt\b", ("Fugenmörtel",), (), ()),
-    (r"\bsilikonfugen hergestellt\b", ("Silikon",), (), ()),
+    (r"\bsilikonfugen (hergestellt|silikoniert)\b", ("Silikon",), (), ()),
     (r"\bgipskarton(?:platten)? montiert\b", ("Gipskartonplatten",), ("Schnellbauschrauben", "Spachtelmasse"), ()),
     (r"\bständerwerk montiert\b", ("CW/UW-Profile",), ("Schnellbauschrauben",), ()),
     (r"\bdecke abgehängt\b", ("CD-Profile",), ("Abhänger",), ()),
@@ -82,6 +92,12 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?keramikterrasse verlegt\b", ("Keramikplatten",), ("Stelzlager", "Drainagemörtel", "Einkornmörtel"), ()),
+    (r"\bholz-/wpc-terrasse gebaut\b", ("WPC-Dielen",), ("Unterkonstruktion",), ()),
+    (r"\brasen vertikutiert\b", (), ("Vertikutierer"), ()),
+    (r"\brasen gedüngt\b", ("Dünger",), (), ()),
+    (r"\bfläche bewässert\b", (), ("Bewässerungsmaterial"), ()),
+    (r"\bwinterdienst durchgeführt\b", ("Streugut",), (), ()),
+    (r"\bgeotextil verlegt\b", ("Geotextil",), (), ()),
     (r"\bhecke geschnitten\b", (), ("Heckenschere"), ()),
     (r"\brasen gemäht\b|\b\d+(?:[.,]\d+)?\s*m²\s*rasen gemäht\b", (), ("Rasenmäher",), ()),
     (r"\brasen getrimmt\b", (), ("Freischneider",), ()),
@@ -91,11 +107,26 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\buntergrund verdichtet\b", (), ("Frostschutzmaterial",), ()),
     (r"\bwasserleitungen montiert\b|\brohrleitungen installiert\b", ("Rohrleitungen",), ("Fittings",), ()),
     (r"\bheizungsanschlüsse montiert\b", (), ("Fittings",), ()),
+    (r"\bwc montiert\b", ("WC",), ("Anschlussset",), ()),
+    (r"\bwaschbecken montiert\b", ("Waschbecken",), ("Armaturen",), ()),
+    (r"\bdusche montiert\b", ("Dusche",), ("Armaturen",), ()),
+    (r"\barmaturen montiert\b", ("Armaturen",), (), ()),
+    (r"\bdruckprüfung durchgeführt\b|\bdruckpruefung durchgeführt\b", (), ("Prüfset"), ()),
+    (r"\bhydraulischer abgleich durchgeführt\b", (), ("Thermostatventile",), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?kg-rohre verlegt\b", ("KG-Rohre",), ("KG-Bögen", "KG-Abzweige"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?ht-rohre verlegt\b", ("HT-Rohre",), ("HT-Bögen", "HT-Abzweige"), ()),
     (r"\bht-manschette montiert\b", ("HT-Manschette",), (), ()),
     (r"\bfassadenarmierung ausgeführt\b|\bfassadenarmierung ausgefuehrt\b", ("Armierungsgewebe",), ("Armierungsmörtel",), ()),
     (r"\barmierung ausgeführt\b|\barmierung ausgefuehrt\b", ("Armierungsgewebe",), ("Armierungsmörtel",), ()),
+    (r"\bsockelputz aufgetragen\b", ("Sockelputz",), ("Grundierung",), ()),
+    (r"\breibputz aufgetragen\b", ("Reibputz",), (), ()),
+    (r"\bkratzputz aufgetragen\b", ("Kratzputz",), (), ()),
+    (r"\bhausanschluss hergestellt\b", ("Hausanschluss",), (), ()),
+    (r"\basphalt eingebaut\b", ("Asphalt",), (), ()),
+    (r"\bgroßformatfliesen verlegt\b|\bgrossformatfliesen verlegt\b", ("Fliesen",), ("Nivelliersystem"), ()),
+    (r"\bnivelliermasse aufgetragen\b", ("Nivelliermasse",), (), ()),
+    (r"\bbodenablauf eingebaut\b", ("Bodenablauf",), (), ()),
+    (r"\bnaturstein verlegt\b", ("Naturstein",), (), ()),
 )
 
 _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
@@ -136,8 +167,26 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bmulch\b", "Mulch"),
     (r"\bkeramikplatte(?:n)?\b", "Keramikplatten"),
     (r"\bstelzlag(?:er|ern)?\b", "Stelzlager"),
-    (r"\bdrainage(?:m(?:ö|oe)rtel)?\b", "Drainagemörtel"),
+    (r"\bdrainagem(?:ö|oe)rtel\b", "Drainagemörtel"),
     (r"\beinkorn(?:m(?:ö|oe)rtel)?\b", "Einkornmörtel"),
+    (r"\bwpc[-\s]*dielen?\b|\bwpc\b", "WPC-Dielen"),
+    (r"\bunterkonstruktion\b", "Unterkonstruktion"),
+    (r"\bd(ü|ue)nger\b", "Dünger"),
+    (r"\bstreugut\b|\bsalz\b", "Streugut"),
+    (r"\bgeotextil\b|\btrennvlies\b|\bfiltervlies\b|\bvlies\b", "Geotextil"),
+    (r"\bwc\b|\btoilette\b", "WC"),
+    (r"\bwaschbecken\b|\bwaschtisch\b", "Waschbecken"),
+    (r"\bdusche\b|\bduschwanne\b|\bduschkabine\b", "Dusche"),
+    (r"\barmatur(en)?\b|\bwasserhahn\b|\bmischer\b", "Armaturen"),
+    (r"\bdruckpr(ü|ue)fung\b", "Prüfset"),
+    (r"\bhausanschluss\b", "Hausanschluss"),
+    (r"\basphalt\b", "Asphalt"),
+    (r"\bnivelliermasse\b|\bausgleichsmasse\b|\bnivellierspachtel\b", "Nivelliermasse"),
+    (r"\bbodenablauf\b|\bduschrinne\b|\bablaufrinne\b", "Bodenablauf"),
+    (r"\bnaturstein\b", "Naturstein"),
+    (r"\bsockelputz\b", "Sockelputz"),
+    (r"\breibputz\b", "Reibputz"),
+    (r"\bkratzputz\b", "Kratzputz"),
     (r"\bfliesenkleber\b", "Fliesenkleber"),
     (r"\bfugenspachtel\b", "Fugenspachtel"),
     (r"\bsteinwolle\b", "Steinwolle"),
@@ -358,6 +407,79 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Stelzlager benutzt?", r"\bstelzlag"),
             ("Drainagemörtel benutzt?", r"\bdrainage(?:m(ö|oe)rtel)?\b"),
             ("Einkornmörtel benutzt?", r"\beinkorn(?:m(ö|oe)rtel)?\b"),
+        ),
+    ),
+    (
+        r"\bholz-/wpc-terrasse gebaut\b",
+        (
+            ("Unterkonstruktion benutzt?", r"\bunterkonstruktion\b"),
+            ("WPC-Dielen benutzt?", r"\bwpc[-\s]*dielen?\b|\bwpc\b"),
+        ),
+    ),
+    (
+        r"\brasen vertikutiert\b",
+        (
+            ("Vertikutierer benutzt?", r"\bvertikutierer\b"),
+        ),
+    ),
+    (
+        r"\brasen gedüngt\b",
+        (
+            ("Dünger benutzt?", r"\bd(ü|ue)nger\b"),
+        ),
+    ),
+    (
+        r"\bfläche bewässert\b|\bflaeche bewaessert\b",
+        (
+            ("Bewässerungsmaterial benutzt?", r"\bbew(ä|ae)sser"),
+        ),
+    ),
+    (
+        r"\bwinterdienst durchgeführt\b|\bwinterdienst durchgefuehrt\b",
+        (
+            ("Streugut benutzt?", r"\bstreugut\b|\bsalz\b"),
+        ),
+    ),
+    (
+        r"\bwc montiert\b",
+        (
+            ("Anschlussset benutzt?", r"\banschlussset\b"),
+        ),
+    ),
+    (
+        r"\bwaschbecken montiert\b|\bdusche montiert\b",
+        (
+            ("Armaturen benutzt?", r"\barmatur(en)?\b|\bwasserhahn\b|\bmischer\b"),
+        ),
+    ),
+    (
+        r"\bdruckprüfung durchgeführt\b|\bdruckpruefung durchgeführt\b",
+        (
+            ("Prüfset benutzt?", r"\bprüfset\b|\bdruckpr(ü|ue)f"),
+        ),
+    ),
+    (
+        r"\bgroßformatfliesen verlegt\b|\bgrossformatfliesen verlegt\b",
+        (
+            ("Nivelliersystem benutzt?", r"\bnivelliersystem\b|\bleveling\b"),
+        ),
+    ),
+    (
+        r"\bnivelliermasse aufgetragen\b",
+        (
+            ("Nivelliermasse benutzt?", r"\bnivelliermasse\b|\bausgleichsmasse\b"),
+        ),
+    ),
+    (
+        r"\bbodenablauf eingebaut\b",
+        (
+            ("Ablaufset benutzt?", r"\bablauf(set)?\b|\bduschrinne\b"),
+        ),
+    ),
+    (
+        r"\bhausanschluss hergestellt\b",
+        (
+            ("Dichteinsatz benutzt?", r"\bdichteinsatz\b"),
         ),
     ),
     (
@@ -789,7 +911,7 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
             out.append("Splitt eingebaut")
     if ("steinwolle" in mats_probe or "mineralwolle" in mats_probe) and "dämmung eingebaut" not in acts_probe:
         if re.search(r"\b(dämmung|daemmung|steinwolle|mineralwolle)\b", raw_probe) and re.search(
-            r"\b(eingebaut|verlegt|angebracht|montiert)\b",
+            r"\b(eingebaut|verlegt|angebracht|montiert|eingebracht)\b",
             raw_probe,
         ):
             out.append("Dämmung eingebaut")
@@ -1251,11 +1373,16 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
     if "decke abgehängt" in low:
         return bool(re.search(r"\bdecke\b", raw) and re.search(r"\babgeh(ä|ae|a)ng", raw))
     if "fugen verspachtelt" in low:
-        return bool(re.search(r"\bfugen?\b", raw) and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht)", raw))
+        return bool(
+            re.search(r"\bfugen?\b|\btrockenbaufugen\b", raw)
+            and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht)", raw)
+        )
     if "fliesen verfugt" in low:
-        if not re.search(r"\bfugen?\b|\bverfugt\b", raw):
+        if not re.search(r"\bfugen?\b|\bfugenm(ö|oe)rtel\b|\bverfugt\b", raw):
             return False
         if re.search(r"\bfliesen?\b", raw):
+            return True
+        if re.search(r"\b(bodenablauf|duschrinne|ablaufrinne)\b", raw):
             return True
         return any("fliesen verlegt" in x.casefold() for x in all_activities)
     if "fliesenkleber aufgetragen" in low:

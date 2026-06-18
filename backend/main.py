@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from office_mail import send_report_to_office
+from office_mail import send_feedback_mail, send_report_to_office
 from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
 from report_structure import structure_report_fields
 from app.services import time_account
@@ -84,6 +84,7 @@ SIGNATURE_ROLES = frozenset({"customer", "employee"})
 MAX_SIGNATURE_BYTES = 512 * 1024
 MIN_SIGNATURE_BYTES = 80
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+FEEDBACK_RECEIVER_EMAIL = "info@freiraum-unternehmensberatung.de"
 
 # --- CORS (DEV / WLAN-Handy): localhost + LAN-IPs auf Frontend-Port 51710 -------------
 # FREIRAUM_DEV_LAN_CORS=0 schaltet Regex ab (nur noch localhost / 127.0.0.1).
@@ -484,6 +485,13 @@ class ReportCreateBody(BaseModel):
     structured: StructuredBlock
 
 
+class FeedbackCreateBody(BaseModel):
+    category: str = Field(default="Verbesserung")
+    message: str = Field(..., min_length=3, max_length=5000)
+    page: str = ""
+    appVersion: str = ""
+
+
 @app.get("/")
 def root():
     return {
@@ -501,6 +509,83 @@ def debug_ping() -> dict[str, Any]:
         "message": "backend reachable",
         "service": "freiraum-baustellen-doku",
     }
+
+
+@app.post("/api/feedback")
+def create_feedback(body: FeedbackCreateBody, user_id: str = Depends(require_bearer)):
+    user = find_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+
+    store = TenantStore(tenant_id_for_user(user))
+    profile = store.read_json("company_profile.json", {})
+    company_name = str(profile.get("companyName") or user.get("companyName") or "").strip()
+    category = str(body.category or "Verbesserung").strip().title()
+    if category not in {"Problem", "Verbesserung", "Lob"}:
+        category = "Verbesserung"
+
+    message = str(body.message or "").strip()
+    if len(message) < 3:
+        raise HTTPException(status_code=400, detail="Feedback ist zu kurz.")
+
+    page = str(body.page or "").strip()[:200]
+    app_version = str(body.appVersion or "").strip()[:80]
+
+    created_at = datetime.now(timezone.utc).isoformat()
+    feedback_entry: dict[str, Any] = {
+        "id": str(uuid.uuid4()),
+        "createdAt": created_at,
+        "category": category,
+        "message": message,
+        "page": page,
+        "appVersion": app_version,
+        "userId": user_id,
+        "userEmail": str(user.get("email") or "").strip().lower(),
+        "companyName": company_name,
+    }
+    feedback_rows = store.read_json("feedback.json", {"items": []})
+    items = feedback_rows.get("items") if isinstance(feedback_rows, dict) else []
+    if not isinstance(items, list):
+        items = []
+    items.append(feedback_entry)
+    store.write_json("feedback.json", {"items": items})
+
+    sender_email = str(user.get("email") or "").strip().lower()
+    mail_config = get_mail_config(sender_email) if sender_email else None
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal ausloggen und wieder einloggen, "
+                "damit SMTP-Daten aktualisiert werden."
+            ),
+        )
+
+    local_time = datetime.now().strftime("%d.%m.%Y %H:%M")
+    subject = f"[App-Feedback] {category} | {company_name or sender_email or 'Unbekannt'}"
+    lines = [
+        "Neues App-Feedback eingegangen.",
+        "",
+        f"Kategorie: {category}",
+        f"Firma: {company_name or 'Keine Angabe'}",
+        f"Absender: {sender_email or 'Keine Angabe'}",
+        f"Seite: {page or 'Unbekannt'}",
+        f"App-Version: {app_version or 'Unbekannt'}",
+        f"Zeitpunkt: {local_time}",
+        "",
+        "Feedback-Text:",
+        message,
+    ]
+    ok, send_message = send_feedback_mail(
+        to_email=FEEDBACK_RECEIVER_EMAIL,
+        subject=subject,
+        body="\n".join(lines),
+        mail_config=mail_config,
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=send_message or "Feedback konnte nicht gesendet werden.")
+
+    return {"ok": True, "message": "Danke! Feedback wurde gesendet."}
 
 
 @app.post("/api/auth/register")

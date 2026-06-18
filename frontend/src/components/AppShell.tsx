@@ -1,5 +1,6 @@
 import {
   ClipboardList,
+  MessageSquareText,
   HardHat,
   Home,
   Mic,
@@ -14,6 +15,7 @@ const baseNav = [
   { to: '/', label: 'Home', Icon: Home, end: true },
   { to: '/bericht', label: 'Bericht', Icon: Mic, end: false },
   { to: '/berichte', label: 'Berichte', Icon: ClipboardList, end: false },
+  { to: '/feedback', label: 'Feedback', Icon: MessageSquareText, end: false },
   { to: '/baustellen', label: 'Baustellen', Icon: HardHat, end: false },
   { to: '/profil', label: 'Profil', Icon: User, end: false },
 ] as const
