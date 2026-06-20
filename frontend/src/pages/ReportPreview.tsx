@@ -475,10 +475,15 @@ function ReportPreviewInner({
 
   return (
     <div key={`preview-wake-${pageWakeKey}`} className="overflow-x-hidden">
-      <PageTitle title="Tagesbericht" subtitle="Vorschau vor dem Speichern" />
-      <p className="mb-2 text-center text-sm text-zinc-500">
-        Bitte prüfen und bei Bedarf anpassen, bevor der Bericht gespeichert wird.
-      </p>
+      <PageTitle
+        title="Tagesbericht"
+        subtitle={savedReportId ? 'Fotos, Unterschrift & Versand' : 'Prüfen & anpassen'}
+      />
+      {!savedReportId ? (
+        <p className="mb-2 text-center text-sm text-zinc-500">
+          Bitte prüfen und bei Bedarf anpassen — im nächsten Schritt Fotos &amp; Unterschrift.
+        </p>
+      ) : null}
       {dirty && !savedReportId ? (
         <p className="mb-3 text-center text-sm text-amber-400">Änderungen noch nicht gespeichert</p>
       ) : null}
@@ -641,18 +646,34 @@ function ReportPreviewInner({
           <p className="mt-2 whitespace-pre-wrap text-zinc-400">{st.rawText}</p>
         </section>
 
-        <ReportPhotosSection
-          reportId={savedReportId}
-          enabled={Boolean(savedReportId)}
-          iosGalleryRedirect
-          onUploadComplete={() => setPageWakeKey((k) => k + 1)}
-        />
+        {savedReportId ? (
+          <section className="border-t border-zinc-800 pt-4">
+            <p className="mb-3 text-xs leading-relaxed text-zinc-500">
+              Bericht gespeichert. Jetzt Fotos aufnehmen und Unterschriften erfassen — alles wird direkt im
+              Bericht gebündelt. Unten kannst du den Bericht senden oder herunterladen.
+            </p>
+            <ReportPhotosSection
+              reportId={savedReportId}
+              enabled
+              iosGalleryRedirect
+              onUploadComplete={() => setPageWakeKey((k) => k + 1)}
+            />
 
-        <ReportSignaturesSection
-          reportId={savedReportId}
-          enabled={Boolean(savedReportId)}
-          customerName={st.customerName}
-        />
+            <ReportSignaturesSection
+              reportId={savedReportId}
+              enabled
+              customerName={st.customerName}
+            />
+          </section>
+        ) : (
+          <section className="border-t border-zinc-800 pt-4">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Fotos & Unterschrift</h3>
+            <p className="mt-2 text-xs leading-relaxed text-zinc-500">
+              Im nächsten Schritt: Nach „Weiter zu Fotos &amp; Unterschrift" kannst du direkt Fotos aufnehmen und
+              Unterschriften erfassen — und den Bericht anschließend ans Büro senden oder herunterladen.
+            </p>
+          </section>
+        )}
       </Card>
 
       <div className="mt-6 space-y-3">
@@ -661,8 +682,13 @@ function ReportPreviewInner({
           disabled={writeBlocked || Boolean(savedReportId) || saveBusy}
           onClick={() => onSave(logoUrl, companyName, officeEmail)}
         >
-          {savedReportId ? 'Gespeichert' : saveBusy ? '…' : 'Bericht speichern und abschließen'}
+          {savedReportId ? 'Bericht gespeichert' : saveBusy ? '…' : 'Weiter zu Fotos & Unterschrift'}
         </BigButton>
+        {!savedReportId ? (
+          <p className="text-center text-xs text-zinc-500">
+            Der Bericht wird gespeichert — danach Fotos &amp; Unterschrift hinzufügen und senden/herunterladen.
+          </p>
+        ) : null}
         {saveErr ? <p className="text-center text-sm text-red-400">{saveErr}</p> : null}
         {saveMsg ? <p className="text-center text-sm text-orange-300">{saveMsg}</p> : null}
         {timeBookingMsg ? <p className="text-center text-sm text-emerald-400/90">{timeBookingMsg}</p> : null}
