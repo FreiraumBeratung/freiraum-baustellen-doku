@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 from typing import Any
 
 _logger = logging.getLogger(__name__)
@@ -113,6 +114,100 @@ def structure_report_with_ai(input_data: dict[str, Any]) -> dict[str, Any] | Non
     except Exception:
         _logger.warning("AI structure failed, using local fallback")
         return None
+
+
+SUMMARY_POLISH_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
+Du formulierst aus einer Liste BEREITS GEPRUEFTER Taetigkeiten (und optional Materialien)
+eine natuerliche, professionelle Zusammenfassung fuer einen Bau-Tagesbericht in deutscher Sprache.
+
+STRIKTE REGELN:
+- Verwende ausschliesslich die unten aufgefuehrten Taetigkeiten und Materialien.
+- Erfinde NICHTS: keine zusaetzlichen Arbeiten, Materialien, Mengen oder Zahlen.
+- Veraendere keine Zahlen, Mengen oder Einheiten.
+- Schreibe 1-3 zusammenhaengende Saetze als Fliesstext (keine Aufzaehlung, keine Stichpunkte).
+- Sachlich, klar, freundlich-professionell, natuerliches Business-Deutsch.
+- Antworte NUR mit dem Zusammenfassungstext, ohne Anfuehrungszeichen, ohne Vorrede, ohne JSON."""
+
+
+def polish_summary_with_ai(structured: dict[str, Any], meta: dict[str, Any] | None = None) -> str | None:
+    """Hebel 1: formuliert die Zusammenfassung natuerlicher — AUSSCHLIESSLICH aus den
+    bereits deterministisch geprueften Daten.
+
+    Sicherheits-Invarianten (rein additiv):
+    - Ohne OPENAI_API_KEY oder ohne Taetigkeiten -> None (Aufrufer behaelt die
+      deterministische Zusammenfassung).
+    - Bei API-/Parsing-/Validierungsfehler -> None (kein Traceback nach aussen).
+    - Zahlen-Waechter: enthaelt der KI-Text eine Zahl, die nicht in den geprueften
+      Daten vorkommt, wird verworfen -> None. Verhindert erfundene Mengen.
+    """
+    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not key:
+        return None
+
+    activities = [str(a).strip() for a in (structured.get("activities") or []) if str(a).strip()]
+    if not activities:
+        return None
+    materials = [str(m).strip() for m in (structured.get("materials") or []) if str(m).strip()]
+    deterministic = str(structured.get("summary") or "")
+    meta = meta or {}
+
+    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    user = (
+        f"Datum: {str(meta.get('date') or '').strip() or 'Keine Angabe'}\n"
+        f"Baustelle: {str(meta.get('projectName') or '').strip() or 'Keine Angabe'}\n\n"
+        "Taetigkeiten:\n" + "\n".join(f"- {a}" for a in activities[:40])
+    )
+    if materials:
+        user += "\n\nMaterialien:\n" + "\n".join(f"- {m}" for m in materials[:40])
+
+    try:
+        from openai import OpenAI  # Lazy import wenn Key gesetzt ist
+
+        client = OpenAI(api_key=key)
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": SUMMARY_POLISH_SYSTEM},
+                {"role": "user", "content": user},
+            ],
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        text = text.strip().strip('"').strip("`").strip()
+        # Auch die der KI mitgegebenen Meta-Daten (Datum/Baustelle) zaehlen als
+        # erlaubte Zahlenquelle – z. B. Hausnummern im Projektnamen.
+        meta_src = f"{meta.get('date') or ''} {meta.get('projectName') or ''}"
+        if not _polished_summary_is_safe(text, activities, materials, deterministic, meta_src):
+            _logger.warning("AI summary polish rejected by guard, using deterministic summary")
+            return None
+        return text
+    except Exception:
+        _logger.warning("AI summary polish failed, using deterministic summary")
+        return None
+
+
+def _polished_summary_is_safe(
+    text: str,
+    activities: list[str],
+    materials: list[str],
+    deterministic: str,
+    extra_allowed: str = "",
+) -> bool:
+    t = str(text or "").strip()
+    if len(t) < 10 or len(t) > 800:
+        return False
+    if "{" in t or "}" in t or "[" in t:  # keine JSON-/Listen-Artefakte
+        return False
+    # Zahlen-Waechter: jede Zahl im KI-Text muss in den geprueften Daten (inkl.
+    # mitgegebener Meta-Daten wie Datum/Baustelle) vorkommen.
+    allowed = set(
+        re.findall(r"\d+", " ".join([deterministic, extra_allowed, *activities, *materials]))
+    )
+    found = set(re.findall(r"\d+", t))
+    if found - allowed:
+        return False
+    return True
 
 
 def _fmt_employees(val: Any) -> str:

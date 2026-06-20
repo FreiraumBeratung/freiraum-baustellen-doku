@@ -52,7 +52,9 @@ from app.services.tenant_storage import (
     repair_owner_tenant_from_legacy_backup,
     tenant_id_for_user,
 )
-from services.ai_report_service import structure_report_with_ai
+from services.ai_report_service import polish_summary_with_ai, structure_report_with_ai
+from app.services.activity_canonicalizer import collect_unmatched_chunks
+from app.services.speech_telemetry import record_unmatched_speech
 from services.trade_language_service import (
     build_professional_summary,
     extract_activity_hints,
@@ -1287,7 +1289,34 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
         structured_dict,
     )
 
+    # Hebel 1: Zusammenfassung natuerlicher formulieren — ausschliesslich aus den
+    # bereits geprueften Daten. Ohne Key/bei Fehler bleibt die deterministische
+    # Zusammenfassung erhalten (kein Bestehendes wird veraendert).
+    try:
+        polished_summary = polish_summary_with_ai(
+            structured_dict,
+            {"date": body.date, "projectName": body.projectName},
+        )
+        if polished_summary:
+            structured_dict["summary"] = polished_summary
+    except Exception:
+        pass
+
     structured_dict = _ensure_clean_structured_final(structured_dict)
+
+    # Hebel 2: nicht erkannte Saetze mandantenspezifisch protokollieren (best-effort,
+    # beeinflusst die Ausgabe nicht).
+    try:
+        unmatched = collect_unmatched_chunks(body.rawText)
+        if unmatched:
+            record_unmatched_speech(
+                store,
+                raw_text=body.rawText,
+                unmatched=unmatched,
+                meta={"projectId": body.projectId, "date": body.date},
+            )
+    except Exception:
+        pass
 
     return {
         "projectId": body.projectId,
