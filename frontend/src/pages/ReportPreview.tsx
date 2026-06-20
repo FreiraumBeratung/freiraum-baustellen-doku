@@ -528,6 +528,12 @@ function ReportPreviewInner({
             <span className="text-zinc-500">Ausgabeformat</span>
             <span className="text-right text-white">{st.exportFormat}</span>
           </div>
+          {st.seriesMode ? (
+            <div className="flex justify-between gap-2 border-t border-zinc-800 pt-2">
+              <span className="text-zinc-500">Art</span>
+              <span className="text-right font-medium text-orange-300/95">Folgebericht (zur laufenden Baustelle)</span>
+            </div>
+          ) : null}
         </div>
       </Card>
 
@@ -622,6 +628,13 @@ function ReportPreviewInner({
             placeholder="Kundengespräch bearbeiten"
           />
         </section>
+
+        {st.notes && st.notes.trim() ? (
+          <section>
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Besonderheiten</h3>
+            <p className="mt-2 whitespace-pre-wrap text-zinc-300">{st.notes}</p>
+          </section>
+        ) : null}
 
         <section>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Rohtext</h3>
@@ -809,6 +822,8 @@ export function ReportPreviewPage() {
         breakMinutes: defaultBreakMinutes(st),
         exportFormat: st.exportFormat,
         rawText: st.rawText,
+        seriesMode: Boolean(st.seriesMode),
+        notes: st.notes ?? '',
         structured: {
           summary: s.summary,
           activities: s.activities,

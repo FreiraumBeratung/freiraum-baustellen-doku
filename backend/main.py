@@ -19,7 +19,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from office_mail import send_feedback_mail, send_report_to_office
-from report_export import build_attachment_names, build_docx_bytes, build_pdf_bytes
+from report_export import (
+    build_attachment_names,
+    build_collective_attachment_names,
+    build_collective_docx_bytes,
+    build_collective_pdf_bytes,
+    build_docx_bytes,
+    build_pdf_bytes,
+)
 from report_structure import structure_report_fields
 from app.services import time_account
 from app.services.quality_filter import apply_quality_filter
@@ -55,6 +62,7 @@ from app.services.tenant_storage import (
 from services.ai_report_service import polish_summary_with_ai, structure_report_with_ai
 from app.services.activity_canonicalizer import collect_unmatched_chunks
 from app.services.speech_telemetry import record_unmatched_speech
+from app.services import collective_report as collective
 from services.trade_language_service import (
     build_professional_summary,
     extract_activity_hints,
@@ -485,6 +493,10 @@ class ReportCreateBody(BaseModel):
     exportFormat: str = "PDF"
     rawText: str
     structured: StructuredBlock
+    # Folgebericht/Sammelbericht (optional, rein additiv): seriesMode=True ordnet den
+    # Bericht dem laufenden Durchlauf der Baustelle zu. notes = freie Besonderheiten.
+    seriesMode: bool = False
+    notes: str = Field(default="", max_length=5000)
 
 
 class FeedbackCreateBody(BaseModel):
@@ -1162,6 +1174,135 @@ def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depe
     raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
 
 
+def _assign_series_run(store: TenantStore, project_id: str) -> str | None:
+    """Ordnet einen Folgebericht dem laufenden Durchlauf der Baustelle zu.
+
+    Legt bei Bedarf einen neuen Durchlauf an (additiv auf dem Projekt). Existiert die
+    Baustelle nicht, wird None zurueckgegeben (Bericht bleibt dann ohne runId).
+    """
+    data = store.read_json("projects.json", {"projects": []})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for p in data.get("projects", []):
+        if p.get("id") == project_id:
+            run_id = collective.ensure_open_run(p, now_iso=now_iso, new_run_id=str(uuid.uuid4()))
+            store.write_json("projects.json", data)
+            return run_id
+    return None
+
+
+@app.post("/api/projects/{project_id}/close-run")
+def close_project_run(project_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+    """Schliesst den laufenden Durchlauf einer Baustelle (Status -> abgeschlossen)."""
+    data = store.read_json("projects.json", {"projects": []})
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for p in data.get("projects", []):
+        if p.get("id") == project_id:
+            info = collective.close_run(p, now_iso=now_iso)
+            store.write_json("projects.json", data)
+            return {"ok": True, "project": p, **info}
+    raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
+
+
+def _build_collective(store: TenantStore, project_id: str, run_id: str | None) -> dict[str, Any]:
+    projects = store.read_json("projects.json", {"projects": []}).get("projects", [])
+    project = next((p for p in projects if p.get("id") == project_id), None)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
+    resolved_run = collective.resolve_run_id(project, run_id)
+    reports = list(store.read_json("reports.json", {"reports": []}).get("reports", []))
+    payload = collective.build_collective_payload(project, reports, run_id=resolved_run)
+    # Foto-URLs mandantenspezifisch aufloesen.
+    for ph in payload.get("photos", []):
+        fn = ph.get("filename")
+        if isinstance(fn, str) and fn:
+            ph["url"] = _photo_public_url(store, fn)
+    # Hebel 1: Gesamt-Zusammenfassung natuerlicher formulieren (nur aus geprueften Daten).
+    try:
+        polished = polish_summary_with_ai(
+            {
+                "activities": payload.get("totals", {}).get("activities", []),
+                "materials": payload.get("totals", {}).get("materials", []),
+                "summary": payload.get("summary", ""),
+            },
+            {"date": payload.get("dateTo"), "projectName": payload.get("projectName")},
+        )
+        if polished:
+            payload["summary"] = polished
+    except Exception:
+        pass
+    return payload
+
+
+@app.get("/api/projects/{project_id}/collective-report")
+def get_collective_report(
+    project_id: str,
+    runId: str | None = None,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    return _build_collective(store, project_id, runId)
+
+
+def _export_resolve_photo(store: TenantStore):
+    def resolve(filename: str) -> Path | None:
+        path = store.resolve_upload_file("photos", filename)
+        if path is not None:
+            return path
+        legacy = PHOTOS_UPLOAD_DIR / filename
+        return legacy if legacy.is_file() else None
+
+    return resolve
+
+
+@app.get("/api/projects/{project_id}/collective-report/export/pdf")
+def export_collective_pdf(
+    project_id: str,
+    runId: str | None = None,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    payload = _build_collective(store, project_id, runId)
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_collective_pdf_bytes(
+            payload,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_photo=_export_resolve_photo(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Gesamtbericht-Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_collective_attachment_names(payload, "pdf")
+    return Response(
+        content=blob,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
+    )
+
+
+@app.get("/api/projects/{project_id}/collective-report/export/word")
+def export_collective_word(
+    project_id: str,
+    runId: str | None = None,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    payload = _build_collective(store, project_id, runId)
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_collective_docx_bytes(
+            payload,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_photo=_export_resolve_photo(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Gesamtbericht-Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_collective_attachment_names(payload, "docx")
+    return Response(
+        content=blob,
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
+    )
+
+
 def _ai_structuring_enabled() -> bool:
     """Opt-in-Schalter fuer die KI-Strukturierung der Taetigkeiten/Materialien.
 
@@ -1377,6 +1518,12 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         company_logo_url = body.companyLogoUrl
 
     rid = str(uuid.uuid4())
+    # Folgebericht: dem laufenden Durchlauf der Baustelle zuordnen (legt bei Bedarf
+    # einen neuen Durchlauf an). Einzelbericht (Standard) bleibt ohne runId -> exakt
+    # bisheriges Verhalten.
+    run_id: str | None = None
+    if body.seriesMode and body.projectId:
+        run_id = _assign_series_run(store, body.projectId)
     doc = {
         "id": rid,
         "companyId": store.tenant_id,
@@ -1395,6 +1542,8 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "exportFormat": body.exportFormat,
         "rawText": body.rawText,
         "structured": body.structured.model_dump(),
+        "notes": str(body.notes or "").strip(),
+        "runId": run_id,
         "photos": [],
         "signatures": {"customer": None, "employee": None},
         "createdAt": datetime.now(timezone.utc).isoformat(),

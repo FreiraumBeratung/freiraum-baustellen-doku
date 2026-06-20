@@ -742,3 +742,336 @@ def build_docx_bytes(
     bio = BytesIO()
     d.save(bio)
     return bio.getvalue()
+
+
+# ============================================================================
+# Gesamtbericht / Sammelbericht (Folgebericht) — eigenstaendige Builder.
+# Bestehende Tagesbericht-Builder bleiben unveraendert.
+# ============================================================================
+
+PhotoPathResolver = Callable[[str], Path | None]
+
+_MAX_COLLECTIVE_PHOTOS = 24
+
+
+def collective_export_base_name(payload: dict[str, Any]) -> str:
+    site = sanitize_export_slug(str(payload.get("projectName") or "Baustelle"))
+    return f"gesamtbericht_{site}"
+
+
+def build_collective_attachment_names(payload: dict[str, Any], ext: str) -> tuple[str, str]:
+    ascii_nm = (
+        "gesamtbericht_"
+        f"{sanitize_export_slug_ascii(str(payload.get('projectName') or 'Baustelle')).lower()}.{ext}"
+    )
+    desc = f"{collective_export_base_name(payload)}.{ext}"
+    return ascii_nm, desc
+
+
+def _zeitraum_label(payload: dict[str, Any]) -> str:
+    df = _format_date_de(str(payload.get("dateFrom") or ""))
+    dt = _format_date_de(str(payload.get("dateTo") or ""))
+    if df and dt and df != dt:
+        return f"{df} – {dt}"
+    return df or dt or "—"
+
+
+def _fmt_hours(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}".replace(".", ",")
+    except Exception:
+        return "0,00"
+
+
+def build_collective_pdf_bytes(
+    payload: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
+) -> bytes:
+    buf = BytesIO()
+    doc_tpl = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        title="Gesamtbericht",
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        topMargin=1.4 * cm,
+        bottomMargin=1.8 * cm,
+    )
+    styles = getSampleStyleSheet()
+    meta_style = ParagraphStyle("MetaLineC", parent=styles["Normal"], fontSize=9, textColor=GREY_META_HEX, spaceAfter=1, leading=11)
+    body_style = ParagraphStyle("ReportBodyC", parent=styles["Normal"], fontSize=9.5, leading=13, textColor=TEXT_DARK_HEX)
+    section_head = ParagraphStyle("SectionHeadC", parent=styles["Heading2"], fontSize=10.5, textColor=SECTION_HEX, spaceBefore=10, spaceAfter=4, leading=13, fontName="Helvetica-Bold")
+    day_head = ParagraphStyle("DayHeadC", parent=styles["Heading3"], fontSize=9.8, textColor=SECTION_HEX, spaceBefore=8, spaceAfter=2, leading=12, fontName="Helvetica-Bold")
+    title_style = ParagraphStyle("DocTitleC", parent=styles["Heading1"], fontSize=15, textColor=TEXT_DARK_HEX, spaceBefore=4, spaceAfter=6, alignment=1, fontName="Helvetica-Bold")
+    company_style = ParagraphStyle("CompanyHeadC", parent=styles["Heading1"], fontSize=13, textColor=TEXT_DARK_HEX, spaceAfter=2, fontName="Helvetica-Bold")
+    section_text_style = ParagraphStyle("SectionBodyC", parent=body_style, spaceAfter=4)
+    info_label_style = ParagraphStyle("InfoLabelC", parent=meta_style, fontName="Helvetica-Bold", textColor=SECTION_HEX)
+    info_value_style = ParagraphStyle("InfoValueC", parent=body_style, fontSize=9.2)
+    bullet_style = ParagraphStyle("BulletC", parent=body_style, leftIndent=10, spaceAfter=3)
+    note_style = ParagraphStyle("NoteC", parent=body_style, leftIndent=10, spaceAfter=3, textColor=GREY_META_HEX)
+
+    company_name = str(payload.get("companyName") or company_profile.get("companyName") or "Firma")
+    emails = str(payload.get("officeEmail") or company_profile.get("officeEmail") or "")
+    phone = str(company_profile.get("phone") or "")
+
+    def footer(canv: Any, __: Any) -> None:
+        canv.saveState()
+        canv.setFont("Helvetica", 7)
+        canv.setFillColor(GREY_META_HEX)
+        canv.drawCentredString(A4[0] / 2.0, 1.2 * cm, "Erstellt mit Freiraum Baustellen-Doku")
+        canv.restoreState()
+
+    story: list[Any] = []
+    logo_path = _resolve_logo_path(payload, company_profile, resolve_logo=resolve_logo)
+    logo_img = _logo_image_for_pdf(logo_path, max_width_cm=5.0, max_height_cm=2.9) if logo_path else None
+
+    company_lines: list[Any] = [Paragraph(_xml_para_text(company_name), company_style)]
+    if emails:
+        company_lines.append(Paragraph(_xml_para_text(f"Büro-E-Mail: {emails}"), meta_style))
+    if phone:
+        company_lines.append(Paragraph(_xml_para_text(f"Telefon: {phone}"), meta_style))
+
+    if logo_img:
+        head_tbl = Table([[logo_img, company_lines]], colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
+    else:
+        head_tbl = Table([[company_lines]], colWidths=[doc_tpl.width])
+    head_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP"), ("LEFTPADDING", (0, 0), (-1, -1), 0), ("RIGHTPADDING", (0, 0), (-1, -1), 0), ("TOPPADDING", (0, 0), (-1, -1), 0), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    story.append(head_tbl)
+    story.append(Spacer(1, 3))
+    story.append(Paragraph("GESAMTBERICHT", title_style))
+    story.append(Spacer(1, 4))
+    line_tbl = Table([[""]], colWidths=[doc_tpl.width], rowHeights=[1.2])
+    line_tbl.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LINE_HEX)]))
+    story.append(line_tbl)
+    story.append(Spacer(1, 8))
+
+    totals = payload.get("totals", {}) if isinstance(payload.get("totals"), dict) else {}
+    meta_rows = [
+        [Paragraph("Baustelle", info_label_style), Paragraph(_xml_para_text(str(payload.get("projectName") or "—")), info_value_style)],
+        [Paragraph("Kunde", info_label_style), Paragraph(_xml_para_text(str(payload.get("customerName") or "—")), info_value_style)],
+        [Paragraph("Zeitraum", info_label_style), Paragraph(_xml_para_text(_zeitraum_label(payload)), info_value_style)],
+        [Paragraph("Arbeitstage", info_label_style), Paragraph(_xml_para_text(str(totals.get("reportCount") or 0)), info_value_style)],
+        [Paragraph("Gesamtstunden", info_label_style), Paragraph(_xml_para_text(_fmt_hours(totals.get("totalHours"))), info_value_style)],
+    ]
+    tbl = Table(meta_rows, colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
+    tbl.setStyle(TableStyle([("FONTNAME", (0, 0), (-1, -1), "Helvetica"), ("VALIGN", (0, 0), (-1, -1), "TOP"), ("BACKGROUND", (0, 0), (-1, -1), SOFT_BG_HEX), ("BOX", (0, 0), (-1, -1), 0.5, LINE_HEX), ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE_HEX), ("LEFTPADDING", (0, 0), (-1, -1), 6), ("RIGHTPADDING", (0, 0), (-1, -1), 6), ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
+    story.append(tbl)
+    story.append(Spacer(1, 10))
+
+    def sec(title: str) -> None:
+        story.append(Paragraph(_xml_para_text(title), section_head))
+
+    def bullets(items: list[str], style: ParagraphStyle = bullet_style) -> None:
+        for item in items:
+            story.append(Paragraph(f"\u2022 {_xml_para_text(str(item))}", style))
+
+    sec("Zusammenfassung")
+    story.append(Paragraph(_xml_para_text(str(payload.get("summary") or "Keine Angabe")), section_text_style))
+
+    hours_by_emp = totals.get("hoursByEmployee") or []
+    if hours_by_emp:
+        sec("Stunden je Mitarbeiter")
+        for row in hours_by_emp:
+            if isinstance(row, dict):
+                story.append(Paragraph(f"\u2022 {_xml_para_text(str(row.get('name') or '—'))}: {_fmt_hours(row.get('hours'))} h", bullet_style))
+
+    mats = totals.get("materials") or []
+    if mats:
+        sec("Material (gesamt)")
+        bullets([str(m) for m in mats])
+
+    opens = totals.get("openItems") or []
+    if opens:
+        sec("Offene Punkte (gesamt)")
+        bullets([str(o) for o in opens])
+
+    probs = totals.get("problems") or []
+    if probs:
+        sec("Probleme (gesamt)")
+        bullets([str(p) for p in probs])
+
+    days = payload.get("days") or []
+    if days:
+        sec("Tagesverlauf")
+        for day in days:
+            if not isinstance(day, dict):
+                continue
+            emps = day.get("employees") or []
+            emps_label = ", ".join(str(e) for e in emps) if emps else "—"
+            head = f"{_format_date_de(str(day.get('date') or '—'))}  ·  {emps_label}  ·  {_fmt_hours(day.get('hours'))} h"
+            story.append(Paragraph(_xml_para_text(head), day_head))
+            bullets([str(a) for a in (day.get("activities") or [])])
+            note = str(day.get("notes") or "").strip()
+            if note:
+                story.append(Paragraph(f"Besonderheiten: {_xml_para_text(note)}", note_style))
+
+    photos = payload.get("photos") or []
+    if photos and resolve_photo is not None:
+        sec("Fotos")
+        shown = 0
+        for ph in photos:
+            if shown >= _MAX_COLLECTIVE_PHOTOS:
+                break
+            if not isinstance(ph, dict):
+                continue
+            fn = ph.get("filename")
+            if not isinstance(fn, str) or not fn:
+                continue
+            path = resolve_photo(fn)
+            if path is None:
+                continue
+            img = _logo_image_for_pdf(path, max_width_cm=8.0, max_height_cm=6.0)
+            if img is None:
+                continue
+            story.append(Spacer(1, 4))
+            story.append(Paragraph(_xml_para_text(f"{_format_date_de(str(ph.get('date') or ''))}"), meta_style))
+            story.append(img)
+            shown += 1
+
+    doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
+
+
+def build_collective_docx_bytes(
+    payload: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
+) -> bytes:
+    d = Document()
+    sec = d.sections[0]
+    sec.top_margin = Cm(1.7)
+    sec.bottom_margin = Cm(1.8)
+    sec.left_margin = Cm(1.9)
+    sec.right_margin = Cm(1.9)
+
+    company_name = str(payload.get("companyName") or company_profile.get("companyName") or "Firma")
+    email = str(payload.get("officeEmail") or company_profile.get("officeEmail") or "")
+    phone = str(company_profile.get("phone") or "")
+    logo_path = _resolve_logo_path(payload, company_profile, resolve_logo=resolve_logo)
+
+    head_tbl = d.add_table(rows=1, cols=2)
+    head_tbl.autofit = True
+    logo_cell = head_tbl.rows[0].cells[0]
+    info_cell = head_tbl.rows[0].cells[1]
+    if logo_path:
+        try:
+            logo_cell.paragraphs[0].add_run().add_picture(str(logo_path), width=Cm(5.0))
+        except Exception:
+            logo_cell.text = ""
+    else:
+        logo_cell.text = ""
+    r_company = info_cell.paragraphs[0].add_run(company_name)
+    r_company.bold = True
+    r_company.font.size = Pt(14)
+    r_company.font.color.rgb = TEXT_DARK_DOCX
+    if email:
+        for r in info_cell.add_paragraph(f"Büro-E-Mail: {email}").runs:
+            r.font.size = Pt(9)
+            r.font.color.rgb = META_GREY_DOCX
+    if phone:
+        for r in info_cell.add_paragraph(f"Telefon: {phone}").runs:
+            r.font.size = Pt(9)
+            r.font.color.rgb = META_GREY_DOCX
+
+    d.add_paragraph()
+    p_title = d.add_paragraph()
+    p_title.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    r_title = p_title.add_run("GESAMTBERICHT")
+    r_title.bold = True
+    r_title.font.size = Pt(15)
+    r_title.font.color.rgb = TEXT_DARK_DOCX
+
+    totals = payload.get("totals", {}) if isinstance(payload.get("totals"), dict) else {}
+    info_tbl = d.add_table(rows=0, cols=2)
+    info_tbl.style = "Table Grid"
+    for label, value in [
+        ("Baustelle", str(payload.get("projectName") or "—")),
+        ("Kunde", str(payload.get("customerName") or "—")),
+        ("Zeitraum", _zeitraum_label(payload)),
+        ("Arbeitstage", str(totals.get("reportCount") or 0)),
+        ("Gesamtstunden", _fmt_hours(totals.get("totalHours"))),
+    ]:
+        row = info_tbl.add_row().cells
+        r_l = row[0].paragraphs[0].add_run(label)
+        r_l.bold = True
+        r_l.font.color.rgb = META_GREY_DOCX
+        r_l.font.size = Pt(10)
+        r_v = row[1].paragraphs[0].add_run(value)
+        r_v.font.size = Pt(10)
+        r_v.font.color.rgb = TEXT_DARK_DOCX
+
+    d.add_paragraph()
+    h_sum = d.add_heading("Zusammenfassung", level=2)
+    _heading_docx(h_sum)
+    for r in d.add_paragraph(str(payload.get("summary") or "Keine Angabe")).runs:
+        r.font.size = Pt(10)
+
+    hours_by_emp = totals.get("hoursByEmployee") or []
+    if hours_by_emp:
+        _section_list_docx(d, "Stunden je Mitarbeiter", [f"{row.get('name')}: {_fmt_hours(row.get('hours'))} h" for row in hours_by_emp if isinstance(row, dict)])
+    if totals.get("materials"):
+        _section_list_docx(d, "Material (gesamt)", [str(m) for m in totals.get("materials")])
+    if totals.get("openItems"):
+        _section_list_docx(d, "Offene Punkte (gesamt)", [str(o) for o in totals.get("openItems")])
+    if totals.get("problems"):
+        _section_list_docx(d, "Probleme (gesamt)", [str(p) for p in totals.get("problems")])
+
+    days = payload.get("days") or []
+    if days:
+        h_days = d.add_heading("Tagesverlauf", level=2)
+        _heading_docx(h_days)
+        for day in days:
+            if not isinstance(day, dict):
+                continue
+            emps = day.get("employees") or []
+            emps_label = ", ".join(str(e) for e in emps) if emps else "—"
+            h_day = d.add_heading(f"{_format_date_de(str(day.get('date') or '—'))} · {emps_label} · {_fmt_hours(day.get('hours'))} h", level=3)
+            _heading_docx(h_day)
+            for a in (day.get("activities") or []):
+                p = d.add_paragraph(style="List Bullet")
+                p.add_run(str(a)).font.size = Pt(10)
+            note = str(day.get("notes") or "").strip()
+            if note:
+                for r in d.add_paragraph(f"Besonderheiten: {note}").runs:
+                    r.font.size = Pt(9)
+                    r.font.color.rgb = META_GREY_DOCX
+
+    photos = payload.get("photos") or []
+    if photos and resolve_photo is not None:
+        h_ph = d.add_heading("Fotos", level=2)
+        _heading_docx(h_ph)
+        shown = 0
+        for ph in photos:
+            if shown >= _MAX_COLLECTIVE_PHOTOS:
+                break
+            if not isinstance(ph, dict):
+                continue
+            fn = ph.get("filename")
+            if not isinstance(fn, str) or not fn:
+                continue
+            path = resolve_photo(fn)
+            if path is None:
+                continue
+            try:
+                d.add_paragraph(f"{_format_date_de(str(ph.get('date') or ''))}").runs[0].font.size = Pt(8)
+                d.add_paragraph().add_run().add_picture(str(path), width=Cm(8.0))
+                shown += 1
+            except Exception:
+                continue
+
+    d.add_paragraph()
+    foot = d.add_paragraph("Erstellt mit Freiraum Baustellen-Doku")
+    foot.alignment = WD_PARAGRAPH_ALIGNMENT.CENTER
+    for r in foot.runs:
+        r.font.size = Pt(8)
+        r.italic = True
+        r.font.color.rgb = META_GREY_DOCX
+
+    bio = BytesIO()
+    d.save(bio)
+    return bio.getvalue()

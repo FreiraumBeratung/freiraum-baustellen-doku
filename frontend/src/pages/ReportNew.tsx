@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, Mic } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, FileText, Layers, Mic } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -26,6 +26,10 @@ export type ReportPreviewState = {
   structured: StructuredPayload
   /** zurück von /api/structure-report */
   structuredBy?: 'openai' | 'local'
+  /** Folgebericht: Bericht wird dem laufenden Durchlauf der Baustelle zugeordnet */
+  seriesMode?: boolean
+  /** freie Besonderheiten/Notiz für diesen Tag (Folge- wie Einzelbericht) */
+  notes?: string
 }
 
 export type StructuredPayload = {
@@ -62,6 +66,9 @@ export function ReportNewPage() {
   const [breakMinutes, setBreakMinutes] = useState(45)
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
+  const [notes, setNotes] = useState('')
+  const [reportMode, setReportMode] = useState<'single' | 'series'>('single')
+  const [showModeModal, setShowModeModal] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [voiceActive, setVoiceActive] = useState(false)
@@ -232,6 +239,8 @@ export function ReportNewPage() {
         rawText,
         structured,
         structuredBy: r.structuredBy === 'openai' ? 'openai' : 'local',
+        seriesMode: reportMode === 'series',
+        notes: notes.trim(),
       }
       nav('/bericht/vorschau', { state })
     } catch (e) {
@@ -247,11 +256,76 @@ export function ReportNewPage() {
 
   return (
     <div className="overflow-x-hidden pb-2">
+      {showModeModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-3xl border border-white/[0.1] bg-zinc-950 p-6 shadow-2xl ring-1 ring-white/[0.06]">
+            <h2 className="text-center text-lg font-semibold text-white">Welche Art Bericht?</h2>
+            <p className="mt-2 text-center text-sm leading-relaxed text-zinc-500">
+              Folgeberichte werden zu einer laufenden Baustelle gesammelt — am Ende entsteht daraus ein
+              Gesamtbericht.
+            </p>
+            <div className="mt-6 space-y-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setReportMode('single')
+                  setShowModeModal(false)
+                }}
+                className="flex w-full items-start gap-3 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-3.5 text-left ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
+              >
+                <FileText strokeWidth={2} className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" aria-hidden />
+                <span>
+                  <span className="block font-medium text-white">Einzelbericht</span>
+                  <span className="mt-0.5 block text-[0.8rem] leading-snug text-zinc-500">
+                    Ein eigenständiger Tagesbericht (wie bisher).
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportMode('series')
+                  setShowModeModal(false)
+                }}
+                className="flex w-full items-start gap-3 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-3.5 text-left ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
+              >
+                <Layers strokeWidth={2} className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" aria-hidden />
+                <span>
+                  <span className="block font-medium text-white">Folgebericht</span>
+                  <span className="mt-0.5 block text-[0.8rem] leading-snug text-zinc-500">
+                    Zu einer laufenden Baustelle sammeln (Gesamtbericht am Ende).
+                  </span>
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <PageTitle title="Tagesbericht" subtitle="Sprache und Notizen" />
 
       <div className="space-y-8">
         <Card className="space-y-5 border-transparent bg-black/35 px-[1.35rem] py-8 shadow-none ring-1 ring-white/[0.06] backdrop-blur-sm">
-          <p className="text-[0.68rem] font-medium tracking-[0.14em] text-zinc-600">Projekt</p>
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-[0.68rem] font-medium tracking-[0.14em] text-zinc-600">Projekt</p>
+            <button
+              type="button"
+              onClick={() => setShowModeModal(true)}
+              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[0.22rem] text-[0.7rem] font-semibold tracking-wide transition ${
+                reportMode === 'series'
+                  ? 'border border-orange-400/45 bg-orange-500/[0.1] text-orange-300/95'
+                  : 'border border-white/[0.12] bg-black/40 text-zinc-400'
+              }`}
+            >
+              {reportMode === 'series' ? (
+                <Layers strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
+              ) : (
+                <FileText strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
+              )}
+              {reportMode === 'series' ? 'Folgebericht' : 'Einzelbericht'}
+              <span className="text-[0.62rem] font-normal text-zinc-500">· ändern</span>
+            </button>
+          </div>
 
           <label className="block min-w-0">
             <span className="text-[0.875rem] text-zinc-500">Baustelle</span>
@@ -407,6 +481,20 @@ export function ReportNewPage() {
                 onChange={(e) => setRawText(e.target.value)}
                 placeholder="Notizen…"
               />
+            </label>
+
+            <label className="block">
+              <span className="text-[0.875rem] text-zinc-500">Besonderheiten (optional)</span>
+              <textarea
+                className="mt-2 min-h-[5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="z. B. Arbeit unterbrochen, weil der Maler kam …"
+              />
+              <span className="mt-1.5 block text-[0.72rem] leading-snug text-zinc-600">
+                Freier Text — landet 1:1 im (Gesamt-)Bericht, ohne automatische Auswertung. Tipp: über das
+                Mikrofon der Handy-Tastatur kann man hier diktieren.
+              </span>
             </label>
           </div>
         </Card>
