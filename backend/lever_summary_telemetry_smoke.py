@@ -15,7 +15,7 @@ from pathlib import Path
 BACKEND_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BACKEND_DIR))
 
-from main import StructureReportBody, api_structure_report  # noqa: E402
+from main import StructureReportBody, api_structure_report, _ai_structuring_enabled  # noqa: E402
 from app.services.tenant_storage import TenantStore  # noqa: E402
 from app.services.activity_canonicalizer import collect_unmatched_chunks  # noqa: E402
 from app.services.speech_telemetry import record_unmatched_speech  # noqa: E402
@@ -66,6 +66,20 @@ def main() -> int:
     summary = str((out.get("structured") or {}).get("summary") or "")
     if not summary or summary == "Keine Angabe":
         failures.append(f"Hebel1: Pipeline-Summary leer (got={summary!r})")
+
+    # ---- KI-Strukturierung: Opt-in-Schalter, Standard AUS -----------------------
+    os.environ.pop("FREIRAUM_AI_STRUCTURING", None)
+    if _ai_structuring_enabled() is not False:
+        failures.append("Schalter: KI-Strukturierung muss standardmaessig AUS sein")
+    for on in ("1", "true", "yes", "on", "ON", "True"):
+        os.environ["FREIRAUM_AI_STRUCTURING"] = on
+        if _ai_structuring_enabled() is not True:
+            failures.append(f"Schalter: '{on}' sollte einschalten")
+    for off in ("0", "", "nein", "off"):
+        os.environ["FREIRAUM_AI_STRUCTURING"] = off
+        if _ai_structuring_enabled() is not False:
+            failures.append(f"Schalter: '{off}' sollte AUS bleiben")
+    os.environ.pop("FREIRAUM_AI_STRUCTURING", None)
 
     # ---- Hebel 2: erkannte Saetze -> keine Telemetrie ---------------------------
     if collect_unmatched_chunks("Heute 50 Quadratmeter Pflaster verlegt.") != []:

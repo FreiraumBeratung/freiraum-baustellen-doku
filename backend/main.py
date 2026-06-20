@@ -1162,6 +1162,18 @@ def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depe
     raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
 
 
+def _ai_structuring_enabled() -> bool:
+    """Opt-in-Schalter fuer die KI-Strukturierung der Taetigkeiten/Materialien.
+
+    Standard: AUS. Damit bleibt die Strukturierung rein deterministisch (wie in
+    allen Tests abgesichert), auch wenn ein OPENAI_API_KEY gesetzt ist. Der Key
+    aktiviert dann ausschliesslich die natuerlichere Zusammenfassung (Hebel 1).
+    Zum bewussten Einschalten: FREIRAUM_AI_STRUCTURING=1 (bzw. true/yes/on).
+    """
+    flag = (os.environ.get("FREIRAUM_AI_STRUCTURING") or "").strip().casefold()
+    return flag in {"1", "true", "yes", "on"}
+
+
 def _merge_ai_core_into_local_structured(ai_core: dict[str, Any], local: dict[str, Any]) -> dict[str, Any]:
     """Übernimmt KI-Zusammenfassung & Bereiche; Arbeitszeit/Participants/Rohtext bleiben lokal konsistent."""
     merged = dict(local)
@@ -1236,17 +1248,21 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
     structured_by: str = "local"
     structured_dict: dict[str, Any] = local_structured
 
-    ai_try = structure_report_with_ai(
-        {
-            "companyName": company_nm,
-            "projectName": body.projectName,
-            "customerName": body.customerName,
-            "date": body.date,
-            "employeeNames": body.employeeNames,
-            "startTime": body.startTime,
-            "endTime": body.endTime,
-            "rawText": normalized_raw,
-        }
+    ai_try = (
+        structure_report_with_ai(
+            {
+                "companyName": company_nm,
+                "projectName": body.projectName,
+                "customerName": body.customerName,
+                "date": body.date,
+                "employeeNames": body.employeeNames,
+                "startTime": body.startTime,
+                "endTime": body.endTime,
+                "rawText": normalized_raw,
+            }
+        )
+        if _ai_structuring_enabled()
+        else None
     )
     if ai_try:
         structured_dict = _merge_ai_core_into_local_structured(ai_try, local_structured)
