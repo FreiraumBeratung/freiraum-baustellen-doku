@@ -22,8 +22,11 @@ from typing import Any
 
 from report_export import (
     LogoPathResolver,
+    PhotoPathResolver,
     SignaturePathResolver,
     build_attachment_names,
+    build_collective_attachment_names,
+    build_collective_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
 )
@@ -283,6 +286,114 @@ def send_report_to_office(
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
     return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT
+
+
+def send_collective_to_office(
+    payload: dict[str, Any],
+    profile: dict[str, Any],
+    to_email: str,
+    *,
+    mail_config: dict[str, Any] | None = None,
+    photos_upload_dir: Path | str | None = None,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> tuple[bool, bool, str]:
+    """Sendet den Gesamtbericht (Sammelbericht eines Durchlaufs) per SMTP ans Büro.
+
+    Baut das PDF aus dem aggregierten ``payload`` (siehe ``collective_report``) und
+    hängt die Fotos des Durchlaufs an. Spiegelt die Versand-/Fehlerlogik von
+    ``send_report_to_office`` (rein additiv, ohne diese zu verändern).
+    """
+    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+        return False, False, MSG_NOT_CONFIGURED
+
+    from_addr = str(mail_config.get("email") or "").strip()
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+
+    if not from_addr or not user or not password or not host or not port:
+        return False, False, MSG_NOT_CONFIGURED
+
+    project_name = str(payload.get("projectName") or "—")
+    df = _format_date_de(payload.get("dateFrom"))
+    dt = _format_date_de(payload.get("dateTo"))
+    zeitraum = df if df == dt else f"{df} – {dt}"
+    subject = f"Gesamtbericht: {project_name} ({zeitraum})"
+
+    try:
+        blob = build_collective_pdf_bytes(
+            payload,
+            profile,
+            resolve_logo=resolve_logo,
+            resolve_photo=resolve_photo,
+            resolve_signature=resolve_signature,
+        )
+        ascii_fn, _desc = build_collective_attachment_names(payload, "pdf")
+    except Exception:
+        logger.exception("Gesamtbericht-Anhang für Mail konnte nicht erzeugt werden")
+        return False, False, "Der Gesamtbericht-Anhang konnte nicht erzeugt werden."
+
+    # Fotos des Durchlaufs anhängen (Foto-Helfer arbeiten auf einem report-Dict mit "photos").
+    photos_report = {"photos": payload.get("photos") or []}
+    photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
+    photo_count = _count_attachable_photos(photos_report, photos_dir)
+
+    totals = payload.get("totals") if isinstance(payload.get("totals"), dict) else {}
+    body_lines = [
+        "Guten Tag,",
+        "",
+        f"anbei der Gesamtbericht zur Baustelle {project_name} (Zeitraum {zeitraum}).",
+        f"Arbeitstage: {totals.get('reportCount') or 0}.",
+        "",
+        "Diese E-Mail wurde automatisch über Freiraum Baustellen-Doku erstellt.",
+        "",
+        f"{_company_signoff_name(profile)}",
+    ]
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.set_content("\n".join(body_lines))
+    msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
+    attached_photos = _attach_report_photos(msg, photos_report, photos_dir)
+    if attached_photos != photo_count:
+        photo_count = attached_photos
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Gesamtbericht-Versand")
+        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Gesamtbericht-Versand fehlgeschlagen")
+        return False, False, "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden."
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Gesamtbericht-Versand")
+        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+
+    return True, False, (
+        f"Gesamtbericht mit {photo_count} Foto(s) wurde ans Büro gesendet."
+        if photo_count
+        else "Gesamtbericht wurde ans Büro gesendet."
+    )
 
 
 def send_feedback_mail(

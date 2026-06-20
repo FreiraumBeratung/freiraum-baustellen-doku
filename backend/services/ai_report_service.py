@@ -187,6 +187,123 @@ def polish_summary_with_ai(structured: dict[str, Any], meta: dict[str, Any] | No
         return None
 
 
+COLLECTIVE_SUMMARY_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
+Du fasst mehrere BEREITS GEPRUEFTE Tagesberichte EINER Baustelle zu einer einzigen,
+natuerlichen Gesamt-Zusammenfassung zusammen (deutscher Fliesstext).
+
+STRIKTE REGELN:
+- Verwende ausschliesslich die unten gelieferten Inhalte (Zeitraum, Stunden, Taetigkeiten je Tag, Besonderheiten, Materialien).
+- Erfinde NICHTS und veraendere keine Zahlen, Mengen, Einheiten oder Daten.
+- Beschreibe den Fortschritt/Verlauf ueber die Tage hinweg (nicht nur einen Tag).
+- Nenne den Zeitraum und die Gesamtstunden, sofern angegeben.
+- 2 bis 5 zusammenhaengende Saetze als Fliesstext (keine Aufzaehlung, keine Stichpunkte, kein JSON).
+- Sachlich, klar, professionell, natuerliches Business-Deutsch.
+- Antworte NUR mit dem Zusammenfassungstext, ohne Anfuehrungszeichen, ohne Vorrede."""
+
+
+def polish_collective_summary_with_ai(
+    payload: dict[str, Any], deterministic: str
+) -> str | None:
+    """Formuliert die GESAMT-Zusammenfassung eines Durchlaufs natuerlich — kombiniert
+    ueber alle Tage, ausschliesslich aus den bereits geprueften Tagesbericht-Daten.
+
+    Sicherheits-Invarianten (rein additiv, wie polish_summary_with_ai):
+    - Ohne OPENAI_API_KEY oder ohne Tage/Taetigkeiten -> None (Aufrufer behaelt die
+      deterministische Gesamt-Zusammenfassung).
+    - Bei API-/Parsing-/Validierungsfehler -> None.
+    - Zahlen-Waechter: jede Zahl im KI-Text muss aus den geprueften Daten stammen.
+    """
+    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not key:
+        return None
+
+    days = [d for d in (payload.get("days") or []) if isinstance(d, dict)]
+    if not days:
+        return None
+
+    totals = payload.get("totals") if isinstance(payload.get("totals"), dict) else {}
+    materials = [str(m).strip() for m in (totals.get("materials") or []) if str(m).strip()]
+
+    # Erlaubte Zahlenquellen + Tagesinhalte fuer den Prompt sammeln.
+    day_blocks: list[str] = []
+    allowed_src_parts: list[str] = [deterministic, str(payload.get("dateFrom") or ""), str(payload.get("dateTo") or "")]
+    allowed_src_parts.append(str(totals.get("totalHours") or ""))
+    allowed_src_parts.append(str(totals.get("reportCount") or ""))
+    allowed_src_parts.append(str(len(days)))
+    for d in days:
+        acts = [str(a).strip() for a in (d.get("activities") or []) if str(a).strip()]
+        note = str(d.get("notes") or "").strip()
+        emps = [str(e).strip() for e in (d.get("employees") or []) if str(e).strip()]
+        date_lbl = str(d.get("date") or "").strip() or "Keine Angabe"
+        block = f"Tag {date_lbl} ({_fmt_hours_value(d.get('hours'))} h, {', '.join(emps) or 'keine Angabe'}):"
+        if acts:
+            block += "\n  Taetigkeiten: " + "; ".join(acts[:12])
+        if note:
+            block += "\n  Besonderheiten: " + note
+        day_blocks.append(block)
+        allowed_src_parts.extend(acts)
+        allowed_src_parts.append(note)
+        allowed_src_parts.append(str(d.get("hours") or ""))
+        allowed_src_parts.extend(emps)
+    for row in (totals.get("hoursByEmployee") or []):
+        if isinstance(row, dict):
+            allowed_src_parts.append(str(row.get("hours") or ""))
+
+    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+
+    user = (
+        f"Baustelle: {str(payload.get('projectName') or '').strip() or 'Keine Angabe'}\n"
+        f"Zeitraum: {str(payload.get('dateFrom') or '—')} bis {str(payload.get('dateTo') or '—')}\n"
+        f"Arbeitstage: {len(days)}\n"
+        f"Gesamtstunden: {_fmt_hours_value(totals.get('totalHours'))}\n\n"
+        "Tagesberichte:\n" + "\n".join(day_blocks[:60])
+    )
+    if materials:
+        user += "\n\nMaterialien (gesamt):\n" + "\n".join(f"- {m}" for m in materials[:40])
+
+    try:
+        from openai import OpenAI  # Lazy import wenn Key gesetzt ist
+
+        client = OpenAI(api_key=key)
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": COLLECTIVE_SUMMARY_SYSTEM},
+                {"role": "user", "content": user},
+            ],
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        text = text.strip().strip('"').strip("`").strip()
+        if not _collective_summary_is_safe(text, " ".join(allowed_src_parts)):
+            _logger.warning("AI collective summary rejected by guard, using deterministic summary")
+            return None
+        return text
+    except Exception:
+        _logger.warning("AI collective summary failed, using deterministic summary")
+        return None
+
+
+def _fmt_hours_value(value: Any) -> str:
+    try:
+        return f"{float(value):.2f}".replace(".", ",")
+    except Exception:
+        return "0,00"
+
+
+def _collective_summary_is_safe(text: str, allowed_src: str) -> bool:
+    t = str(text or "").strip()
+    if len(t) < 10 or len(t) > 1500:
+        return False
+    if "{" in t or "}" in t or "[" in t:
+        return False
+    allowed = set(re.findall(r"\d+", allowed_src))
+    found = set(re.findall(r"\d+", t))
+    if found - allowed:
+        return False
+    return True
+
+
 def _polished_summary_is_safe(
     text: str,
     activities: list[str],

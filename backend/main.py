@@ -18,7 +18,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
-from office_mail import send_feedback_mail, send_report_to_office
+from office_mail import send_collective_to_office, send_feedback_mail, send_report_to_office
 from report_export import (
     build_attachment_names,
     build_collective_attachment_names,
@@ -59,7 +59,11 @@ from app.services.tenant_storage import (
     repair_owner_tenant_from_legacy_backup,
     tenant_id_for_user,
 )
-from services.ai_report_service import polish_summary_with_ai, structure_report_with_ai
+from services.ai_report_service import (
+    polish_collective_summary_with_ai,
+    polish_summary_with_ai,
+    structure_report_with_ai,
+)
 from app.services.activity_canonicalizer import collect_unmatched_chunks
 from app.services.speech_telemetry import record_unmatched_speech
 from app.services import collective_report as collective
@@ -1216,16 +1220,10 @@ def _build_collective(store: TenantStore, project_id: str, run_id: str | None) -
         fn = ph.get("filename")
         if isinstance(fn, str) and fn:
             ph["url"] = _photo_public_url(store, fn)
-    # Hebel 1: Gesamt-Zusammenfassung natuerlicher formulieren (nur aus geprueften Daten).
+    # Gesamt-Zusammenfassung natuerlich UND ueber alle Tage kombiniert formulieren
+    # (nur aus geprueften Daten; ohne KI bleibt die deterministische Kombi-Summary).
     try:
-        polished = polish_summary_with_ai(
-            {
-                "activities": payload.get("totals", {}).get("activities", []),
-                "materials": payload.get("totals", {}).get("materials", []),
-                "summary": payload.get("summary", ""),
-            },
-            {"date": payload.get("dateTo"), "projectName": payload.get("projectName")},
-        )
+        polished = polish_collective_summary_with_ai(payload, str(payload.get("summary") or ""))
         if polished:
             payload["summary"] = polished
     except Exception:
@@ -1267,6 +1265,7 @@ def export_collective_pdf(
             prof,
             resolve_logo=_export_resolve_logo(store),
             resolve_photo=_export_resolve_photo(store),
+            resolve_signature=_export_resolve_signature(store),
         )
     except Exception:
         raise HTTPException(status_code=500, detail="Gesamtbericht-Export konnte nicht erstellt werden.")
@@ -1292,6 +1291,7 @@ def export_collective_word(
             prof,
             resolve_logo=_export_resolve_logo(store),
             resolve_photo=_export_resolve_photo(store),
+            resolve_signature=_export_resolve_signature(store),
         )
     except Exception:
         raise HTTPException(status_code=500, detail="Gesamtbericht-Export konnte nicht erstellt werden.")
@@ -2048,6 +2048,54 @@ def send_report_to_office_endpoint(
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")
+    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
+
+
+@app.post("/api/projects/{project_id}/collective-report/send-office", response_model=SendOfficeResponse)
+def send_collective_to_office_endpoint(
+    project_id: str,
+    runId: str | None = None,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+) -> SendOfficeResponse:
+    payload = _build_collective(store, project_id, runId)
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == user_id:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
+        raise HTTPException(
+            status_code=401,
+            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
+        )
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_collective_to_office(
+        payload,
+        prof,
+        office,
+        mail_config=mail_config,
+        photos_upload_dir=store.uploads_dir("photos"),
+        resolve_logo=_export_resolve_logo(store),
+        resolve_photo=_export_resolve_photo(store),
+        resolve_signature=_export_resolve_signature(store),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Gesamtbericht konnte nicht gesendet werden.")
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 

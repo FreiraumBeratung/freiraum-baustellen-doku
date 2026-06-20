@@ -1,4 +1,4 @@
-import { Download, Layers, RotateCcw } from 'lucide-react'
+import { Download, Layers, RotateCcw, Send } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api, downloadExport } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
@@ -118,6 +118,35 @@ export function ProjectsPage() {
     }
   }
 
+  async function sendCollective(p: Project) {
+    if (writeBlocked) return
+    setBusyRunId(p.id)
+    setRunMsg((m) => ({ ...m, [p.id]: '' }))
+    try {
+      const res = await api<{ ok: boolean; message: string }>(
+        `/api/projects/${p.id}/collective-report/send-office`,
+        { method: 'POST' },
+      )
+      setRunMsg((m) => ({ ...m, [p.id]: res.message?.trim() || 'Gesamtbericht ans Büro gesendet.' }))
+    } catch (ex) {
+      const msg = ex instanceof Error ? ex.message : ''
+      setRunMsg((m) => ({ ...m, [p.id]: msg || 'Gesamtbericht konnte nicht gesendet werden.' }))
+    } finally {
+      setBusyRunId(null)
+    }
+  }
+
+  async function reactivate(p: Project) {
+    if (writeBlocked) return
+    setBusyRunId(p.id)
+    try {
+      await api(`/api/projects/${p.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'aktiv' }) })
+      await load()
+    } finally {
+      setBusyRunId(null)
+    }
+  }
+
   return (
     <div className="overflow-x-hidden">
       <PageTitle title="Baustellen" subtitle="Aktive Projekte erscheinen im Tagesbericht" />
@@ -231,6 +260,16 @@ export function ProjectsPage() {
                     </button>
                   ) : null}
 
+                  <button
+                    type="button"
+                    disabled={writeBlocked || busyRunId === p.id}
+                    onClick={() => sendCollective(p)}
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[0.9rem] bg-black/55 py-[0.65rem] text-[0.78rem] font-semibold text-orange-300/95 ring-1 ring-orange-400/30 transition hover:bg-black/65 active:scale-[0.99] disabled:opacity-40"
+                  >
+                    <Send strokeWidth={2} className="h-4 w-4" aria-hidden />
+                    Gesamtbericht ans Büro senden
+                  </button>
+
                   <div className="mt-2 grid grid-cols-2 gap-2">
                     <button
                       type="button"
@@ -255,6 +294,18 @@ export function ProjectsPage() {
                     <p className="mt-2 text-[0.78rem] text-zinc-300">{runMsg[p.id]}</p>
                   ) : null}
                 </div>
+              ) : null}
+
+              {p.status === 'abgeschlossen' ? (
+                <button
+                  type="button"
+                  disabled={writeBlocked || busyRunId === p.id}
+                  onClick={() => reactivate(p)}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.7rem] text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-emerald-300/95 ring-1 ring-emerald-400/25 transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
+                >
+                  <RotateCcw strokeWidth={2} className="h-4 w-4" aria-hidden />
+                  Baustelle reaktivieren
+                </button>
               ) : null}
             </div>
           </Card>

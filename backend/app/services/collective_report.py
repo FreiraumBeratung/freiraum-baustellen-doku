@@ -130,6 +130,7 @@ def build_collective_payload(
     hours_by_emp: dict[str, float] = {}
     total_hours = 0.0
     photos: list[dict[str, Any]] = []
+    signatures: list[dict[str, Any]] = []
 
     for r in run_reports:
         st = r.get("structured") if isinstance(r.get("structured"), dict) else {}
@@ -139,6 +140,7 @@ def build_collective_payload(
         opens = _as_list(st.get("openItems"))
         notes = str(r.get("notes") or "").strip()
         ktalk = str(st.get("customerTalk") or "").strip()
+        day_summary = str(st.get("summary") or "").strip()
         emps = _as_list(r.get("employees"))
         day_h = _day_hours(r)
         total_hours += day_h
@@ -158,6 +160,22 @@ def build_collective_payload(
                         "date": r.get("date"),
                         "filename": ph.get("filename"),
                         "originalFilename": ph.get("originalFilename"),
+                        "contentType": ph.get("contentType"),
+                    }
+                )
+
+        sig_doc = r.get("signatures") if isinstance(r.get("signatures"), dict) else {}
+        for role in ("customer", "employee"):
+            entry = sig_doc.get(role)
+            if isinstance(entry, dict) and entry.get("filename"):
+                signatures.append(
+                    {
+                        "reportId": r.get("id"),
+                        "date": str(r.get("date") or ""),
+                        "role": role,
+                        "filename": entry.get("filename"),
+                        "signedByLabel": entry.get("signedByLabel"),
+                        "signedAt": entry.get("signedAt"),
                     }
                 )
 
@@ -176,6 +194,7 @@ def build_collective_payload(
                 "openItems": opens,
                 "notes": notes,
                 "customerTalk": ktalk,
+                "summary": day_summary,
             }
         )
 
@@ -201,6 +220,7 @@ def build_collective_payload(
         day_count=len(days),
         total_hours=total_hours,
         activities=_dedupe(all_activities),
+        days=days,
     )
 
     return {
@@ -231,6 +251,7 @@ def build_collective_payload(
         },
         "summary": deterministic_summary,
         "photos": photos,
+        "signatures": signatures,
     }
 
 
@@ -253,7 +274,10 @@ def _build_deterministic_summary(
     day_count: int,
     total_hours: float,
     activities: list[str],
+    days: list[dict[str, Any]] | None = None,
 ) -> str:
+    """Deterministische Gesamt-Zusammenfassung, die tatsaechlich ueber alle Tage
+    kombiniert (Fallback, wenn keine KI-Formulierung verfuegbar ist)."""
     if day_count == 0:
         return "Keine Angabe"
     if date_from and date_to and date_from != date_to:
@@ -265,7 +289,17 @@ def _build_deterministic_summary(
     parts.append(
         f"{head}: {zeitraum}, {day_count} Arbeitstag(e), insgesamt {_fmt_hours_de(total_hours)} Stunden."
     )
-    if activities:
-        top = activities[:8]
-        parts.append("Ausgefuehrte Arbeiten: " + "; ".join(top) + ".")
+    # Pro-Tag-Verlauf zusammenfuehren, damit der Text wirklich alle Tage abbildet.
+    day_lines: list[str] = []
+    for day in days or []:
+        if not isinstance(day, dict):
+            continue
+        d_label = _fmt_date_de(str(day.get("date") or ""))
+        acts = _as_list(day.get("activities"))
+        recap = "; ".join(acts[:4]) if acts else (str(day.get("summary") or "").strip() or "—")
+        day_lines.append(f"{d_label}: {recap}")
+    if day_lines:
+        parts.append("Verlauf: " + " | ".join(day_lines) + ".")
+    elif activities:
+        parts.append("Ausgefuehrte Arbeiten: " + "; ".join(activities[:8]) + ".")
     return " ".join(parts)

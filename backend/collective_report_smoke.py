@@ -130,9 +130,39 @@ def main() -> int:
     # Zeitraum
     if payload.get("dateFrom") != "2026-06-22" or payload.get("dateTo") != "2026-06-23":
         failures.append(f"Zeitraum falsch (got={payload.get('dateFrom')}..{payload.get('dateTo')})")
-    # Summary belastbar
-    if not str(payload.get("summary") or "").strip() or payload.get("summary") == "Keine Angabe":
+    # Summary belastbar UND ueber alle Tage kombiniert (deterministisch enthaelt "Verlauf:")
+    summ = str(payload.get("summary") or "").strip()
+    if not summ or summ == "Keine Angabe":
         failures.append("Gesamtbericht: Summary leer")
+    if "Verlauf:" not in summ:
+        failures.append(f"Gesamtbericht: Summary kombiniert die Tage nicht (got={summ!r})")
+
+    # ---- Pure: Signatur-Aggregation + Tages-Summaries -------------------------
+    proj2 = {"id": "pX", "name": "SigTest", "customer": "K", "status": "abgeschlossen", "lastClosedRunId": "rX"}
+    reports2 = [
+        {
+            "id": "r1", "projectId": "pX", "runId": "rX", "date": "2026-07-01",
+            "employees": ["Anna"], "startTime": "08:00", "endTime": "16:00", "breakMinutes": 30,
+            "structured": {"summary": "Tag 1 Text", "activities": ["Fundament betoniert"]},
+            "signatures": {"customer": {"filename": "sig1.png", "signedByLabel": "Herr K.", "signedAt": "2026-07-01"}, "employee": None},
+            "photos": [],
+        },
+        {
+            "id": "r2", "projectId": "pX", "runId": "rX", "date": "2026-07-02",
+            "employees": ["Anna"], "startTime": "08:00", "endTime": "16:00", "breakMinutes": 30,
+            "structured": {"summary": "Tag 2 Text", "activities": ["Mauerwerk erstellt"]},
+            "signatures": {"customer": None, "employee": {"filename": "sig2.png", "signedAt": "2026-07-02"}},
+            "photos": [],
+        },
+    ]
+    pay2 = collective.build_collective_payload(proj2, reports2, run_id="rX")
+    sigs = pay2.get("signatures", [])
+    if len(sigs) != 2:
+        failures.append(f"Signatur-Aggregation: erwartet 2 (got={len(sigs)})")
+    if not any(s.get("filename") == "sig1.png" and s.get("role") == "customer" for s in sigs):
+        failures.append("Signatur-Aggregation: Kundensignatur Tag 1 fehlt")
+    if not any(d.get("summary") == "Tag 1 Text" for d in pay2.get("days", [])):
+        failures.append("Tages-Summary nicht erhalten")
 
     # ---- Export-Builder (PDF/DOCX) erzeugen ----------------------------------
     from report_export import build_collective_pdf_bytes, build_collective_docx_bytes  # noqa: E402

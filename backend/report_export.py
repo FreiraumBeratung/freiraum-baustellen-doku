@@ -789,6 +789,7 @@ def build_collective_pdf_bytes(
     *,
     resolve_logo: LogoPathResolver | None = None,
     resolve_photo: PhotoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
@@ -908,6 +909,31 @@ def build_collective_pdf_bytes(
             if note:
                 story.append(Paragraph(f"Besonderheiten: {_xml_para_text(note)}", note_style))
 
+    signatures = payload.get("signatures") or []
+    if signatures:
+        rendered: list[Any] = []
+        role_label = {"customer": "Kunde / Auftraggeber", "employee": "Mitarbeiter"}
+        for sg in signatures:
+            if not isinstance(sg, dict):
+                continue
+            fn = str(sg.get("filename") or "")
+            path = _safe_signature_path(fn, resolve_signature=resolve_signature)
+            if path is None:
+                continue
+            img = _signature_image_for_pdf(path, 6.5 * cm, 2.4 * cm)
+            if img is None:
+                continue
+            label = str(sg.get("signedByLabel") or role_label.get(str(sg.get("role")), "Unterschrift")).strip()
+            date_line = _format_signed_at_de(sg.get("signedAt"), sg.get("date"))
+            rendered.append(Spacer(1, 4))
+            rendered.append(img)
+            rendered.append(Paragraph(_xml_para_text(label), info_label_style))
+            rendered.append(Paragraph(_xml_para_text(f"Datum: {date_line}"), meta_style))
+        if rendered:
+            sec("Unterschriften")
+            for flow in rendered:
+                story.append(flow)
+
     photos = payload.get("photos") or []
     if photos and resolve_photo is not None:
         sec("Fotos")
@@ -941,6 +967,7 @@ def build_collective_docx_bytes(
     *,
     resolve_logo: LogoPathResolver | None = None,
     resolve_photo: PhotoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
     d = Document()
     sec = d.sections[0]
@@ -1040,6 +1067,29 @@ def build_collective_docx_bytes(
                 for r in d.add_paragraph(f"Besonderheiten: {note}").runs:
                     r.font.size = Pt(9)
                     r.font.color.rgb = META_GREY_DOCX
+
+    signatures = payload.get("signatures") or []
+    if signatures:
+        role_label = {"customer": "Kunde / Auftraggeber", "employee": "Mitarbeiter"}
+        sig_rendered = False
+        for sg in signatures:
+            if not isinstance(sg, dict):
+                continue
+            path = _safe_signature_path(str(sg.get("filename") or ""), resolve_signature=resolve_signature)
+            if path is None:
+                continue
+            if not sig_rendered:
+                _heading_docx(d.add_heading("Unterschriften", level=2))
+                sig_rendered = True
+            try:
+                d.add_paragraph().add_run().add_picture(str(path), width=Cm(6.5))
+            except Exception:
+                continue
+            label = str(sg.get("signedByLabel") or role_label.get(str(sg.get("role")), "Unterschrift")).strip()
+            date_line = _format_signed_at_de(sg.get("signedAt"), sg.get("date"))
+            for r in d.add_paragraph(f"{label} — Datum: {date_line}").runs:
+                r.font.size = Pt(9)
+                r.font.color.rgb = META_GREY_DOCX
 
     photos = payload.get("photos") or []
     if photos and resolve_photo is not None:

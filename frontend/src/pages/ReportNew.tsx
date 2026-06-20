@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, FileText, Layers, Mic } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, FileText, Layers, Mic, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -101,6 +101,15 @@ export function ReportNewPage() {
       }
     })
   }, [])
+
+  useEffect(() => {
+    if (!showModeModal) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setShowModeModal(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [showModeModal])
 
   useEffect(() => {
     return () => {
@@ -257,29 +266,37 @@ export function ReportNewPage() {
   return (
     <div className="overflow-x-hidden pb-2">
       {showModeModal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-3xl border border-white/[0.1] bg-zinc-950 p-6 shadow-2xl ring-1 ring-white/[0.06]">
-            <h2 className="text-center text-lg font-semibold text-white">Welche Art Bericht?</h2>
-            <p className="mt-2 text-center text-sm leading-relaxed text-zinc-500">
-              Folgeberichte werden zu einer laufenden Baustelle gesammelt — am Ende entsteht daraus ein
-              Gesamtbericht.
-            </p>
-            <div className="mt-6 space-y-3">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 px-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="false"
+          aria-label="Art des Berichts wählen"
+          onClick={() => setShowModeModal(false)}
+        >
+          <div
+            className="relative w-full max-w-xs rounded-3xl border border-white/[0.1] bg-zinc-950 p-6 shadow-2xl ring-1 ring-white/[0.06]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowModeModal(false)}
+              aria-label="Schließen"
+              className="absolute right-3 top-3 rounded-full p-1 text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-300"
+            >
+              <X strokeWidth={2} className="h-5 w-5" aria-hidden />
+            </button>
+            <h2 className="text-center text-base font-semibold text-white">Welche Art Bericht?</h2>
+            <div className="mt-5 space-y-3">
               <button
                 type="button"
                 onClick={() => {
                   setReportMode('single')
                   setShowModeModal(false)
                 }}
-                className="flex w-full items-start gap-3 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-3.5 text-left ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-4 font-medium text-white ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
               >
-                <FileText strokeWidth={2} className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" aria-hidden />
-                <span>
-                  <span className="block font-medium text-white">Einzelbericht</span>
-                  <span className="mt-0.5 block text-[0.8rem] leading-snug text-zinc-500">
-                    Ein eigenständiger Tagesbericht (wie bisher).
-                  </span>
-                </span>
+                <FileText strokeWidth={2} className="h-5 w-5 text-orange-400" aria-hidden />
+                Einzelbericht
               </button>
               <button
                 type="button"
@@ -287,15 +304,10 @@ export function ReportNewPage() {
                   setReportMode('series')
                   setShowModeModal(false)
                 }}
-                className="flex w-full items-start gap-3 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-3.5 text-left ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-4 font-medium text-white ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
               >
-                <Layers strokeWidth={2} className="mt-0.5 h-5 w-5 shrink-0 text-orange-400" aria-hidden />
-                <span>
-                  <span className="block font-medium text-white">Folgebericht</span>
-                  <span className="mt-0.5 block text-[0.8rem] leading-snug text-zinc-500">
-                    Zu einer laufenden Baustelle sammeln (Gesamtbericht am Ende).
-                  </span>
-                </span>
+                <Layers strokeWidth={2} className="h-5 w-5 text-orange-400" aria-hidden />
+                Folgebericht
               </button>
             </div>
           </div>
