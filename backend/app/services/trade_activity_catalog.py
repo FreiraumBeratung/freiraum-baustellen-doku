@@ -47,21 +47,21 @@ _GALABAU_RULES: tuple[_CatalogRule, ...] = (
 )
 
 _TROCKENBAU_RULES: tuple[_CatalogRule, ...] = (
-    _CatalogRule("staenderwerk_montiert", "Ständerwerk montiert", 79.0, (r"\b(ständerwerk|staenderwerk|cw|uw|cw-profile?|uw-profile?)\b", r"\b(gebaut|montiert|gestellt|eingebaut)\b")),
-    _CatalogRule("gipskarton_montiert", "Gipskartonplatten montiert", 90.0, (r"\b(gipskarton|rigips)\b", r"\b(montiert|angebracht|aufgebaut|gesetzt)\b")),
-    _CatalogRule("trockenbauwand_geschlossen", "Trockenbauwand geschlossen", 96.0, (r"\b(trockenbauwand|wand)\b", r"\b(geschlossen|zugemacht|gestellt)\b")),
-    _CatalogRule("decke_abgehaengt", "Decke abgehängt", 74.0, (r"\bdecke(n)?\b", r"\b(abgehängt|abgehaengt|abgehangen)\b")),
-    _CatalogRule("trockenbau_fugen_verspachtelt", "Fugen verspachtelt", 62.0, (r"\b(fuge|fugen)\b", r"\b(verspachtelt|gespachtelt|zugemacht)\b")),
-    _CatalogRule("daemmung_eingebaut", "Dämmung eingebaut", 71.0, (r"\b(dämmung|daemmung|dämmmatte|daemm matte|steinwolle|mineralwolle)\b", r"\b(eingebaut|verlegt|angebracht|eingebracht|eingesetzt)\b")),
+    _CatalogRule("staenderwerk_montiert", "Ständerwerk montiert", 79.0, (r"\b(ständerwerk|staenderwerk|ständerwerksprofile|staenderwerksprofile|doppelständerwand|cw|uw|cw-profile?|uw-profile?|profile)\b", r"\b(gebaut|montiert|gestellt|eingebaut|geschraubt|festgeschraubt|angebaut|gesetzt|eingesetzt|aufgebaut)\b")),
+    _CatalogRule("gipskarton_montiert", "Gipskartonplatten montiert", 90.0, (r"\b(gipskarton|rigips|gk[\s-]?platten|knauf[\s-]?platten)\b", r"\b(montiert|angebracht|aufgebaut|gesetzt|dran gemacht|verschraubt|geschraubt|festgeschraubt|gemacht|beplankt|rein)\b")),
+    _CatalogRule("trockenbauwand_geschlossen", "Trockenbauwand geschlossen", 96.0, (r"\b(trockenbauwand|rigipswand|wand)\b", r"\b(geschlossen|zugemacht|gestellt)\b")),
+    _CatalogRule("decke_abgehaengt", "Decke abgehängt", 74.0, (r"\bdecke(n)?\b", r"\b(abgehängt|abgehaengt|abgehangen|runtergehängt|runtergehaengt)\b")),
+    _CatalogRule("trockenbau_fugen_verspachtelt", "Fugen verspachtelt", 62.0, (r"\b(fuge|fugen)\b", r"\b(verspachtelt|gespachtelt|zugemacht|nachgespachtelt)\b")),
+    _CatalogRule("daemmung_eingebaut", "Dämmung eingebaut", 71.0, (r"\b(dämmung|daemmung|dämmmatte|daemm matte|steinwolle|mineralwolle)\b", r"\b(eingebaut|verlegt|angebracht|eingebracht|eingesetzt|reingepackt|reingemacht)\b")),
     _CatalogRule("akustikdecke_eingebaut", "Akustikdecke eingebaut", 70.0, (r"\bakustikdecke(n)?\b", r"\b(eingebaut|montiert)\b")),
-    _CatalogRule("brandschutzwand_hergestellt", "Brandschutzwand hergestellt", 72.0, (r"\b(brandschutzwand|brandschutz)\b", r"\b(hergestellt|gebaut|montiert)\b")),
+    _CatalogRule("brandschutzwand_hergestellt", "Brandschutzwand hergestellt", 72.0, (r"\b(brandschutzwand|brandschutz)\b", r"\b(hergestellt|gebaut|errichtet)\b")),
     _CatalogRule("revisionsklappe_eingebaut", "Revisionsklappe eingebaut", 66.0, (r"\brevisionsklappe(n)?\b", r"\b(eingebaut|montiert)\b")),
 )
 
 _FLIESEN_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, (r"\b(grundierung|grundiert)\b", r"\b(aufgetragen|aufgebracht|grundiert)\b")),
     _CatalogRule("abdichtung_hergestellt", "Abdichtung hergestellt", 71.0, (r"\b(abdichtung|fl(ü|ue)ssigfolie|dichtschl(ä|ae)mme|dichtband)\b", r"\b(hergestellt|aufgebracht|eingebaut|montiert)\b")),
-    _CatalogRule("fliesen_verlegt", "Fliesen verlegt", 100.0, (r"\b(fliesen?|platten|mosaik|feinsteinzeug)\b", r"\b(verlegt|gelegt|gesetzt)\b")),
+    _CatalogRule("fliesen_verlegt", "Fliesen verlegt", 100.0, (r"\b(fliesen?|platten|mosaik|feinsteinzeug|wandfliesen|bodenfliesen)\b", r"\b(verlegt|gelegt|gesetzt|geklebt)\b")),
     _CatalogRule("fliesenkleber", "Fliesenkleber aufgetragen", 68.0, (r"\b(kleber|flexkleber|mittelbettm(ö|oe)rtel|d(ü|ue)nnbettm(ö|oe)rtel)\b", r"\b(aufgetragen|aufgebracht|gezogen|benutzt|verwendet|verarbeitet|gemacht)\b")),
     _CatalogRule("fliesen_verfugt", "Fliesen verfugt", 56.0, (r"\b(fugenm(ö|oe)rtel|fugen)\b", r"\b(verfugt|eingebracht|gezogen)\b")),
     _CatalogRule("silikonfugen_silikoniert", "Silikonfugen silikoniert", 58.0, (r"\bsilikonfugen?|silikon\b", r"\b(gezogen|hergestellt|ausgef(ü|ue)hrt)\b")),
@@ -75,7 +75,7 @@ _FLIESEN_RULES: tuple[_CatalogRule, ...] = (
 _SHK_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("wasserleitungen_verlegt", "Wasserleitungen verlegt", 87.0, (r"\b(wasserleitung(en)?|trinkwasser|mehrschichtverbundrohr|kupferrohr|edelstahlpress)\b", r"\b(verlegt|montiert|installiert|angeschlossen)\b")),
     _CatalogRule("ht_rohre_verlegt", "HT-Rohre verlegt", 88.5, (r"\b(ht-?\s*rohre?|ht\s*dn\s*\d+)\b", r"\b(verlegt|montiert|eingebaut)\b")),
-    _CatalogRule("kg_rohre_verlegt", "KG-Rohre verlegt", 89.0, (r"\b(kg-?\s*rohre?|kg\s*dn\s*\d+)\b", r"\b(verlegt|montiert|eingebaut)\b")),
+    _CatalogRule("kg_rohre_verlegt", "KG-Rohre verlegt", 89.0, (r"\b(kg-?\s*rohre?|kg\s*dn\s*\d+|\d+\s*(?:meter|m|lfm)?\s*kg)\b", r"\b(verlegt|montiert|eingebaut|gelegt)\b")),
     _CatalogRule("heizungsanschluesse_montiert", "Heizungsanschlüsse montiert", 88.0, (r"\b(heizung|heizungsanschl(ü|ue)sse)\b", r"\b(angeschlossen|montiert|installiert)\b")),
     _CatalogRule("heizkoerper_montiert", "Heizkörper montiert", 80.0, (r"\bheizk(ö|oe)rper\b", r"\b(montiert|angebracht|eingebaut)\b")),
     _CatalogRule("fussbodenheizung_verlegt", "Fußbodenheizung verlegt", 81.0, (r"\b(fu(ß|ss)bodenheizung)\b", r"\b(verlegt|eingebaut|installiert)\b")),
@@ -92,8 +92,8 @@ _SHK_RULES: tuple[_CatalogRule, ...] = (
 _TIEFBAU_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("graben_ausgehoben", "Graben ausgehoben", 79.0, (r"\b(graben|baugrube)\b", r"\b(ausgehoben|gezogen|erstellt)\b")),
     _CatalogRule("untergrund_verdichtet", "Untergrund verdichtet", 76.5, (r"\b(untergrund|boden)\b", r"\b(verdichtet|verdichtung|abger(ü|ue)ttelt)\b")),
-    _CatalogRule("kg_rohre_verlegt", "KG-Rohre verlegt", 89.0, (r"\b(kg-?\s*rohre?|kg\s*dn\s*\d+)\b", r"\b(verlegt|eingebaut|montiert)\b")),
-    _CatalogRule("drainage_entwaesserung", "Drainage/Entwässerung eingebaut", 75.0, (r"\b(drainage|entw(ä|ae)sserung)\b", r"\b(eingebaut|verlegt|hergestellt)\b")),
+    _CatalogRule("kg_rohre_verlegt", "KG-Rohre verlegt", 89.0, (r"\b(kg-?\s*rohre?|kg\s*dn\s*\d+|\d+\s*(?:meter|m|lfm)?\s*kg)\b", r"\b(verlegt|eingebaut|montiert|gelegt)\b")),
+    _CatalogRule("drainage_entwaesserung", "Drainage/Entwässerung eingebaut", 75.0, (r"\b(drainage|entw(ä|ae)sserung)\b", r"\b(eingebaut|verlegt|gelegt|hergestellt)\b")),
     _CatalogRule("kanal_schacht", "Kanal-/Schachtarbeiten durchgeführt", 77.0, (r"\b(kanal|schacht|sch(ä|ae)chte)\b", r"\b(gesetzt|eingebaut|angeschlossen|betoniert)\b")),
     _CatalogRule("strassenbau_ausgefuehrt", "Straßen-/Wegebau ausgeführt", 78.0, (r"\b(asphalt|bordstein|gehweg|radweg|parkfl(ä|ae)che|stra(ß|ss)e)\b", r"\b(gebaut|hergestellt|asphaltiert|gesetzt|eingebaut|verlegt|eingebracht)\b")),
     _CatalogRule("verbau_gesetzt", "Verbau gesetzt", 73.0, (r"\bverbau|spundwand\b", r"\b(gesetzt|gestellt|eingebaut)\b")),
@@ -103,7 +103,7 @@ _TIEFBAU_RULES: tuple[_CatalogRule, ...] = (
 )
 
 _HOCHBAU_RULES: tuple[_CatalogRule, ...] = (
-    _CatalogRule("mauerwerk_erstellt", "Mauerwerk erstellt", 84.0, (r"\b(mauer(?:werk)?|ziegel|kalksandstein|ks[-\s]*stein|ks\b|porenbeton|poroton|porit|ytong)\b", r"\b(gemauert|gebaut|erstellt|aufgemauert|hochgezogen)\b")),
+    _CatalogRule("mauerwerk_erstellt", "Mauerwerk erstellt", 84.0, (r"\b(mauer(?:werk)?|ziegel|kalksandstein|ks[-\s]*stein|ks\b|porenbeton|poroton|porit|ytong)\b", r"\b(gemauert|gebaut|erstellt|aufgemauert|hochgezogen|hochgemauert)\b")),
     _CatalogRule("schalung_erstellt", "Schalung erstellt", 83.0, (r"\bschalung\b", r"\b(erstellt|gebaut|gestellt)\b")),
     _CatalogRule("bewehrung_eingebaut", "Bewehrung eingebaut", 84.0, (r"\b(bewehrung|bewehrungsstahl|armierung)\b", r"\b(eingebaut|verlegt|gestellt)\b")),
     _CatalogRule("beton_eingebracht", "Beton eingebracht", 86.0, (r"\bbeton\b", r"\b(eingebracht|gegossen|verarbeitet|betoniert)\b")),
@@ -114,9 +114,9 @@ _HOCHBAU_RULES: tuple[_CatalogRule, ...] = (
 _STUCK_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("innenputz_aufgetragen", "Innenputz aufgetragen", 74.0, (r"\b(innenputz|gipsputz|kalkputz|lehmputz)\b", r"\b(aufgetragen|aufgebracht|verarbeitet)\b")),
     _CatalogRule("aussenputz_aufgetragen", "Außenputz aufgetragen", 74.0, (r"\b(aussenputz|au(ß|ss)enputz|fassade)\b", r"\b(aufgetragen|aufgebracht|strukturiert)\b")),
-    _CatalogRule("wdvs_ausgefuehrt", "WDVS ausgeführt", 73.0, (r"\bwdvs|d(ä|ae)mmplatten|eps|mineralwolle|holzfaser\b", r"\b(angebracht|ged(ä|ae)mmt|ausgef(ü|ue)hrt|ged(ü|ue)belt)\b")),
-    _CatalogRule("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, (r"\b(armierungsgewebe|fassadenarmierung|gewebe)\b", r"\b(eingebettet|aufgebracht|ausgef(ü|ue)hrt)\b")),
-    _CatalogRule("stuckarbeiten", "Stuckarbeiten durchgeführt", 62.0, (r"\bstuck|zierleisten|rosetten|gesimse\b", r"\b(montiert|hergestellt|angebracht)\b")),
+    _CatalogRule("wdvs_ausgefuehrt", "WDVS ausgeführt", 73.0, (r"\bwdvs|d(ä|ae)mmplatten|eps|mineralwolle|holzfaser|fassade\b", r"\b(angebracht|ged(ä|ae)mmt|ausgef(ü|ue)hrt|ged(ü|ue)belt|angeklebt)\b")),
+    _CatalogRule("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, (r"\b(armierungsgewebe|fassadenarmierung|gewebe)\b", r"\b(eingebettet|aufgebracht|ausgef(ü|ue)hrt|reingemacht|reingepackt|gemacht)\b")),
+    _CatalogRule("stuckarbeiten", "Stuckarbeiten durchgeführt", 62.0, (r"\bstuck(?:arbeiten)?|zierleisten|rosetten|gesimse\b", r"\b(montiert|hergestellt|angebracht|stuckiert|gemacht)\b")),
     _CatalogRule("sockelputz_aufgetragen", "Sockelputz aufgetragen", 73.0, (r"\bsockelputz\b", r"\b(aufgetragen|aufgebracht|verarbeitet)\b")),
     _CatalogRule("reibputz_aufgetragen", "Reibputz aufgetragen", 73.0, (r"\breibputz\b", r"\b(aufgetragen|aufgebracht|verarbeitet|abgerieben)\b")),
     _CatalogRule("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, (r"\bkratzputz\b", r"\b(aufgetragen|aufgebracht|verarbeitet)\b")),

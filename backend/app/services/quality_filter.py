@@ -3,7 +3,11 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from app.services.activity_canonicalizer import canonicalize_activities, normalize_for_match
+from app.services.activity_canonicalizer import (
+    _raw_has_trockenbau_context,
+    canonicalize_activities,
+    normalize_for_match,
+)
 from app.services.human_language_engine import humanize_activity, humanize_material
 from app.services.summary_builder import build_deterministic_summary
 from app.services.trade_phrase_memory import apply_trade_phrase_memory, phrase_priority_boost
@@ -492,7 +496,7 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
 )
 
 _MACHINE_RULES: tuple[tuple[str, str, str, str], ...] = (
-    ("bagger", r"\b(mini\s*)?bagger\b|\bgebaggert\b", "Baggerarbeiten durchgeführt", "Baggerstunden erfassen?"),
+    ("bagger", r"\b(?:mini\s*)?bagger\b|\bgebaggert\b", "Baggerarbeiten durchgeführt", "Baggerstunden erfassen?"),
     ("dumper", r"\bdumper\b", "Dumper eingesetzt", "Dumperstunden erfassen?"),
     (
         "ruettelplatte",
@@ -910,8 +914,8 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
         if re.search(r"\b(eingebaut|verarbeitet|eingebracht|verwendet)\b", raw_probe):
             out.append("Splitt eingebaut")
     if ("steinwolle" in mats_probe or "mineralwolle" in mats_probe) and "dämmung eingebaut" not in acts_probe:
-        if re.search(r"\b(dämmung|daemmung|steinwolle|mineralwolle)\b", raw_probe) and re.search(
-            r"\b(eingebaut|verlegt|angebracht|montiert|eingebracht)\b",
+        if re.search(r"\b(dämmung|daemmung|steinwolle|mineralwolle|dämmmatte|daemmatte)\b", raw_probe) and re.search(
+            r"\b(eingebaut|verlegt|angebracht|montiert|eingebracht|reingepackt|reingemacht|eingesetzt)\b",
             raw_probe,
         ):
             out.append("Dämmung eingebaut")
@@ -1251,7 +1255,7 @@ def _apply_dn_to_pipe_fittings(materials: list[str], activities: list[str], raw_
 def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
     raw = str(raw_text or "").casefold()
     machine_patterns: dict[str, str] = {
-        "bagger": r"\b(mini\s*)?bagger\b",
+        "bagger": r"\b(?:mini\s*)?bagger\b",
         "dumper": r"\bdumper\b",
         "ruettelplatte": r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b",
         "stampfer": r"\bstampfer\b",
@@ -1264,15 +1268,16 @@ def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
         return False
     if not re.search(machine_pattern, raw, flags=re.IGNORECASE):
         return False
-    # Stundenangaben im Kontext der Maschine.
+    # Stundenangaben im Kontext der Maschine (direkt danach oder wenige Wörter davor).
+    gap = r"(?:\s+\S+){0,8}\s+"
     return bool(
         re.search(
-            machine_pattern + r".{0,30}\b\d+(?:[.,]\d+)?\s*(h|std|stunden)\b",
+            machine_pattern + r"\s+(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b",
             raw,
             flags=re.IGNORECASE,
         )
         or re.search(
-            r"\b\d+(?:[.,]\d+)?\s*(h|std|stunden)\b.{0,30}" + machine_pattern,
+            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b" + gap + machine_pattern,
             raw,
             flags=re.IGNORECASE,
         )
@@ -1283,30 +1288,31 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
     raw = str(raw_text or "").casefold()
     out: list[str] = []
     machine_patterns: tuple[tuple[str, str], ...] = (
-        ("Bagger", r"\b(mini\s*)?bagger\b"),
+        ("Bagger", r"\b(?:mini\s*)?bagger\b"),
         ("Dumper", r"\bdumper\b"),
         ("Rüttelplatte", r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b"),
         ("Stampfer", r"\bstampfer\b"),
         ("Radlader", r"\bradlader\b"),
         ("Walze", r"\bwalze(nzug)?\b|\bgrabenwalze\b"),
-        ("Kran", r"\b(autokran|turmdrehkran|kran)\b"),
+        ("Kran", r"\b(?:autokran|turmdrehkran|kran)\b"),
     )
+    gap = r"(?:\s+\S+){0,8}\s+"
     for label, pattern in machine_patterns:
-        m1 = re.search(
-            pattern + r".{0,30}\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b",
+        m_after = re.search(
+            pattern + r"\s+(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b",
             raw,
             flags=re.IGNORECASE,
         )
-        if m1:
-            out.append(f"{label}: {m1.group(1)} h")
+        if m_after:
+            out.append(f"{label}: {m_after.group(1)} h")
             continue
-        m2 = re.search(
-            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b.{0,30}" + pattern,
+        m_before = re.search(
+            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b" + gap + pattern,
             raw,
             flags=re.IGNORECASE,
         )
-        if m2:
-            out.append(f"{label}: {m2.group(1)} h")
+        if m_before:
+            out.append(f"{label}: {m_before.group(1)} h")
     return _dedupe(out)
 
 
@@ -1335,9 +1341,7 @@ def _apply_machine_assistance(
 def _context_gate_activities(activities: list[str], raw_text: str) -> list[str]:
     probe = str(raw_text or "").casefold()
     has_fliesen_context = bool(re.search(r"\b(fliesen?|fliesenkleber|fugenmörtel|fugenmoertel)\b", probe))
-    has_trockenbau_context = bool(
-        re.search(r"\b(gipskarton|rigips|trockenbau|fugenspachtel|schnellbauschrauben|decke abgeh)\b", probe)
-    )
+    has_trockenbau_context = _raw_has_trockenbau_context(probe)
     out: list[str] = []
     for act in activities:
         low = str(act or "").casefold()
@@ -1369,37 +1373,58 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
         return False
 
     if "gipskartonplatten montiert" in low:
-        return bool(re.search(r"gipskarton|gips\s*karton|rigips", raw))
-    if "decke abgehängt" in low:
-        trockenbau_ctx = bool(
-            re.search(r"gipskarton|rigips|trockenbau|ständerwerk|staenderwerk|cw profil|uw profil|akustikdecke", raw)
-        )
         return bool(
-            re.search(r"decke", raw)
-            and re.search(r"abgeh(ä|ae|a)ng|abgehaengt|abgehangen", raw)
-            or (trockenbau_ctx and re.search(r"decke", raw) and re.search(r"montiert|angebracht", raw))
+            re.search(
+                r"gips\s*karton|rigips|ri\s+gips|gk[\s-]?platten|knauf|"
+                r"beide\s+seiten\s+beplankt|doppelständerwand",
+                raw,
+            )
+            or (
+                re.search(r"\bbeplankt\b", raw)
+                and re.search(
+                    r"trocken\s*bau|ständerwerk|staender\s*werk|gips\s*karton|rigips|ri\s+gips",
+                    raw,
+                )
+            )
+        )
+    if "decke abgehängt" in low:
+        return bool(
+            re.search(r"decke|akustik\s*decke|abhang\s*decke", raw)
+            and re.search(
+                r"abgeh(ä|ae|a)ng|abgehaengt|abgehangen|runtergeh(ä|ae|a)ng|runtergehaengt",
+                raw,
+            )
+            or (
+                _raw_has_trockenbau_context(raw)
+                and re.search(r"decke", raw)
+                and re.search(r"montiert|angebracht", raw)
+            )
         )
     if "fugen verspachtelt" in low:
         return bool(
             re.search(r"\bfugen?\b|\bfugenspachtel\b|\btrockenbaufugen\b", raw)
-            and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht|gezogen)", raw)
+            and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht|zu\s+gemacht|nachzu\s+gemacht|gezogen)", raw)
         )
     if "fliesen verfugt" in low:
-        if not re.search(r"\bfugen?\b|\bfugenm(ö|oe)rtel\b|\bverfugt\b", raw):
+        if not re.search(r"\bfugen?\b|\bfugenm(ö|oe)rtel\b|\bverfugt\b|\bnachgezogen\b", raw):
             return False
-        if re.search(r"\bfliesen?\b", raw):
+        if re.search(r"fliesen|fliese|naturstein|mosaik|feinsteinzeug", raw):
             return True
         if re.search(r"\b(bodenablauf|duschrinne|ablaufrinne)\b", raw):
             return True
-        return any("fliesen verlegt" in x.casefold() for x in all_activities)
+        return any("fliesen verlegt" in x.casefold() or "naturstein verlegt" in x.casefold() for x in all_activities)
+    if "bodenablauf eingebaut" in low:
+        return bool(re.search(r"boden\s*ablauf|duschrinne|ablaufrinne", raw))
     if "fliesenkleber aufgetragen" in low:
         has_verb = re.search(
-            r"(gezogen|aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht|drauf)",
+            r"(gezogen|aufgezogen|aufgetragen|aufgebracht|auf\s+getragen|auf\s+gezogen|benutzt|verwendet|verarbeitet|gemacht|drauf)",
             raw,
         )
         if not has_verb:
             return False
         if re.search(r"\bfliesenkleber\b|\bflexkleber\b|\bmittelbettm(ö|oe)rtel\b", raw):
+            return True
+        if re.search(r"fliesen\s*kleber|flex\s*kleber", raw):
             return True
         # Generischer "Kleber" zaehlt nur, wenn auch Fliesen-Kontext da ist.
         if re.search(r"\b\w*kleber\b", raw) and re.search(r"\bfliesen?\b", raw):
@@ -1503,6 +1528,24 @@ def _drop_conflicting_pipe_activities(activities: list[str], raw_text: str = "")
     return list(activities)
 
 
+def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
+    out: list[str] = []
+    for act in activities:
+        low = str(act or "").strip().casefold()
+        if not low:
+            continue
+        if re.match(r"^(also|genau)\s+\w+", low):
+            continue
+        if low.startswith("ich hab gemacht "):
+            continue
+        if low.startswith("ja also vom tag her "):
+            continue
+        if re.search(r"\bfeierabend\b", low):
+            continue
+        out.append(str(act))
+    return out
+
+
 def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any]) -> dict[str, Any]:
     result = dict(structured)
     activities_raw = [str(x) for x in (result.get("activities") or [])]
@@ -1516,6 +1559,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     activities = _drop_conflicting_pipe_activities(activities, raw_text)
     activities = _context_gate_activities(activities, raw_text)
     activities = _evidence_gate_activities(activities, raw_text)
+    activities = _drop_runon_noise_activities(activities)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)
     confidence = _material_confidence_buckets(
         activities,
