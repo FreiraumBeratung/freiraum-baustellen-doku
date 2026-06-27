@@ -1369,13 +1369,20 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
         return False
 
     if "gipskartonplatten montiert" in low:
-        return bool(re.search(r"\bgipskarton\w*|\brigips\b", raw))
+        return bool(re.search(r"gipskarton|gips\s*karton|rigips", raw))
     if "decke abgehängt" in low:
-        return bool(re.search(r"\bdecke\b", raw) and re.search(r"\babgeh(ä|ae|a)ng", raw))
+        trockenbau_ctx = bool(
+            re.search(r"gipskarton|rigips|trockenbau|ständerwerk|staenderwerk|cw profil|uw profil|akustikdecke", raw)
+        )
+        return bool(
+            re.search(r"decke", raw)
+            and re.search(r"abgeh(ä|ae|a)ng|abgehaengt|abgehangen", raw)
+            or (trockenbau_ctx and re.search(r"decke", raw) and re.search(r"montiert|angebracht", raw))
+        )
     if "fugen verspachtelt" in low:
         return bool(
-            re.search(r"\bfugen?\b|\btrockenbaufugen\b", raw)
-            and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht)", raw)
+            re.search(r"\bfugen?\b|\bfugenspachtel\b|\btrockenbaufugen\b", raw)
+            and re.search(r"(spacht|fugenspachtel|verspacht|zugemacht|gezogen)", raw)
         )
     if "fliesen verfugt" in low:
         if not re.search(r"\bfugen?\b|\bfugenm(ö|oe)rtel\b|\bverfugt\b", raw):
@@ -1486,9 +1493,12 @@ def _summary_fragment(activity: str, *, raw_text: str = "") -> str:
     return a
 
 
-def _drop_conflicting_pipe_activities(activities: list[str]) -> list[str]:
+def _drop_conflicting_pipe_activities(activities: list[str], raw_text: str = "") -> list[str]:
     probe = " | ".join(str(a or "") for a in activities).casefold()
+    raw = str(raw_text or "").casefold()
     if "kg-rohre" in probe or "ht-rohre" in probe:
+        if re.search(r"\bwasserleit", raw):
+            return list(activities)
         return [a for a in activities if "wasserleitungen" not in str(a or "").casefold()]
     return list(activities)
 
@@ -1503,7 +1513,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
 
     raw_text = str(input_data.get("rawText") or "")
     activities = canonicalize_activities(activities_raw, raw_text=raw_text)
-    activities = _drop_conflicting_pipe_activities(activities)
+    activities = _drop_conflicting_pipe_activities(activities, raw_text)
     activities = _context_gate_activities(activities, raw_text)
     activities = _evidence_gate_activities(activities, raw_text)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)

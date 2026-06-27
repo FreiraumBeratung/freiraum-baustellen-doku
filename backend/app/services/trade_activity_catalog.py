@@ -52,7 +52,7 @@ _TROCKENBAU_RULES: tuple[_CatalogRule, ...] = (
     _CatalogRule("trockenbauwand_geschlossen", "Trockenbauwand geschlossen", 96.0, (r"\b(trockenbauwand|wand)\b", r"\b(geschlossen|zugemacht|gestellt)\b")),
     _CatalogRule("decke_abgehaengt", "Decke abgehängt", 74.0, (r"\bdecke(n)?\b", r"\b(abgehängt|abgehaengt|abgehangen)\b")),
     _CatalogRule("trockenbau_fugen_verspachtelt", "Fugen verspachtelt", 62.0, (r"\b(fuge|fugen)\b", r"\b(verspachtelt|gespachtelt|zugemacht)\b")),
-    _CatalogRule("daemmung_eingebaut", "Dämmung eingebaut", 71.0, (r"\b(dämmung|daemmung|steinwolle|mineralwolle)\b", r"\b(eingebaut|verlegt|angebracht|eingebracht)\b")),
+    _CatalogRule("daemmung_eingebaut", "Dämmung eingebaut", 71.0, (r"\b(dämmung|daemmung|dämmmatte|daemm matte|steinwolle|mineralwolle)\b", r"\b(eingebaut|verlegt|angebracht|eingebracht|eingesetzt)\b")),
     _CatalogRule("akustikdecke_eingebaut", "Akustikdecke eingebaut", 70.0, (r"\bakustikdecke(n)?\b", r"\b(eingebaut|montiert)\b")),
     _CatalogRule("brandschutzwand_hergestellt", "Brandschutzwand hergestellt", 72.0, (r"\b(brandschutzwand|brandschutz)\b", r"\b(hergestellt|gebaut|montiert)\b")),
     _CatalogRule("revisionsklappe_eingebaut", "Revisionsklappe eingebaut", 66.0, (r"\brevisionsklappe(n)?\b", r"\b(eingebaut|montiert)\b")),

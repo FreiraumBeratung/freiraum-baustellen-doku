@@ -155,6 +155,7 @@ CUSTOMER_HINTS = (
     "auftraggeber",
     "gesprochen",
     "informiert",
+    " bauleitung ",
     "abgesprochen",
     "abgestimmt",
     "war zufrieden",
