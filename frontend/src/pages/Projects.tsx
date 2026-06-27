@@ -1,4 +1,4 @@
-import { Download, Layers, RotateCcw, Send } from 'lucide-react'
+import { Download, Layers, RotateCcw, Send, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api, downloadExport } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
@@ -47,6 +47,7 @@ export function ProjectsPage() {
   const [note, setNote] = useState('')
   const [busyRunId, setBusyRunId] = useState<string | null>(null)
   const [runMsg, setRunMsg] = useState<Record<string, string>>({})
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   async function load() {
     const r = await api<{ projects: Project[] }>('/api/projects')
@@ -147,6 +148,21 @@ export function ProjectsPage() {
     }
   }
 
+  async function deleteProject(p: Project) {
+    if (writeBlocked) return
+    setBusyRunId(p.id)
+    setRunMsg((m) => ({ ...m, [p.id]: '' }))
+    try {
+      await api(`/api/projects/${p.id}`, { method: 'DELETE' })
+      setConfirmDeleteId(null)
+      await load()
+    } catch {
+      setRunMsg((m) => ({ ...m, [p.id]: 'Löschen fehlgeschlagen.' }))
+    } finally {
+      setBusyRunId(null)
+    }
+  }
+
   return (
     <div className="overflow-x-hidden">
       <PageTitle title="Baustellen" subtitle="Aktive Projekte erscheinen im Tagesbericht" />
@@ -222,18 +238,51 @@ export function ProjectsPage() {
                 <p className="rounded-[1rem] bg-black/52 px-[0.875rem] py-[0.625rem] text-[0.805rem] text-zinc-300 ring-1 ring-white/[0.06]">{p.note}</p>
               ) : null}
 
-              <button
-                type="button"
-                disabled={writeBlocked}
-                onClick={() => cycleStatus(p)}
-                className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.7rem] text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-orange-400/98 ring-1 ring-white/[0.08] transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
-              >
-                <RotateCcw strokeWidth={2} className="h-4 w-4 opacity-95" aria-hidden />
-                nächsten Status wählen
-              </button>
+              {confirmDeleteId === p.id ? (
+                <div className="mt-2 flex items-center gap-2 rounded-[1rem] border border-red-500/35 bg-red-500/[0.08] px-3 py-2.5">
+                  <span className="min-w-0 flex-1 text-[0.78rem] text-red-200/95">Baustelle wirklich löschen?</span>
+                  <button
+                    type="button"
+                    disabled={busyRunId === p.id}
+                    onClick={() => deleteProject(p)}
+                    className="rounded-[0.7rem] bg-red-500/90 px-3 py-1.5 text-[0.74rem] font-semibold text-zinc-950 transition hover:bg-red-400 disabled:opacity-40"
+                  >
+                    {busyRunId === p.id ? '…' : 'Löschen'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmDeleteId(null)}
+                    className="rounded-[0.7rem] bg-black/45 px-3 py-1.5 text-[0.74rem] font-medium text-zinc-300 ring-1 ring-white/[0.1] transition hover:bg-black/60"
+                  >
+                    Abbrechen
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={writeBlocked}
+                    onClick={() => cycleStatus(p)}
+                    className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[0.85rem] bg-black/50 py-[0.5rem] text-[0.72rem] font-semibold uppercase tracking-[0.08em] text-orange-400/95 ring-1 ring-white/[0.08] transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
+                  >
+                    <RotateCcw strokeWidth={2} className="h-3.5 w-3.5 opacity-95" aria-hidden />
+                    Status ändern
+                  </button>
+                  <button
+                    type="button"
+                    disabled={writeBlocked}
+                    onClick={() => setConfirmDeleteId(p.id)}
+                    aria-label="Baustelle löschen"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-[0.85rem] bg-black/50 px-3 py-[0.5rem] text-[0.72rem] font-medium text-zinc-400 ring-1 ring-white/[0.08] transition hover:bg-red-500/[0.12] hover:text-red-300 hover:ring-red-500/30 active:scale-[0.99] disabled:opacity-40"
+                  >
+                    <Trash2 strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
+                    Löschen
+                  </button>
+                </div>
+              )}
 
               {p.currentRunId || p.lastClosedRunId ? (
-                <div className="mt-1 rounded-[1rem] border border-orange-400/25 bg-orange-500/[0.06] px-[0.875rem] py-[0.8rem]">
+                <div className="mt-1 rounded-[1rem] border border-orange-400/25 bg-orange-500/[0.06] px-3 py-2.5">
                   <div className="flex items-center gap-2 text-[0.74rem] font-semibold uppercase tracking-[0.1em] text-orange-300/95">
                     <Layers strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
                     Folgebericht
@@ -254,7 +303,7 @@ export function ProjectsPage() {
                       type="button"
                       disabled={writeBlocked || busyRunId === p.id}
                       onClick={() => closeRun(p)}
-                      className="mt-2.5 inline-flex w-full items-center justify-center gap-2 rounded-[0.9rem] bg-orange-500/90 py-[0.65rem] text-[0.78rem] font-semibold text-zinc-950 transition hover:bg-orange-400 active:scale-[0.99] disabled:opacity-40"
+                      className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[0.9rem] bg-orange-500/90 py-[0.55rem] text-[0.76rem] font-semibold text-zinc-950 transition hover:bg-orange-400 active:scale-[0.99] disabled:opacity-40"
                     >
                       {busyRunId === p.id ? '…' : 'Baustelle abschließen & Gesamtbericht'}
                     </button>
@@ -264,7 +313,7 @@ export function ProjectsPage() {
                     type="button"
                     disabled={writeBlocked || busyRunId === p.id}
                     onClick={() => sendCollective(p)}
-                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[0.9rem] bg-black/55 py-[0.65rem] text-[0.78rem] font-semibold text-orange-300/95 ring-1 ring-orange-400/30 transition hover:bg-black/65 active:scale-[0.99] disabled:opacity-40"
+                    className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-[0.9rem] bg-black/55 py-[0.55rem] text-[0.76rem] font-semibold text-orange-300/95 ring-1 ring-orange-400/30 transition hover:bg-black/65 active:scale-[0.99] disabled:opacity-40"
                   >
                     <Send strokeWidth={2} className="h-4 w-4" aria-hidden />
                     Gesamtbericht ans Büro senden
@@ -301,7 +350,7 @@ export function ProjectsPage() {
                   type="button"
                   disabled={writeBlocked || busyRunId === p.id}
                   onClick={() => reactivate(p)}
-                  className="inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.7rem] text-[0.78rem] font-semibold uppercase tracking-[0.1em] text-emerald-300/95 ring-1 ring-emerald-400/25 transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-[1rem] bg-black/50 py-[0.55rem] text-[0.74rem] font-semibold uppercase tracking-[0.1em] text-emerald-300/95 ring-1 ring-emerald-400/25 transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
                 >
                   <RotateCcw strokeWidth={2} className="h-4 w-4" aria-hidden />
                   Baustelle reaktivieren

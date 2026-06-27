@@ -1007,6 +1007,23 @@ def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = D
     raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
 
 
+@app.delete("/api/employees/{employee_id}")
+def delete_employee(employee_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+    """Entfernt einen Mitarbeiter dauerhaft (z. B. bei Kündigung).
+
+    Additiv: bereits gespeicherte Tagesberichte/Stunden bleiben unverändert erhalten,
+    da sie die Namen selbst tragen. Es wird nur der Stammdaten-Eintrag entfernt.
+    """
+    data = store.read_json("employees.json", {"employees": []})
+    employees_list = list(data.get("employees", []))
+    target = next((e for e in employees_list if e.get("id") == employee_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+    data["employees"] = [e for e in employees_list if e.get("id") != employee_id]
+    store.write_json("employees.json", data)
+    return {"ok": True}
+
+
 @app.get("/api/time-entries")
 def list_time_entries_endpoint(
     employeeId: str | None = None,
@@ -1176,6 +1193,23 @@ def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depe
             store.write_json("projects.json", data)
             return p
     raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
+
+
+@app.delete("/api/projects/{project_id}")
+def delete_project(project_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+    """Entfernt eine Baustelle dauerhaft aus der Liste.
+
+    Additiv: vorhandene Tagesberichte dieser Baustelle bleiben unter „Berichte"
+    erhalten (sie tragen ihre Daten selbst). Es wird nur der Projekteintrag entfernt.
+    """
+    data = store.read_json("projects.json", {"projects": []})
+    projects_list = list(data.get("projects", []))
+    target = next((p for p in projects_list if p.get("id") == project_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
+    data["projects"] = [p for p in projects_list if p.get("id") != project_id]
+    store.write_json("projects.json", data)
+    return {"ok": True}
 
 
 def _assign_series_run(store: TenantStore, project_id: str) -> str | None:

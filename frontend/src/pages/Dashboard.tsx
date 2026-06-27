@@ -29,38 +29,38 @@ export function DashboardPage() {
 
   return (
     <div className="flex min-h-full flex-col">
-      {/* Kompakter Kopf: Marke + Logo + Firmenname auf einen Blick */}
-      <header className="relative -mx-4 overflow-hidden rounded-b-[1.75rem] border-b border-white/[0.05] px-6 pb-7 pt-6 text-center">
+      {/* Dominanter Kopf: Marke + Logo + Firmenname auf einen Blick */}
+      <header className="relative -mx-4 overflow-hidden rounded-b-[2rem] border-b border-white/[0.05] px-6 pb-11 pt-10 text-center">
         <div
           aria-hidden
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(110%_85%_at_50%_-10%,rgba(249,115,22,0.13),transparent_60%)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_95%_at_50%_-12%,rgba(249,115,22,0.16),transparent_62%)]"
         />
-        <div className="relative flex flex-col items-center gap-3">
-          <p className="text-[0.6rem] font-medium uppercase tracking-[0.26em] text-orange-300/85">
+        <div className="relative flex flex-col items-center gap-4">
+          <p className="text-[0.7rem] font-medium uppercase tracking-[0.3em] text-orange-300/85">
             Freiraum · Baustellen-Doku
           </p>
           {company?.logoUrl ? (
             <img
               src={resolveBackendPublicUrl(company.logoUrl) ?? company.logoUrl}
               alt="Firmenlogo"
-              className="h-[3.4rem] w-auto max-w-[180px] object-contain opacity-[0.97]"
+              className="h-[4.6rem] w-auto max-w-[210px] object-contain opacity-[0.97]"
             />
           ) : (
             <div
               aria-hidden
-              className="flex h-[3.4rem] w-[3.4rem] items-center justify-center rounded-[1.15rem] bg-white/[0.05] text-[1.5rem] ring-1 ring-white/[0.08]"
+              className="flex h-[4.6rem] w-[4.6rem] items-center justify-center rounded-[1.35rem] bg-white/[0.05] text-[2rem] ring-1 ring-white/[0.08]"
             >
               🏢
             </div>
           )}
-          <p className="text-[1.1rem] font-semibold tracking-tight text-white/96">
+          <p className="text-[1.45rem] font-semibold tracking-tight text-white/96">
             {company?.companyName?.trim() || 'Ihre Firma'}
           </p>
         </div>
       </header>
 
-      {/* 3 + 3 Kacheln — alles ohne Scrollen erreichbar */}
-      <nav aria-label="Schnellzugriff" className="grid grid-cols-3 gap-2.5 pt-6">
+      {/* 3 + 3 Kacheln — vertikal mittig im freien Bereich, alles ohne Scrollen */}
+      <nav aria-label="Schnellzugriff" className="my-auto grid grid-cols-3 gap-2.5 py-8">
         {tiles.map((t) => (
           <Link
             key={t.to}

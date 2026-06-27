@@ -365,75 +365,6 @@ export function ReportNewPage() {
 
         </Card>
 
-        <Card className="relative overflow-hidden border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_52%)] px-[1.15rem] py-9 shadow-none ring-1 ring-orange-400/14 backdrop-blur-sm">
-          <div
-            aria-hidden
-            className="pointer-events-none absolute inset-x-1/4 top-[-35%] h-[62%] rounded-full bg-orange-500/[0.08] blur-[44px]"
-          />
-          <div className="relative space-y-7">
-            <div>
-              <p className="text-[0.68rem] font-medium tracking-[0.14em] text-orange-300/85">Aufnahme</p>
-              <p className="mt-3 text-[0.88rem] leading-[1.55] text-zinc-500">Frei sprechen oder unten schreiben.</p>
-            </div>
-
-            {voiceSupported ? (
-              <div className="flex flex-col items-center gap-5 py-2">
-                <div className="rounded-[2.1rem] bg-black/35 p-[0.35rem] ring-1 ring-white/[0.07]">
-                <button
-                  type="button"
-                  disabled={busy || writeBlocked}
-                  onClick={() => toggleVoice()}
-                  className={`flex h-[6.85rem] w-[6.85rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/45 ring-offset-4 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
-                  aria-pressed={voiceActive}
-                  aria-label={voiceActive ? 'Spracheingabe stoppen' : 'Spracheingabe starten'}
-                >
-                  {voiceSavedFlash && !voiceActive ? (
-                    <Check className="h-12 w-12" strokeWidth={2.5} aria-hidden />
-                  ) : (
-                    <Mic className="h-12 w-12" strokeWidth={2} aria-hidden />
-                  )}
-                </button>
-                </div>
-                <p className={`min-h-[2.875rem] text-center text-[0.95rem] font-medium tracking-tight ${voiceActive ? 'text-orange-400' : voiceSavedFlash ? 'text-orange-400/92' : 'text-zinc-500'}`}>
-                  {voiceActive
-                    ? 'Aufnahme läuft…'
-                    : voiceSavedFlash
-                      ? 'Aussprache übernommen'
-                      : 'Tippen zum Sprechen'}
-                </p>
-              </div>
-            ) : (
-              <div className="rounded-2xl bg-amber-500/10 px-4 py-[0.875rem] text-center text-[0.9rem] text-amber-100/93 ring-1 ring-amber-400/38">
-                Spracheingabe wird hier nicht unterstützt — bitte den Text eingeben.
-              </div>
-            )}
-
-            <label className="block">
-              <span className="text-[0.875rem] text-zinc-500">Notizen / Bericht</span>
-              <textarea
-                className="mt-2 min-h-[11.5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
-                value={rawText}
-                onChange={(e) => setRawText(e.target.value)}
-                placeholder="Notizen…"
-              />
-            </label>
-
-            <label className="block">
-              <span className="text-[0.875rem] text-zinc-500">Besonderheiten (optional)</span>
-              <textarea
-                className="mt-2 min-h-[5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                placeholder="z. B. Arbeit unterbrochen, weil der Maler kam …"
-              />
-              <span className="mt-1.5 block text-[0.72rem] leading-snug text-zinc-600">
-                Freier Text — landet 1:1 im (Gesamt-)Bericht, ohne automatische Auswertung. Tipp: über das
-                Mikrofon der Handy-Tastatur kann man hier diktieren.
-              </span>
-            </label>
-          </div>
-        </Card>
-
         <div className="rounded-3xl bg-black/45 ring-1 ring-white/[0.08]">
           <button
             type="button"
@@ -539,6 +470,75 @@ export function ReportNewPage() {
             </div>
           ) : null}
         </div>
+
+        <Card className="relative overflow-hidden border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_52%)] px-[1.15rem] py-6 shadow-none ring-1 ring-orange-400/14 backdrop-blur-sm">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-x-1/4 top-[-35%] h-[62%] rounded-full bg-orange-500/[0.08] blur-[44px]"
+          />
+          <div className="relative space-y-5">
+            <div>
+              <p className="text-[0.68rem] font-medium tracking-[0.14em] text-orange-300/85">Aufnahme</p>
+              <p className="mt-2 text-[0.86rem] leading-[1.5] text-zinc-500">Frei sprechen oder unten schreiben.</p>
+            </div>
+
+            {voiceSupported ? (
+              <div className="flex flex-col items-center gap-3 py-0">
+                <div className="rounded-[1.8rem] bg-black/35 p-[0.3rem] ring-1 ring-white/[0.07]">
+                <button
+                  type="button"
+                  disabled={busy || writeBlocked}
+                  onClick={() => toggleVoice()}
+                  className={`flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/45 ring-offset-2 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
+                  aria-pressed={voiceActive}
+                  aria-label={voiceActive ? 'Spracheingabe stoppen' : 'Spracheingabe starten'}
+                >
+                  {voiceSavedFlash && !voiceActive ? (
+                    <Check className="h-9 w-9" strokeWidth={2.5} aria-hidden />
+                  ) : (
+                    <Mic className="h-9 w-9" strokeWidth={2} aria-hidden />
+                  )}
+                </button>
+                </div>
+                <p className={`min-h-[1.9rem] text-center text-[0.95rem] font-medium tracking-tight ${voiceActive ? 'text-orange-400' : voiceSavedFlash ? 'text-orange-400/92' : 'text-zinc-500'}`}>
+                  {voiceActive
+                    ? 'Aufnahme läuft…'
+                    : voiceSavedFlash
+                      ? 'Aussprache übernommen'
+                      : 'Tippen zum Sprechen'}
+                </p>
+              </div>
+            ) : (
+              <div className="rounded-2xl bg-amber-500/10 px-4 py-[0.875rem] text-center text-[0.9rem] text-amber-100/93 ring-1 ring-amber-400/38">
+                Spracheingabe wird hier nicht unterstützt — bitte den Text eingeben.
+              </div>
+            )}
+
+            <label className="block">
+              <span className="text-[0.875rem] text-zinc-500">Notizen / Bericht</span>
+              <textarea
+                className="mt-2 min-h-[11.5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
+                value={rawText}
+                onChange={(e) => setRawText(e.target.value)}
+                placeholder="Notizen…"
+              />
+            </label>
+
+            <label className="block">
+              <span className="text-[0.875rem] text-zinc-500">Besonderheiten (optional)</span>
+              <textarea
+                className="mt-2 min-h-[5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="z. B. Arbeit unterbrochen, weil der Maler kam …"
+              />
+              <span className="mt-1.5 block text-[0.72rem] leading-snug text-zinc-600">
+                Freier Text — landet 1:1 im (Gesamt-)Bericht, ohne automatische Auswertung. Tipp: über das
+                Mikrofon der Handy-Tastatur kann man hier diktieren.
+              </span>
+            </label>
+          </div>
+        </Card>
 
         {err ? <p className="text-sm text-red-400">{err}</p> : null}
         <BigButton type="button" disabled={busy || writeBlocked || !projectId || !rawText.trim()} onClick={() => structure()}>
