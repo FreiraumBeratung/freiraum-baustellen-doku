@@ -148,6 +148,7 @@ def _open_hint_match(lower_sentence: str) -> bool:
 
 CUSTOMER_HINTS = (
     " kunde ",
+    " kund ",
     "kunden",
     "kundin",
     "bauherr",
@@ -155,6 +156,7 @@ CUSTOMER_HINTS = (
     "gesprochen",
     "informiert",
     "abgesprochen",
+    "abgestimmt",
     "war zufrieden",
     "freigegeben",
     "rücksprache",

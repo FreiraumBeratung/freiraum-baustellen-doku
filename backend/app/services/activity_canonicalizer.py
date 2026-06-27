@@ -88,11 +88,46 @@ def _split_chunks(text: str) -> list[str]:
     t = str(text or "").strip()
     if not t:
         return []
+    # Whisper-Klebung vor dem strukturellen Splitten aufloesen, damit Verb-Uebergaenge
+    # (z.B. "ausgeschachtet die KG-Rohre verlegt") sauber getrennt werden.
+    t = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgeotextiel\b", "geotextil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgeo\s+textil\b", "geotextil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bka\s+ga\s+rohre?\b", "kg rohre", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bbe\s+wehrung\b", "bewehrung", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfuss\s+boden\s+heizung\b", "fußbodenheizung", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgips\s+karton\s+platten\b", "gipskartonplatten", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bnivellier\s+masse\b", "nivelliermasse", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgross\s+format\s+fliesen\b", "großformatfliesen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\blauf\s+ende\s+meter\b", "laufende meter", t, flags=re.IGNORECASE)
+    t = re.sub(r"\brasen\s+kanten\s+steine\b", "rasenkantensteine", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdruck\s+pr(ü|ue|u)fung\b", "druckprüfung", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bsilikon\s+fugen\b", "silikonfugen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bputz\s+runter\b", "putz entfernt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\baltputz\s+runter\b", "altputz entfernt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\becke\s+geschnitten\b", "hecke geschnitten", t, flags=re.IGNORECASE)
+    t = re.sub(r"\becke\s+(zurückgeschnitten|zurueckgeschnitten|getrimmt)\b", r"hecke \1", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bheiz\s*k(ö|oe)rper\b", "heizkörper", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bver\s+fugt\b", "verfugt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bver\s+spachtelt\b", "verspachtelt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bschot\s+ter\b", "schotter", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bunter\s+grund\b", "untergrund", t, flags=re.IGNORECASE)
+    t = re.sub(r"\broll\s+rasen\b", "rollrasen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bpla\s+num\b", "planum", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bnach dem kundengespr(ä|ae)ch\b", ". nach dem kundengespräch", t, flags=re.IGNORECASE)
+    t = re.sub(r"\boffen bleibt\b", ". offen bleibt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bproblem war\b", ". problem war", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(unter|ober|grund|sanier|alt|innen|sockel|reib|kratz)\s+putz\b",
+        r"\1putz",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"[;!?]", ".", t)
     t = re.sub(r"\bwir haben\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaben wir\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(
-        r"\b(?:dann noch|dann|anschließend|anschliessend|sowie|und dann|zwischendurch)\b",
+        r"\b(?:dann noch|dann|danach|anschließend|anschliessend|sowie|und dann|zwischendurch)\b",
         ".",
         t,
         flags=re.IGNORECASE,
@@ -237,9 +272,23 @@ _TRANSITION_VERBS = (
     "verfüllt",
     "verfuellt",
     "ausgehoben",
+    "ausgeschachtet",
+    "abgetragen",
+    "geschliffen",
+    "grundiert",
+    "reingepackt",
+    "eingepackt",
+    "beplankt",
     "verdichtet",
     "entfernt",
     "beseitigt",
+    "gedämmt",
+    "gedaemmt",
+    "vertikutiert",
+    "gedüngt",
+    "geduengt",
+    "bewässert",
+    "bewaessert",
     "saniert",
     "angeschlossen",
     "installiert",
@@ -249,6 +298,8 @@ _TRANSITION_VERBS = (
     "ausgefuehrt",
     "durchgeführt",
     "durchgefuehrt",
+    "eingebracht",
+    "eingedeckt",
     "erstellt",
     "gegossen",
     "betoniert",
@@ -296,8 +347,21 @@ _FOLLOW_NOUNS = (
     "pflanzkuebel",
     "schotter",
     "splitt",
+    "sand",
+    "boden",
+    "fläche",
+    "flaeche",
+    "frostschutz",
+    "planum",
+    "abgleich",
+    "hydraulischen",
     "sanierputz",
     "altputz",
+    "schimmel",
+    "unterputz",
+    "oberputz",
+    "grundputz",
+    "innenputz",
     "putz",
     "innenputz",
     "außenputz",
@@ -317,12 +381,14 @@ _FOLLOW_NOUNS = (
     "bewährung",
     "bewahrung",
     "bewehrungsstahl",
+    "armierung",
     "bewährungsstahl",
     "schalung",
     "fundament",
     "wasserleitungen",
     "heizung",
     "heizkörper",
+    "heiz",
     "herzkörper",
     "heizkoerper",
     "thermostatventil",
@@ -448,6 +514,15 @@ def _split_by_verb_transition(part: str) -> list[str]:
         rf"(?=(?:{follow_pattern}|{number_words_pattern}|\d)\b|\d)"
     )
     marked = re.sub(pattern, r"\1. ", t, flags=re.IGNORECASE)
+    verb_chain = "|".join(
+        v for v in _TRANSITION_VERBS if v not in ("eingebaut", "eingebracht", "verlegt", "montiert", "gesetzt")
+    )
+    marked = re.sub(
+        rf"\b({verbs_pattern})\b\s+(?=\b({verb_chain})\b)",
+        r"\1. ",
+        marked,
+        flags=re.IGNORECASE,
+    )
     splits = [p.strip(" ,.;") for p in re.split(r"[.]", marked) if p.strip(" ,.;")]
     return splits if splits else [t]
 
@@ -530,9 +605,22 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bbewassert\b|\bbewessert\b|\bbewassert\b", "bewässert", out)
     out = re.sub(r"\bstelllager\b|\bstelzlagern\b", "stelzlager", out)
     out = re.sub(r"\bgeotextiel\b", "geotextil", out)
+    out = re.sub(r"\bgeo\s+textil\b", "geotextil", out)
+    out = re.sub(r"\bka\s+ga\s+rohre?\b", "kg rohre", out)
+    out = re.sub(r"\bbe\s+wehrung\b", "bewehrung", out)
+    out = re.sub(r"\bfuss\s+boden\s+heizung\b", "fußbodenheizung", out)
+    out = re.sub(r"\bgips\s+karton\s+platten\b", "gipskartonplatten", out)
+    out = re.sub(r"\bnivellier\s+masse\b", "nivelliermasse", out)
+    out = re.sub(r"\bgross\s+format\s+fliesen\b", "großformatfliesen", out)
+    out = re.sub(r"\blauf\s+ende\s+meter\b", "laufende meter", out)
+    out = re.sub(r"\brasen\s+kanten\s+steine\b", "rasenkantensteine", out)
+    out = re.sub(r"\bdruck\s+pr(ü|ue|u)fung\b", "druckprüfung", out)
+    out = re.sub(r"\bsilikon\s+fugen\b", "silikonfugen", out)
     out = re.sub(r"\bschimel\b", "schimmel", out)
     out = re.sub(r"\bdruckprufung\b", "druckprüfung", out)
     # Whisper-Trennung von Putz-Komposita: "unter putz" -> "unterputz" usw.
+    out = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", out)
+    out = re.sub(r"\bunter\s+putz\b", "unterputz", out)
     out = re.sub(
         r"\b(unter|ober|grund|sanier|alt|innen|sockel|reib|kratz)\s+putz\b",
         r"\1putz",
@@ -560,6 +648,13 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bporen\s*beton\b", "porenbeton", out)
     out = re.sub(r"\bkalk\s*sandstein(e)?\b", "kalksandstein", out)
     out = re.sub(r"\bherz\s*k(ö|oe)rper\b|\bherzk(ö|oe)rper\b", "heizkörper", out)
+    out = re.sub(r"\bheiz\s*k(ö|oe)rper\b", "heizkörper", out)
+    out = re.sub(r"\bver\s+fugt\b", "verfugt", out)
+    out = re.sub(r"\bver\s+spachtelt\b", "verspachtelt", out)
+    out = re.sub(r"\bschot\s+ter\b", "schotter", out)
+    out = re.sub(r"\bunter\s+grund\b", "untergrund", out)
+    out = re.sub(r"\broll\s+rasen\b", "rollrasen", out)
+    out = re.sub(r"\bpla\s+num\b", "planum", out)
     out = re.sub(r"\bmanschete\b", "manschette", out)
     out = re.sub(r"\bbeton gemacht\b", "beton eingebracht", out)
     out = _normalize_masonry_size_notation(out)
@@ -794,6 +889,13 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     # Fliesenleger
     if "grundierung" in t and re.search(r"\b(aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht)\b", t):
         return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
+    if re.search(r"\bgrundiert\b", t) and (
+        "wand" in t
+        or "decke" in t
+        or "untergrund" in t
+        or re.search(r"\b(wand|decke|untergrund|fassade)\b", (raw_text or "").casefold())
+    ):
+        return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
     if "abdichtung" in t and re.search(r"\b(hergestellt|aufgebracht|eingebaut|gemacht)\b", t):
         return CanonicalActivity("abdichtung_hergestellt", "Abdichtung hergestellt", 71.0, False)
     if re.search(r"\b(gro(ß|ss)format(?:fliesen?)?|gro(ß|ss)format)\b", t) and re.search(
@@ -951,6 +1053,12 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("flaeche_bewaessert", "Fläche bewässert", 69.0, False)
+    if re.search(r"\b(bewässert|bewaessert|gegossen|gewässert|gewaessert)\b", t) and re.search(
+        r"\brasen\b",
+        str(raw_text or ""),
+        flags=re.IGNORECASE,
+    ):
+        return CanonicalActivity("flaeche_bewaessert", "Fläche bewässert", 69.0, False)
     if re.search(r"\b(winterdienst|schnee|eis|streugut|salz)\b", t) and re.search(
         r"\b(geräumt|geraeumt|gestreut|durchgeführt|durchgefuehrt|gemacht)\b",
         t,
@@ -1082,9 +1190,19 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         if "ht" in context_probe or "abwasser" in context_probe:
             return CanonicalActivity("ht_abzweig_eingebaut", "HT-Abzweig eingebaut", 62.0, False)
         return CanonicalActivity("abzweig_eingebaut", "Abzweig eingebaut", 58.0, False)
-    if re.search(r"\bb(ö|oe)gen?\b|\bbogen\b", t) and (
-        re.search(r"\b(eingebaut|gesetzt|montiert|verbaut|gemacht)\b", t)
-        or re.search(r"\bb(ö|oe)gen?\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut|gemacht)\b", raw_probe)
+    if re.search(r"\bb(ö|oe)gen?\b|\bbogen\b", t) and not re.search(
+        r"\b(fehlt|fehlte|fehlen|gefehlt|nachleg|nachbestell)\b",
+        f"{t} {raw_probe}",
+    ) and (
+        re.search(r"\b(eingebaut|gesetzt|montiert|verbaut)\b", t)
+        or (
+            re.search(r"\bgemacht\b", t)
+            and not re.search(r"\bdurch\s+gemacht\b", t)
+        )
+        or re.search(
+            r"\bb(ö|oe)gen?\b.{0,24}\b(eingebaut|gesetzt|montiert|verbaut)\b",
+            raw_probe,
+        )
     ):
         context_probe = f"{t} | {raw_probe}"
         if "kg" in context_probe or "kanal" in context_probe:
@@ -1130,7 +1248,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if re.search(r"\b(armatur(en)?|mischer|wasserhahn)\b", t) and re.search(r"\b(montiert|gesetzt|eingebaut|angeschlossen|gemacht)\b", t):
         return CanonicalActivity("armaturen_montiert", "Armaturen montiert", 78.0, False)
     if re.search(r"\b(druckprüfung|druckpruefung|dichtheitsprüfung|dichtheitspruefung)\b", t) and re.search(
-        r"\b(durchgeführt|durchgefuehrt|gemacht|abgeschlossen)\b",
+        r"\b(durchgeführt|durchgefuehrt|durch\s+gemacht|abgeschlossen)\b",
         t,
     ):
         return CanonicalActivity("druckpruefung_durchgefuehrt", "Druckprüfung durchgeführt", 78.0, False)
@@ -1146,8 +1264,19 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("lueftung_klima_installiert", "Lüftungs-/Klimatechnik installiert", 69.0, False)
 
     # Sanierung
-    if "altputz" in t or "putz runter" in t:
+    if (
+        "altputz" in t
+        or "putz runter" in t
+        or re.search(r"\b(alten?\s+putz|putz\s+abgetragen|altputz)\b", t)
+    ):
         return CanonicalActivity("altputz_entfernt", "Altputz entfernt", 91.0, False)
+    if re.search(r"\b(geschliffen|angeschliffen)\b", t) and (
+        "wand" in t
+        or "decke" in t
+        or "fassade" in t
+        or re.search(r"\b(wand|decke|fassade)\b", (raw_text or "").casefold())
+    ):
+        return CanonicalActivity("wand_geschliffen", "Wand geschliffen", 72.0, False)
     if "schimmel" in t:
         return CanonicalActivity("schimmel_beseitigt", "Schimmel beseitigt", 85.0, False)
     if "sanierputz" in t:
@@ -1170,7 +1299,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
     if re.search(r"\bputz\b", t) and re.search(r"\b(aufgebracht|aufgetragen|verarbeitet)\b", t):
         return CanonicalActivity("putz_aufgebracht", "Putz aufgebracht", 76.0, False)
-    if ("armierung" in t or "gewebe" in t) and re.search(r"\b(hergestellt|aufgebracht|eingebettet|ausgeführt|ausgefuehrt|gemacht)\b", t):
+    if ("armierung" in t or "gewebe" in t) and re.search(
+        r"\b(hergestellt|aufgebracht|eingebettet|eingebaut|montiert|ausgeführt|ausgefuehrt|gemacht)\b",
+        t,
+    ):
         raw_probe = str(raw_text or "").casefold()
         if "fassade" in t or re.search(r"\bfassade|fassaden\b", raw_probe):
             return CanonicalActivity("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, False)
@@ -1208,10 +1340,24 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if ("aushub" in t or "erdarbeiten" in t) and re.search(r"\b(ausgeführt|durchgeführt|gemacht|erstellt)\b", t):
         return CanonicalActivity("erdarbeiten", "Erdarbeiten durchgeführt", 78.0, False)
     if ("graben" in t or "baugrube" in t or "grube" in t or "gebaggert" in t or "bagger" in t) and re.search(
-        r"\b(ausgehoben|erstellt|gezogen|gegraben|gebaggert|gemacht)\b",
+        r"\b(ausgehoben|ausgeschachtet|erstellt|gezogen|gegraben|gebaggert|gemacht)\b",
         t,
     ):
         return CanonicalActivity("graben_ausgehoben", "Graben ausgehoben", 79.0, False)
+    if "boden" in t and re.search(r"\b(ausgeschachtet|ausgehoben)\b", t) and "putz" not in t:
+        return CanonicalActivity("boden_ausgeschachtet", "Boden ausgeschachtet", 80.0, False)
+    if (
+        re.search(r"\b(ausgeschachtet|ausgehoben)\b", t)
+        and "putz" not in t
+        and re.search(r"\bboden\b", (raw_text or "").casefold())
+        and (len(t.split()) <= 3 or "boden" in t)
+    ):
+        return CanonicalActivity("boden_ausgeschachtet", "Boden ausgeschachtet", 80.0, False)
+    if re.search(r"\bsand\b", t) and re.search(
+        r"\b(eingebaut|eingebracht|reingepackt|reingemacht|rein gemacht|eingepackt|verfüllt|verfuellt|rein)\b",
+        t,
+    ):
+        return CanonicalActivity("sand_eingebaut", "Sand eingebaut", 74.0, False)
     if re.search(
         r"\b(verfüllt|verfuellt|verfüllen|verfuellen|aufgefüllt|aufgefuellt)\b",
         t,
@@ -1225,10 +1371,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         )
     ):
         return CanonicalActivity("graben_verfuellt", "Graben verfüllt", 77.0, False)
+    if "frostschutz" in t and re.search(r"\b(eingebaut|eingebracht|verlegt)\b", t):
+        return CanonicalActivity("frostschutz_eingebaut", "Frostschutz eingebaut", 78.5, False)
     if re.search(r"\b(verdichtet|verdichtung|verdichten)\b", t) and (
         ("untergrund" in t or "grube" in t or "baugrube" in t)
-        # Subjekt-Fallback fuer "Baugrube ausgehoben und verdichtet": nur wenn der
-        # Chunk kein konkurrierendes Subjekt traegt und der Rohtext Erdbau-Kontext hat.
         or (
             not re.search(r"\b(beton|estrich|fuge|fugen|pflaster)\b", t)
             and re.search(
@@ -1238,7 +1384,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         )
     ):
         return CanonicalActivity("untergrund_verdichtet", "Untergrund verdichtet", 76.5, False)
-    if ("drainage" in t or "entwässerung" in t or "entwaesserung" in t) and re.search(r"\b(eingebaut|hergestellt|verlegt)\b", t):
+    if ("drainage" in t or "entwässerung" in t or "entwaesserung" in t) and re.search(
+        r"\b(eingebaut|hergestellt|verlegt)\b",
+        t,
+    ):
         return CanonicalActivity("drainage_entwaesserung", "Drainage/Entwässerung eingebaut", 75.0, False)
     if ("kanal" in t or "schacht" in t) and re.search(r"\b(angeschlossen|gesetzt|eingebaut|betoniert)\b", t):
         return CanonicalActivity("kanal_schacht", "Kanal-/Schachtarbeiten durchgeführt", 77.0, False)
