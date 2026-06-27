@@ -2,7 +2,6 @@ import { Check, ChevronDown, ChevronUp, FileText, Layers, Mic, X } from 'lucide-
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
-import { ReportAudioSection } from '../components/ReportAudioSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
@@ -51,9 +50,6 @@ export type StructuredPayload = {
 export function ReportNewPage() {
   const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
-  const [reportDraftId] = useState(() =>
-    typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
-  )
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [projectId, setProjectId] = useState('')
@@ -76,7 +72,7 @@ export function ReportNewPage() {
   const voiceRef = useRef<BrowserSpeechRecognition | null>(null)
   const voiceFeedbackTimerRef = useRef<number | null>(null)
   const voiceSupported = speechRecognitionSupported()
-  const [extrasOpen, setExtrasOpen] = useState(false)
+  const [detailsOpen, setDetailsOpen] = useState(false)
 
   useEffect(() => {
     api<{ projects: Project[] }>('/api/projects').then((r) => {
@@ -186,6 +182,11 @@ export function ReportNewPage() {
   }
 
   const proj = projects.find((p) => p.id === projectId)
+  const selectedCount = employees.filter((e) => selectedEmp[e.id]).length
+  const dateLabelDe = (() => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date)
+    return m ? `${m[3]}.${m[2]}.` : date
+  })()
 
   async function structure() {
     setErr('')
@@ -362,84 +363,6 @@ export function ReportNewPage() {
             ) : null}
           </label>
 
-          <label className="block">
-            <span className="text-[0.875rem] text-zinc-500">Datum</span>
-            <input
-              type="date"
-              className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-            />
-          </label>
-
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-[0.875rem] text-zinc-500">Start</span>
-              <input
-                type="time"
-                className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-                value={startTime}
-                onChange={(e) => setStartTime(e.target.value)}
-              />
-            </label>
-            <label className="block">
-              <span className="text-[0.875rem] text-zinc-500">Ende</span>
-              <input
-                type="time"
-                className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-                value={endTime}
-                onChange={(e) => setEndTime(e.target.value)}
-              />
-            </label>
-          </div>
-
-          <label className="block">
-            <span className="text-[0.875rem] text-zinc-500">Pause</span>
-            <select
-              className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-              value={breakMinutes}
-              onChange={(e) => setBreakMinutes(Number(e.target.value))}
-            >
-              <option value={0}>Keine Pause</option>
-              <option value={30}>30 Minuten</option>
-              <option value={45}>45 Minuten</option>
-              <option value={60}>60 Minuten</option>
-              <option value={90}>90 Minuten</option>
-            </select>
-          </label>
-
-          <label className="block">
-            <span className="text-[0.875rem] text-zinc-500">Ausgabeformat</span>
-            <select
-              className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-              value={exportFormat}
-              onChange={(e) => setExportFormat(e.target.value)}
-            >
-              <option value="PDF">PDF</option>
-              <option value="Word">Word</option>
-            </select>
-          </label>
-
-          <div>
-            <span className="text-[0.875rem] text-zinc-500">Mitarbeitende</span>
-            <div className="mt-2 grid gap-2">
-              {employees.map((e) => (
-                <label
-                  key={e.id}
-                  className="flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-transparent bg-black/55 px-3 py-2.5 ring-1 ring-white/[0.08]"
-                >
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedEmp[e.id])}
-                    onChange={() => toggleEmp(e.id)}
-                    className="h-5 w-5 accent-orange-500"
-                  />
-                  <span className="text-white">{e.name}</span>
-                </label>
-              ))}
-              {employees.length === 0 ? <p className="text-sm text-zinc-500">Keine aktiven Mitarbeitenden.</p> : null}
-            </div>
-          </div>
         </Card>
 
         <Card className="relative overflow-hidden border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_52%)] px-[1.15rem] py-9 shadow-none ring-1 ring-orange-400/14 backdrop-blur-sm">
@@ -514,34 +437,105 @@ export function ReportNewPage() {
         <div className="rounded-3xl bg-black/45 ring-1 ring-white/[0.08]">
           <button
             type="button"
-            aria-expanded={extrasOpen}
-            onClick={() => setExtrasOpen((o) => !o)}
-            className="flex w-full items-center justify-between gap-3 rounded-[1.125rem_1.125rem_0_0] px-4 py-[0.78rem] text-left text-[0.9rem] font-medium text-zinc-400 transition hover:bg-black/45"
+            aria-expanded={detailsOpen}
+            onClick={() => setDetailsOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-3 rounded-[1.125rem_1.125rem_0_0] px-4 py-[0.78rem] text-left transition hover:bg-black/45"
           >
-            <span>Erweiterter Aufzeichnungsbereich</span>
-            {extrasOpen ? (
+            <span className="flex min-w-0 flex-col">
+              <span className="text-[0.9rem] font-medium text-zinc-300">Details</span>
+              <span className="mt-0.5 truncate text-[0.72rem] text-zinc-500">
+                {dateLabelDe} · {startTime}–{endTime} · {breakMinutes} Min · {selectedCount}{' '}
+                {selectedCount === 1 ? 'Mitarbeiter' : 'Mitarbeitende'} · {exportFormat}
+              </span>
+            </span>
+            {detailsOpen ? (
               <ChevronUp strokeWidth={2} className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden />
             ) : (
               <ChevronDown strokeWidth={2} className="h-5 w-5 shrink-0 text-zinc-500" aria-hidden />
             )}
           </button>
-          {extrasOpen ? (
-            <div className="border-t border-white/[0.06] px-3 pb-[0.6rem] pt-1">
-              <ReportAudioSection
-                reportDraftId={reportDraftId}
-                projectId={projectId}
-                date={date}
-                strukturierungBusy={busy}
-                compact
-                onApplyTranscript={(text) =>
-                  setRawText((prev) => {
-                    const p = prev.trim()
-                    const t = text.trim()
-                    if (!t) return prev
-                    return p ? `${p}\n\n${t}` : t
-                  })
-                }
-              />
+          {detailsOpen ? (
+            <div className="space-y-5 border-t border-white/[0.06] px-4 pb-5 pt-4">
+              <label className="block">
+                <span className="text-[0.875rem] text-zinc-500">Datum</span>
+                <input
+                  type="date"
+                  className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                />
+              </label>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block">
+                  <span className="text-[0.875rem] text-zinc-500">Start</span>
+                  <input
+                    type="time"
+                    className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                  />
+                </label>
+                <label className="block">
+                  <span className="text-[0.875rem] text-zinc-500">Ende</span>
+                  <input
+                    type="time"
+                    className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                    value={endTime}
+                    onChange={(e) => setEndTime(e.target.value)}
+                  />
+                </label>
+              </div>
+
+              <label className="block">
+                <span className="text-[0.875rem] text-zinc-500">Pause</span>
+                <select
+                  className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                  value={breakMinutes}
+                  onChange={(e) => setBreakMinutes(Number(e.target.value))}
+                >
+                  <option value={0}>Keine Pause</option>
+                  <option value={30}>30 Minuten</option>
+                  <option value={45}>45 Minuten</option>
+                  <option value={60}>60 Minuten</option>
+                  <option value={90}>90 Minuten</option>
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="text-[0.875rem] text-zinc-500">Ausgabeformat</span>
+                <select
+                  className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                  value={exportFormat}
+                  onChange={(e) => setExportFormat(e.target.value)}
+                >
+                  <option value="PDF">PDF</option>
+                  <option value="Word">Word</option>
+                </select>
+              </label>
+
+              <div>
+                <span className="text-[0.875rem] text-zinc-500">Mitarbeitende</span>
+                <div className="mt-2 grid gap-2">
+                  {employees.map((e) => (
+                    <label
+                      key={e.id}
+                      className="flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-transparent bg-black/55 px-3 py-2.5 ring-1 ring-white/[0.08]"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(selectedEmp[e.id])}
+                        onChange={() => toggleEmp(e.id)}
+                        className="h-5 w-5 accent-orange-500"
+                      />
+                      <span className="text-white">{e.name}</span>
+                    </label>
+                  ))}
+                  {employees.length === 0 ? (
+                    <p className="text-sm text-zinc-500">Keine aktiven Mitarbeitenden.</p>
+                  ) : null}
+                </div>
+              </div>
             </div>
           ) : null}
         </div>
