@@ -8,6 +8,7 @@ from app.services.activity_canonicalizer import (
     canonicalize_activities,
     normalize_for_match,
 )
+from app.services.customer_talk_builder import refine_customer_talk
 from app.services.human_language_engine import humanize_activity, humanize_material
 from app.services.summary_builder import build_deterministic_summary
 from app.services.trade_phrase_memory import apply_trade_phrase_memory, phrase_priority_boost
@@ -876,6 +877,67 @@ def _extract_dn_values(text: str, *, kind: str) -> list[str]:
     return _dedupe(out)
 
 
+_MATERIAL_ECHO_VERBS = re.compile(
+    r"\b(?:verarbeitet|verbaut|verwendet|eingesetzt|eingebaut|reingemacht|reingepackt)\b|zum\s+einsatz\b",
+    flags=re.IGNORECASE,
+)
+
+
+def _implied_materials_from_activities(activities: list[str]) -> set[str]:
+    implied: set[str] = set()
+    probe = " | ".join(str(x or "") for x in activities)
+    for pattern, high_mats, _, _ in _MATERIAL_CONFIDENCE_RULES:
+        if re.search(pattern, probe, flags=re.IGNORECASE):
+            implied.update(m for m in high_mats if m)
+    return implied
+
+
+def _is_pure_material_echo(activity: str, known_materials: set[str]) -> bool:
+    low = str(activity or "").casefold().strip()
+    if not low or not known_materials:
+        return False
+    if not _MATERIAL_ECHO_VERBS.search(low):
+        return False
+    act_key = _material_key(low)
+    if not act_key:
+        return False
+    for mat in known_materials:
+        mat_key = _material_key(mat)
+        if not mat_key:
+            continue
+        if mat_key not in act_key and act_key not in mat_key:
+            continue
+        remainder = _MATERIAL_ECHO_VERBS.sub(" ", low)
+        remainder = re.sub(r"\b(dafür|dafuer|kamen|kam|zu|dem|der|die|das|es|sie)\b", " ", remainder)
+        remainder = re.sub(r"\s+", " ", remainder).strip()
+        rem_key = _material_key(remainder)
+        if rem_key == mat_key or (mat_key and mat_key in rem_key):
+            return True
+    return False
+
+
+def _drop_material_echo_activities(activities: list[str], materials: list[str]) -> list[str]:
+    vals = [str(x).strip() for x in activities if str(x).strip()]
+    if len(vals) < 2:
+        return vals
+    primary_implied = _implied_materials_from_activities([vals[0]])
+    if not primary_implied:
+        return vals
+    out = [vals[0]]
+    for act in vals[1:]:
+        if re.search(
+            r"\b\d+(?:[.,]\d+)?\s*(m²|m2|qm|m³|m3|lfm|stück|stk|kg|t)\b",
+            act,
+            flags=re.IGNORECASE,
+        ):
+            out.append(act)
+            continue
+        if _is_pure_material_echo(act, primary_implied):
+            continue
+        out.append(act)
+    return _dedupe(out)
+
+
 def _build_summary(input_data: dict[str, Any], activities: list[str]) -> str:
     if not activities:
         return "Keine Angabe"
@@ -1110,6 +1172,8 @@ def _material_key(value: str) -> str:
     t = re.sub(r"\bboegen\b", "bogen", t)
     t = re.sub(r"[^a-z0-9äöüß/\s-]", " ", t)
     t = re.sub(r"\s+", " ", t).strip()
+    t = re.sub(r"\bpflaster\s+steine?\b", "pflastersteine", t)
+    t = re.sub(r"\bfliesen\s+kleber\b", "fliesenkleber", t)
     return t
 
 
@@ -1574,6 +1638,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     materials = _prefer_specific_material_labels(materials)
     materials = _enforce_pipe_family_consistency(materials, activities, raw_text)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
+    activities = _drop_material_echo_activities(activities, materials)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)
     summary = build_deterministic_summary(
         activities,
@@ -1590,6 +1655,11 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     result["summary"] = summary
     result["problems"] = _dedupe(problems_raw)
     result["openItems"] = _dedupe(open_raw)
+    result["customerTalk"] = refine_customer_talk(
+        raw_text,
+        str(result.get("customerTalk") or ""),
+        summary=str(result.get("summary") or summary),
+    )
     if not str(result.get("customerTalk") or "").strip():
         result["customerTalk"] = "Keine Angabe"
     return result

@@ -13,6 +13,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+from app.services.customer_talk_builder import extract_customer_talk_from_text
+
 # ── Tätigkeit: häufige Partizipformen und Arbeitsschrift ─────────────────────
 ACTIVITY_MARKERS = (
     "gemacht",
@@ -336,7 +338,9 @@ def structure_report_fields(
             open_items.append(sentence.strip())
 
         if _sentence_has_customer(lw_sent):
-            customer_bits.append(sentence.strip())
+            fragment = extract_customer_talk_from_text(sentence.strip()) or sentence.strip()
+            if fragment and _sentence_has_customer(_lw(fragment)):
+                customer_bits.append(fragment)
 
     activities = _dedupe_preserve(activities)
     materials = _dedupe_preserve(materials)
