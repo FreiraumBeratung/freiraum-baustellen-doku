@@ -61,6 +61,8 @@ from app.services.tenant_storage import (
 )
 from services.ai_report_service import (
     polish_collective_summary_with_ai,
+    polish_customer_talk_with_ai,
+    polish_problem_open_with_ai,
     polish_summary_with_ai,
     structure_report_with_ai,
 )
@@ -1399,7 +1401,18 @@ def _ensure_clean_structured_final(structured: dict[str, Any]) -> dict[str, Any]
     result["machineHours"] = _dedupe_preserve([str(x) for x in (result.get("machineHours") or [])])
     result["problems"] = _dedupe_preserve([str(x) for x in (result.get("problems") or [])])
     result["openItems"] = _dedupe_preserve([str(x) for x in (result.get("openItems") or [])])
-    result["summary"] = str(result.get("summary") or "").strip() or "Keine Angabe"
+    summary = str(result.get("summary") or "").strip() or "Keine Angabe"
+    try:
+        from app.services.summary_material_guard import strip_material_echo_from_summary
+
+        summary = strip_material_echo_from_summary(
+            summary,
+            result["materials"],
+            result["activities"],
+        )
+    except Exception:
+        pass
+    result["summary"] = summary.strip() or "Keine Angabe"
     result["customerTalk"] = str(result.get("customerTalk") or "").strip() or "Keine Angabe"
     return result
 
@@ -1490,6 +1503,31 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
         )
         if polished_summary:
             structured_dict["summary"] = polished_summary
+    except Exception:
+        pass
+
+    # Hebel 3: Kundengespraech natuerlicher formulieren — nur aus isoliertem Inhalt.
+    try:
+        polished_customer = polish_customer_talk_with_ai(
+            structured_dict,
+            raw_text=body.rawText,
+        )
+        if polished_customer:
+            structured_dict["customerTalk"] = polished_customer
+    except Exception:
+        pass
+
+    # Hebel 4: Probleme und offene Punkte natuerlicher formulieren — nur isolierter Inhalt.
+    try:
+        polished_problem_open = polish_problem_open_with_ai(
+            structured_dict,
+            raw_text=body.rawText,
+        )
+        if polished_problem_open:
+            if polished_problem_open.get("problems") is not None:
+                structured_dict["problems"] = polished_problem_open["problems"]
+            if polished_problem_open.get("openItems") is not None:
+                structured_dict["openItems"] = polished_problem_open["openItems"]
     except Exception:
         pass
 

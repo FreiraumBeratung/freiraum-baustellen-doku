@@ -1653,8 +1653,19 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     result["machineSuggestions"] = machine_suggestions
     result["machineHours"] = _dedupe(machine_hours_raw + machine_hours_auto)
     result["summary"] = summary
+    from app.services.summary_material_guard import strip_material_echo_from_summary
+
+    result["summary"] = strip_material_echo_from_summary(
+        str(result.get("summary") or summary),
+        materials,
+        activities,
+    )
     result["problems"] = _dedupe(problems_raw)
     result["openItems"] = _dedupe(open_raw)
+    from app.services.problem_open_builder import refine_open_items_list, refine_problems_list
+
+    result["problems"] = refine_problems_list(result["problems"], raw_text)
+    result["openItems"] = refine_open_items_list(result["openItems"], raw_text)
     result["customerTalk"] = refine_customer_talk(
         raw_text,
         str(result.get("customerTalk") or ""),

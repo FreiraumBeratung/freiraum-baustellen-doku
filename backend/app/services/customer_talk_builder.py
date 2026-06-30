@@ -349,6 +349,126 @@ def _polish_customer_clause(text: str, *, gender: str) -> str:
     return t
 
 
+_COMMUNICATION_MARKERS = re.compile(
+    r"\b("
+    r"gesprochen|unterhalten|informiert|abgestimmt|abgesprochen|"
+    r"rücksprache|ruecksprache|kundengespräch|kundengespraech|gespräch|gespraech|"
+    r"vor\s+ort|besprochen|geklärt|geklaert"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _output_has_communication_context(text: str) -> bool:
+    return bool(_COMMUNICATION_MARKERS.search(str(text or "")))
+
+
+def _communication_prefix_from_raw(raw_text: str, *, gender: str) -> str:
+    low = _normalize_customer_probe(raw_text).casefold()
+    if re.search(r"\bkundengespräch\s+gehabt\b|\bkundengespraech\s+gehabt\b", low):
+        return "Kundengespräch geführt"
+    if re.search(r"\bkundengespräch\b|\bkundengespraech\b", low):
+        return "Kundengespräch geführt"
+    if re.search(r"\bmit\s+der\s+kundin\s+(?:gesprochen|unterhalten)\b", low):
+        return "Mit der Kundin gesprochen"
+    if re.search(r"\bmit\s+dem\s+kunden?\s+(?:gesprochen|unterhalten)\b", low):
+        return "Mit dem Kunden gesprochen"
+    if re.search(r"\buns\s+mit\s+der\s+kundin\s+unterhalten\b", low):
+        return "Mit der Kundin gesprochen"
+    if re.search(r"\bdie\s+kundin\s+unterhalten\b", low):
+        return "Mit der Kundin gesprochen"
+    if re.search(r"\brücksprache\s+mit\s+kund", low) or re.search(r"\bruecksprache\s+mit\s+kund", low):
+        return "Rücksprache mit dem Kunden geführt"
+    if re.search(r"\bbauherr(?:in)?\s+(?:kurz\s+)?informiert\b", low):
+        return "Bauherr informiert"
+    if re.search(r"\bauftraggeber\s+(?:kurz\s+)?informiert\b", low):
+        return "Auftraggeber informiert"
+    if gender == "f" and re.search(r"\bkundin\b", low) and re.search(r"\b(?:gesprochen|gred)\b", low):
+        return "Mit der Kundin gesprochen"
+    if gender == "m" and re.search(r"\bkunde\b", low) and re.search(r"\b(?:gesprochen|gred)\b", low):
+        return "Mit dem Kunden gesprochen"
+    return ""
+
+
+def _to_dependent_clause(text: str, *, gender: str) -> str:
+    t = str(text or "").strip().rstrip(".")
+    if not t:
+        return ""
+    t = re.sub(r"^Die Kundin\b", "sie", t, flags=re.IGNORECASE)
+    t = re.sub(r"^Der Kunde\b", "er", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bwar\s+sehr\b", "ist sehr", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bwar\s+zufrieden\b", "ist zufrieden", t, flags=re.IGNORECASE)
+    t = re.sub(r"^Bauherrin\b", "die Bauherrin", t, flags=re.IGNORECASE)
+    t = re.sub(r"^Bauherr\b", "der Bauherr", t, flags=re.IGNORECASE)
+    if gender == "m" and re.match(r"^er\s+ist\b", t, flags=re.IGNORECASE):
+        return t
+    if gender == "f" and re.match(r"^sie\s+ist\b", t, flags=re.IGNORECASE):
+        return t
+    return t
+
+
+def enrich_thin_customer_talk(extracted: str, raw_text: str, *, gender: str = "n") -> str:
+    """Ergänzt zu dünne Isolationen um den Gesprächskontext aus dem Rohtext."""
+    out = _normalize_whitespace(extracted)
+    if not out or out.casefold() == "keine angabe":
+        return out
+    out = re.sub(
+        r"\bkundengespräch\s+gehabt\b",
+        "Kundengespräch geführt",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r"\bkundengespraech\s+gehabt\b",
+        "Kundengespräch geführt",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r"^(Kundengespräch geführt)\s+",
+        r"\1; ",
+        out,
+        flags=re.IGNORECASE,
+    )
+    if _output_has_communication_context(out):
+        return out
+
+    prefix = _communication_prefix_from_raw(raw_text, gender=gender)
+    if not prefix:
+        if re.match(r"^kundengespräch\s+gehabt\b", out, flags=re.IGNORECASE):
+            tail = re.sub(r"^kundengespräch\s+gehabt\s*", "", out, flags=re.IGNORECASE).strip(" .,;")
+            if tail:
+                tail = tail[0].upper() + tail[1:] if tail else tail
+                return f"Kundengespräch geführt; {tail}."
+            return "Kundengespräch geführt."
+        return out
+
+    tail = _to_dependent_clause(out, gender=gender)
+    if not tail:
+        return f"{prefix}."
+    if tail.casefold().startswith(prefix.casefold()):
+        return out
+    return f"{prefix}; {tail}."
+
+
+def _strip_trailing_work_from_customer(text: str) -> str:
+    t = _normalize_whitespace(text)
+    if not t or not _is_work_polluted(t):
+        return t
+    m = re.search(
+        r"\b\d+(?:[.,]\d+)?\s*(?:qm|m²|m2|quadratmeter|kubik|m³|m3|lfm|meter)\b",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m and m.start() > 10:
+        return t[: m.start()].strip(" .,;:")
+    parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", t) if p.strip()]
+    kept = [p for p in parts if _has_customer_marker(p) and not _WORK_POLLUTION.search(p)]
+    if kept:
+        return " ".join(kept)
+    return t
+
+
 def extract_customer_talk_from_text(raw_text: str) -> str:
     """Rohtext → isoliertes, professionelles Kundengespräch."""
     text = _normalize_customer_probe(raw_text)
@@ -372,7 +492,10 @@ def extract_customer_talk_from_text(raw_text: str) -> str:
     gender = _detect_customer_gender([text, *fragments])
     polished = [_polish_customer_clause(f, gender=gender) for f in fragments]
     polished = [p for p in polished if p]
-    return _normalize_whitespace(" ".join(polished))
+    result = _normalize_whitespace(" ".join(polished))
+    return _strip_trailing_work_from_customer(
+        enrich_thin_customer_talk(result, text, gender=gender)
+    )
 
 
 def refine_customer_talk(
@@ -385,30 +508,37 @@ def refine_customer_talk(
     raw = str(raw_text or "").strip()
     current = _normalize_whitespace(existing)
     summ = _normalize_whitespace(summary)
+    gender = _detect_customer_gender([raw, current])
+
+    def _finalize(value: str) -> str:
+        v = _normalize_whitespace(value)
+        if not v or v.casefold() == "keine angabe":
+            return v
+        v = enrich_thin_customer_talk(v, raw, gender=_detect_customer_gender([raw, v]))
+        return _strip_trailing_work_from_customer(v)
 
     if current.casefold() in {"keine angabe", ""}:
         extracted = extract_customer_talk_from_text(raw)
-        return extracted or current
+        return _finalize(extracted or current)
 
     if summ and current.casefold() == summ.casefold():
         extracted = extract_customer_talk_from_text(raw)
-        return extracted or current
+        return _finalize(extracted or current)
 
     if _is_work_polluted(current) or (summ and summ.casefold() in current.casefold()):
         extracted = extract_customer_talk_from_text(raw)
         if extracted:
-            return extracted
+            return _finalize(extracted)
         return ""
 
     if _has_customer_marker(current) and not _is_work_polluted(current):
-        gender = _detect_customer_gender([raw, current])
         polished = _polish_customer_clause(current, gender=gender)
         if polished:
-            return polished
+            return _finalize(polished)
 
     extracted = extract_customer_talk_from_text(raw)
     if extracted:
-        return extracted
+        return _finalize(extracted)
     if _is_work_polluted(current):
         return ""
-    return current
+    return _finalize(current)

@@ -117,13 +117,15 @@ def structure_report_with_ai(input_data: dict[str, Any]) -> dict[str, Any] | Non
 
 
 SUMMARY_POLISH_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
-Du formulierst aus einer Liste BEREITS GEPRUEFTER Taetigkeiten (und optional Materialien)
+Du formulierst aus einer Liste BEREITS GEPRUEFTER Taetigkeiten
 eine natuerliche, professionelle Zusammenfassung fuer einen Bau-Tagesbericht in deutscher Sprache.
 
 STRIKTE REGELN:
-- Verwende ausschliesslich die unten aufgefuehrten Taetigkeiten und Materialien.
+- Verwende ausschliesslich die unten aufgefuehrten Taetigkeiten.
 - Erfinde NICHTS: keine zusaetzlichen Arbeiten, Materialien, Mengen oder Zahlen.
 - Veraendere keine Zahlen, Mengen oder Einheiten.
+- Nenne KEINE Materialien, Baustoffe oder Werkzeuge in der Zusammenfassung
+  (kein „zum Einsatz“, kein „dafuer kamen“, keine Materialnamen) — Material steht im eigenen Reiter.
 - Schreibe 1-3 zusammenhaengende Saetze als Fliesstext (keine Aufzaehlung, keine Stichpunkte).
 - Sachlich, klar, freundlich-professionell, natuerliches Business-Deutsch.
 - Antworte NUR mit dem Zusammenfassungstext, ohne Anfuehrungszeichen, ohne Vorrede, ohne JSON."""
@@ -156,10 +158,9 @@ def polish_summary_with_ai(structured: dict[str, Any], meta: dict[str, Any] | No
     user = (
         f"Datum: {str(meta.get('date') or '').strip() or 'Keine Angabe'}\n"
         f"Baustelle: {str(meta.get('projectName') or '').strip() or 'Keine Angabe'}\n\n"
-        "Taetigkeiten:\n" + "\n".join(f"- {a}" for a in activities[:40])
+        "Taetigkeiten (nur diese in der Zusammenfassung verwenden — Materialien weglassen):\n"
+        + "\n".join(f"- {a}" for a in activities[:40])
     )
-    if materials:
-        user += "\n\nMaterialien:\n" + "\n".join(f"- {m}" for m in materials[:40])
 
     try:
         from openai import OpenAI  # Lazy import wenn Key gesetzt ist
@@ -175,9 +176,18 @@ def polish_summary_with_ai(structured: dict[str, Any], meta: dict[str, Any] | No
         )
         text = (completion.choices[0].message.content or "").strip()
         text = text.strip().strip('"').strip("`").strip()
+        from app.services.summary_material_guard import (
+            strip_material_echo_from_summary,
+            summary_has_material_echo,
+        )
+
+        text = strip_material_echo_from_summary(text, materials, activities)
         # Auch die der KI mitgegebenen Meta-Daten (Datum/Baustelle) zaehlen als
         # erlaubte Zahlenquelle – z. B. Hausnummern im Projektnamen.
         meta_src = f"{meta.get('date') or ''} {meta.get('projectName') or ''}"
+        if summary_has_material_echo(text, materials, activities):
+            _logger.warning("AI summary polish rejected: material echo in summary")
+            return None
         if not _polished_summary_is_safe(text, activities, materials, deterministic, meta_src):
             _logger.warning("AI summary polish rejected by guard, using deterministic summary")
             return None
@@ -185,6 +195,211 @@ def polish_summary_with_ai(structured: dict[str, Any], meta: dict[str, Any] | No
     except Exception:
         _logger.warning("AI summary polish failed, using deterministic summary")
         return None
+
+
+CUSTOMER_TALK_POLISH_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
+Du formulierst aus einem BEREITS ISOLIERTEN Kundengespraech-Text
+einen natuerlichen, professionellen Satz oder zwei fuer einen Bau-Tagesbericht in deutscher Sprache.
+
+STRIKTE REGELN:
+- Verwende ausschliesslich die unten stehenden Inhalte.
+- Erfinde NICHTS: keine zusaetzlichen Details, Termine, Namen, Arbeiten, Materialien oder Mengen.
+- Maximal 1-2 kurze Saetze als Fliesstext (keine Aufzaehlung, kein JSON).
+- Sachlich, klar, freundlich-professionell — nicht uebertrieben oder werblich.
+- Keine Baustellen-Taetigkeiten und keine Materialien erwaehnen.
+- Antworte NUR mit dem Kundengespraech-Text, ohne Anfuehrungszeichen, ohne Vorrede."""
+
+
+def polish_customer_talk_with_ai(
+    structured: dict[str, Any],
+    *,
+    raw_text: str = "",
+) -> str | None:
+    """Hebel 3: Kundengespraech natuerlicher formulieren — nur aus isoliertem Inhalt.
+
+    Sicherheits-Invarianten (rein additiv):
+    - Ohne OPENAI_API_KEY oder ohne belastbares Kundengespraech -> None.
+    - Bei API-/Parsing-/Validierungsfehler -> None.
+    - Guard verwirft Arbeitstext, neue Zahlen oder verlorene Kunden-Fakten.
+    """
+    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not key:
+        return None
+
+    deterministic = str(structured.get("customerTalk") or "").strip()
+    if not deterministic or deterministic.casefold() == "keine angabe":
+        return None
+
+    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    user = (
+        "Isoliertes Kundengespraech (nur daraus formulieren, nichts hinzufuegen):\n"
+        f"{deterministic}"
+    )
+
+    try:
+        from openai import OpenAI  # Lazy import wenn Key gesetzt ist
+        from app.services.customer_talk_guard import (
+            customer_talk_polish_is_safe,
+            strip_work_pollution_from_customer_talk,
+        )
+
+        client = OpenAI(api_key=key)
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.25,
+            messages=[
+                {"role": "system", "content": CUSTOMER_TALK_POLISH_SYSTEM},
+                {"role": "user", "content": user},
+            ],
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        text = text.strip().strip('"').strip("`").strip()
+        text = strip_work_pollution_from_customer_talk(text)
+        if not text:
+            return None
+        summary = str(structured.get("summary") or "")
+        if not customer_talk_polish_is_safe(
+            text,
+            deterministic,
+            raw_text=raw_text,
+            summary=summary,
+        ):
+            _logger.warning("AI customer talk polish rejected by guard, using deterministic text")
+            return None
+        return text
+    except Exception:
+        _logger.warning("AI customer talk polish failed, using deterministic customer talk")
+        return None
+
+
+PROBLEM_ITEM_POLISH_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
+Du formulierst BEREITS ISOLIERTE Baustellen-Probleme als kurze, professionelle Saetze.
+
+STRIKTE REGELN:
+- Verwende ausschliesslich die unten gelieferten Problem-Inhalte.
+- Erfinde NICHTS: keine zusaetzlichen Stoerungen, Arbeiten, Materialien oder Mengen.
+- Pro Eintrag maximal 1 kurzer Satz.
+- Keine Taetigkeiten, kein Kundengespraech, keine offenen Punkte.
+- Antworte als JSON-Objekt: {"items":["..."]} mit exakt gleicher Anzahl wie die Eingabe."""
+
+
+OPEN_ITEM_POLISH_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
+Du formulierst BEREITS ISOLIERTE offene Punkte als kurze, professionelle Saetze.
+
+STRIKTE REGELN:
+- Verwende ausschliesslich die unten gelieferten offenen Punkte.
+- Erfinde NICHTS: keine zusaetzlichen Aufgaben, Termine, Arbeiten oder Mengen.
+- Pro Eintrag maximal 1 kurzer Satz; der Punkt soll klar als offen erkennbar bleiben.
+- Keine Taetigkeiten, kein Kundengespraech, keine Probleme.
+- Antworte als JSON-Objekt: {"items":["..."]} mit exakt gleicher Anzahl wie die Eingabe."""
+
+
+def _polish_string_list_with_ai(
+    items: list[str],
+    *,
+    system_prompt: str,
+    guard_fn: Any,
+    raw_text: str,
+    log_label: str,
+) -> list[str] | None:
+    vals = [str(x).strip() for x in items if str(x).strip()]
+    if not vals:
+        return None
+
+    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    if not key:
+        return None
+
+    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    user = json.dumps({"items": vals}, ensure_ascii=False)
+
+    try:
+        from openai import OpenAI  # Lazy import wenn Key gesetzt ist
+        from app.services.problem_open_guard import strip_pollution_from_problem_open_item
+
+        client = OpenAI(api_key=key)
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.25,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user},
+            ],
+            response_format={"type": "json_object"},
+        )
+        content = (completion.choices[0].message.content or "").strip()
+        parsed = json.loads(content)
+        if not isinstance(parsed, dict):
+            return None
+        out_raw = parsed.get("items")
+        if not isinstance(out_raw, list) or len(out_raw) != len(vals):
+            return None
+
+        out: list[str] = []
+        for det, polished in zip(vals, out_raw):
+            text = strip_pollution_from_problem_open_item(str(polished or "").strip())
+            if not text:
+                return None
+            if not guard_fn(text, det, raw_text=raw_text):
+                _logger.warning("AI %s polish rejected by guard: %r", log_label, text)
+                return None
+            out.append(text)
+        return out
+    except Exception:
+        _logger.warning("AI %s polish failed, using deterministic list", log_label)
+        return None
+
+
+def polish_problems_with_ai(
+    structured: dict[str, Any],
+    *,
+    raw_text: str = "",
+) -> list[str] | None:
+    from app.services.problem_open_guard import problem_item_polish_is_safe
+
+    items = [str(x).strip() for x in (structured.get("problems") or []) if str(x).strip()]
+    return _polish_string_list_with_ai(
+        items,
+        system_prompt=PROBLEM_ITEM_POLISH_SYSTEM,
+        guard_fn=problem_item_polish_is_safe,
+        raw_text=raw_text,
+        log_label="problem",
+    )
+
+
+def polish_open_items_with_ai(
+    structured: dict[str, Any],
+    *,
+    raw_text: str = "",
+) -> list[str] | None:
+    from app.services.problem_open_guard import open_item_polish_is_safe
+
+    items = [str(x).strip() for x in (structured.get("openItems") or []) if str(x).strip()]
+    return _polish_string_list_with_ai(
+        items,
+        system_prompt=OPEN_ITEM_POLISH_SYSTEM,
+        guard_fn=open_item_polish_is_safe,
+        raw_text=raw_text,
+        log_label="open item",
+    )
+
+
+def polish_problem_open_with_ai(
+    structured: dict[str, Any],
+    *,
+    raw_text: str = "",
+) -> dict[str, list[str]] | None:
+    """Hebel 4: Probleme und offene Punkte natuerlicher formulieren."""
+    problems = polish_problems_with_ai(structured, raw_text=raw_text)
+    opens = polish_open_items_with_ai(structured, raw_text=raw_text)
+    if problems is None and opens is None:
+        return None
+    result: dict[str, list[str]] = {}
+    if problems is not None:
+        result["problems"] = problems
+    if opens is not None:
+        result["openItems"] = opens
+    return result or None
 
 
 COLLECTIVE_SUMMARY_SYSTEM = """Du bist ein Bau-/Handwerks-Dokumentationsassistent.
@@ -324,6 +539,13 @@ def _polished_summary_is_safe(
     found = set(re.findall(r"\d+", t))
     if found - allowed:
         return False
+    try:
+        from app.services.summary_material_guard import summary_has_material_echo
+
+        if summary_has_material_echo(t, materials, activities):
+            return False
+    except Exception:
+        pass
     return True
 
 
