@@ -37,7 +37,9 @@ _PROBLEM_SUBSTANCE = re.compile(
     r"wasserdruck|armatur|undicht|leck|frost|grundwasser|betonpumpe|gerüst|geruest|"
     r"wind|staub|temperatur|gefälle|gefaelle|riss|dichtung|manometer|pressfitting|"
     r"schrauben|mörtel|moertel|genehmigung|leitungs|kran|anlegeplatz|profil|"
-    r"abpumpen|verspät|verspaet|lotrecht|schnitt|dichtband|strom"
+    r"abpumpen|verspät|verspaet|lotrecht|schnitt|dichtband|strom|"
+    r"untergrund|uneben|abbrechen|unterbrochen|regnen|geregnet|staub|lieferung|pressfitting|"
+    r"kleber|hitze|anschluss|eng|grundwasser"
     r")\b",
     re.IGNORECASE,
 )
@@ -45,13 +47,48 @@ _PROBLEM_SUBSTANCE = re.compile(
 _OPEN_SUBSTANCE = re.compile(
     r"\b("
     r"rest|reihe|morgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
-    r"woche|nachliefer|nachbestell|klär|klaer|fehlt\s+noch|muss\s+noch|"
+    r"woche|nachliefer|nachbestell|klär|klaer|fehlt\s+noch|muss\s+noch|müssen\s+wir|muessen\s+wir|"
     r"armatur|fuge|fliese|pflaster|schotter|putz|decke|wand|kante|abschluss|"
-    r"spachtel|rigips|silikon|entlüftung|entlueftung|dämmung|daemmung|"
+    r"spachtel|rigips|silikon|entlüftung|entlueftung|dämmung|daemmung|oberputz|unterputz|"
     r"einbau|fugen|heizung|unterlagen|freigabe|korrektur|abziehen|abbinden|"
     r"endkappe|materialumschlag|heizphase|verbindung|elektriker|asphalt|"
-    r"rohrleitung|drainage|anschluss|trocknung|nacharbeit|ausgleich|armierung"
+    r"rohrleitung|drainage|anschluss|trocknung|nacharbeit|ausgleich|armierung|"
+    r"hecke|schneiden|abschließen|abschliessen|grundieren|grundiert"
     r")\b",
+    re.IGNORECASE,
+)
+
+_IMPLICIT_PROBLEM_INTERRUPT = re.compile(
+    r"(?:"
+    r"(?:leider\s+)?(?:mussten\s+wir|hamma|mussten)\s+(?:[^.!?]{0,70}?)?(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
+    r"|mussten\s+leider\s+abbrechen(?:\s+(?:weil|da)\s+[^.!?]{4,80})?"
+    r"|mussten\s+abbrechen\s+(?:weil|da)\s+[^.!?]{4,80}"
+    r"|(?:leider\s+)?(?:mussten|müssen)\s+(?:wir\s+)?stoppen\s+(?:weil|da)\s+[^.!?]{4,80}"
+    r"|(?:weil|da)\s+es\s+(?:angefangen\s+hat\s+zu\s+)?(?:regnen|geregnet\s+hat)"
+    r"|(?:das\s+war\s+)?(?:ein\s+)?(?:sehr\s+)?großes\s+problem"
+    r"|untergrund\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
+    r"|(?:die\s+)?wand\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
+    r"|was\s+zu\s+problemen\s+geführt\s+hat"
+    r"|(?:weil|da)\s+(?:die\s+)?wand\s+nicht\s+lotrecht\s+ist"
+    r"|(?:leider|wegen)\s+[^.!?]{0,80}(?:regen|wetter|sturm|frost|kaputt|defekt|undicht|staub|liefer)"
+    r"|(?:zu\s+)?(?:spaet|spät)(?:er)?\s+(?:kam|geliefert|geworden)"
+    r"|(?:dichtung|pressfitting)\s+[^.!?]{0,40}(?:undicht|fehlt)"
+    r"|grundwasser\s+[^.!?]{0,40}(?:stand|im\s+graben)"
+    r"|gefälle\s+(?:war\s+)?(?:falsch|zu\s+flach)"
+    r")",
+    re.IGNORECASE,
+)
+
+_IMPLICIT_OPEN_FUTURE = re.compile(
+    r"(?:"
+    r"morgen\s+(?:müssen\s+wir|muessen\s+wir|muss\s+ich|müssen)\s+(?:noch\s+)?[^.!?]{4,120}"
+    r"|morgen\s+(?:noch\s+)?[^.!?]{4,120}(?:schneiden|legen|verlegen|auftragen|abschließen|abschliessen|"
+    r"montieren|fertigstellen|fertig\s+machen|machen|erledigen|weitermachen|schalen|abziehen|verfuellen|verfüllen)"
+    r"|morgen\s+noch\s+[^.!?]{4,80}"
+    r"|(?:am\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag)\s+"
+    r"(?:müssen\s+wir|muessen\s+wir|noch\s+)?[^.!?]{4,120}"
+    r"|dementsprechend\s+(?:werden\s+wir|machen\s+wir|schliessen\s+wir|schließen\s+wir|betonieren\s+wir)\s+morgen[^.!?]{0,80}"
+    r")",
     re.IGNORECASE,
 )
 
@@ -62,6 +99,8 @@ def _normalize_probe(text: str) -> str:
     t = re.sub(r"\boffen\s+is\b", "offen", t, flags=re.IGNORECASE)
     t = re.sub(r"\bspaet\b", "spät", t, flags=re.IGNORECASE)
     t = re.sub(r"\bnaechste\b", "nächste", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgefaelle\b", "gefälle", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgefuehrt\b", "geführt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmontag\b", "Montag", t, flags=re.IGNORECASE)
     return t
 
@@ -82,6 +121,19 @@ def _has_customer_marker(text: str) -> bool:
     return bool(_CUSTOMER_CUT.search(str(text or "")))
 
 
+def _is_legitimate_future_work(text: str) -> bool:
+    t = str(text or "").casefold()
+    return bool(
+        re.search(
+            r"\b(?:morgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
+            r"nächste\s+woche|naechste\s+woche|müssen\s+wir|muessen\s+wir|"
+            r"muss\s+noch|noch\s+offen|weitermachen|abschließen|abschliessen)\b",
+            t,
+            flags=re.IGNORECASE,
+        )
+    )
+
+
 def _is_work_polluted(text: str) -> bool:
     t = str(text or "").casefold().strip()
     if not t:
@@ -100,6 +152,13 @@ def _cut_before_customer(text: str) -> str:
     if not m:
         return str(text or "").strip()
     return str(text or "")[: m.start()].strip(" .,;:")
+
+
+def _cut_before_morgen(text: str) -> str:
+    m = re.search(r"\bmorgen\b", str(text or ""), flags=re.IGNORECASE)
+    if m and m.start() > 8:
+        return str(text or "")[: m.start()].strip(" .,;:")
+    return str(text or "").strip()
 
 
 def _cut_before_open(text: str) -> str:
@@ -126,6 +185,14 @@ def _is_problem_item_polluted(item: str, raw_text: str) -> bool:
         return True
     if _PROBLEM_MARKER.search(t) and _OPEN_MARKER.search(t) and len(t) > 40:
         return True
+    if _is_legitimate_future_work(t) and not re.search(
+        r"\b(?:regen|kaputt|defekt|undicht|uneben|stör|stoer|problem|unterbrochen|abbrechen)\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    if re.search(r"\b(?:dementsprechend|weitermachen)\b", t, flags=re.IGNORECASE) and not _has_problem_substance(t):
+        return True
     raw = _normalize_probe(raw_text)
     if raw and t.casefold() == raw.casefold():
         return True
@@ -138,7 +205,23 @@ def _is_open_item_polluted(item: str, raw_text: str) -> bool:
     t = str(item or "").strip()
     if not t:
         return True
-    if _is_work_polluted(t):
+    if len(t) > 85:
+        return True
+    if re.search(r"\bheute\b", t, flags=re.IGNORECASE) and re.search(r"\bmorgen\b", t, flags=re.IGNORECASE):
+        return True
+    if _is_work_polluted(t) and not _is_legitimate_future_work(t):
+        return True
+    if _is_work_polluted(t) and re.search(
+        r"\b(?:eingebaut|verlegt|montiert|gelegt|aufgetragen|gebaut|geschlossen)\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    if _is_work_polluted(t) and re.search(
+        r"\d+(?:[.,]\d+)?\s*(?:qm|m²|m2|quadratmeter|meter)\b",
+        t,
+        flags=re.IGNORECASE,
+    ):
         return True
     if _has_customer_marker(t):
         return True
@@ -198,6 +281,18 @@ def _polish_open_clause(text: str) -> str:
     t = re.sub(r"\brest\s+nächste\s+woche\b", "Rest nächste Woche noch offen", t, flags=re.IGNORECASE)
     t = re.sub(r"\brest\s+naechste\s+woche\b", "Rest nächste Woche noch offen", t, flags=re.IGNORECASE)
     t = re.sub(r"\bletzte\s+reihe\s+morgen\b", "Letzte Reihe morgen noch offen", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"^morgen\s+müssen\s+wir\s+(?:noch\s+)?",
+        "Morgen müssen wir noch ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"^morgen\s+muessen\s+wir\s+(?:noch\s+)?",
+        "Morgen müssen wir noch ",
+        t,
+        flags=re.IGNORECASE,
+    )
     if not re.search(r"\boffen\b", t, flags=re.IGNORECASE):
         if t and t[0].islower():
             t = t[0].upper() + t[1:]
@@ -209,60 +304,150 @@ def _polish_open_clause(text: str) -> str:
     return t
 
 
+def _implicit_problem_clause(match_text: str) -> str:
+    t = _normalize_probe(match_text).strip(" .,;")
+    low = t.casefold()
+    if re.search(r"weil\s+es|angefangen\s+hat\s+zu\s+regnen|geregnet\s+hat", low):
+        return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
+    if re.search(r"abbrechen|stoppen", low) and re.search(r"staub", low):
+        return _polish_problem_clause("Arbeiten wegen Staub unterbrochen")
+    if re.search(r"abbrechen|stoppen", low) and re.search(r"liefer|spät|spaet", low):
+        return _polish_problem_clause("Lieferung verspätet, Arbeiten unterbrochen")
+    if re.search(r"undicht|dichtung", low):
+        return _polish_problem_clause("Dichtung undicht")
+    if re.search(r"pressfitting\s+fehlt|fehlt", low) and re.search(r"pressfitting", low):
+        return _polish_problem_clause("Pressfitting fehlt")
+    if re.search(r"zu\s+eng|anschluss\s+zu\s+eng", low):
+        return _polish_problem_clause("Anschluss zu eng")
+    if re.search(r"grundwasser", low):
+        return _polish_problem_clause("Grundwasser im Graben")
+    if re.search(r"gefälle|gefaelle", low):
+        return _polish_problem_clause("Gefälle nicht in Ordnung")
+    if re.search(r"lotrecht", low):
+        return _polish_problem_clause("Wand nicht lotrecht")
+    if re.search(r"abbrechen|stoppen|beenden", low) and re.search(r"kleber|hitze|abbindet", low):
+        return _polish_problem_clause("Kleber bindet bei Hitze zu schnell ab")
+    if re.search(r"abbrechen|stoppen|beenden", low):
+        return _polish_problem_clause("Arbeiten mussten unterbrochen werden")
+    if re.search(r"uneben", low) or (
+        re.search(r"zu\s+problemen", low) and re.search(r"(?:untergrund|wand)", low)
+    ):
+        return _polish_problem_clause("Untergrund sehr uneben")
+    if re.search(r"großes\s+problem|grosses\s+problem", low):
+        if re.search(r"liefer", low):
+            return _polish_problem_clause("Problem mit der Lieferung")
+        return _polish_problem_clause("Es gab ein Problem auf der Baustelle")
+    if re.search(r"schlechtem\s+wetter|wetter", low):
+        return _polish_problem_clause("Schlechtes Wetter")
+    return _polish_problem_clause(t)
+
+
+def _extract_implicit_problems(raw_text: str) -> list[str]:
+    text = _cut_before_customer(_normalize_probe(raw_text))
+    if not text:
+        return []
+    fragments: list[str] = []
+    for match in _IMPLICIT_PROBLEM_INTERRUPT.finditer(text):
+        chunk = re.split(r"\bmorgen\b", match.group(0), maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,;")
+        clause = _implicit_problem_clause(chunk)
+        if clause and _has_problem_substance(clause):
+            fragments.append(clause)
+    cleaned = [f for f in fragments if not re.match(r"^Weil\b", f.strip())]
+    if cleaned:
+        fragments = cleaned
+    return _dedupe(fragments)
+
+
+def _extract_implicit_open_items(raw_text: str) -> list[str]:
+    text = _cut_before_customer(_normalize_probe(raw_text))
+    if not text:
+        return []
+    fragments: list[str] = []
+    for match in _IMPLICIT_OPEN_FUTURE.finditer(text):
+        chunk = match.group(0).strip(" .,;")
+        chunk = _cut_before_customer(chunk)
+        chunk = re.split(r"\b(?:problem|leider\s+mussten)\b", chunk, maxsplit=1, flags=re.IGNORECASE)[0]
+        chunk = chunk.strip(" .,;")
+        if len(chunk) > 100:
+            m = re.search(
+                r"(?:morgen\s+(?:müssen\s+wir|muessen\s+wir)\s+(?:noch\s+)?.+|"
+                r"dementsprechend\s+werden\s+wir\s+morgen.+)",
+                chunk,
+                flags=re.IGNORECASE,
+            )
+            chunk = m.group(0).strip(" .,;") if m else chunk[:100].strip(" .,;")
+        if chunk and _has_open_substance(chunk):
+            fragments.append(_polish_open_clause(chunk))
+    return _dedupe(fragments)
+
+
 def extract_problems_from_text(raw_text: str) -> list[str]:
     text = _normalize_probe(raw_text)
-    if not _PROBLEM_MARKER.search(text):
-        return []
-
     fragments: list[str] = []
-    for match in _PROBLEM_MARKER.finditer(text):
-        tail = text[match.end() :].lstrip(" :,-")
-        tail = _cut_before_open(tail)
-        tail = _cut_before_customer(tail)
-        tail = tail.strip(" .,;")
-        if tail and _has_problem_substance(tail):
-            fragments.append(_polish_problem_clause(tail))
+
+    if _PROBLEM_MARKER.search(text):
+        for match in _PROBLEM_MARKER.finditer(text):
+            tail = text[match.end() :].lstrip(" :,-")
+            tail = _cut_before_open(tail)
+            tail = _cut_before_morgen(tail)
+            tail = _cut_before_customer(tail)
+            tail = tail.strip(" .,;")
+            if tail and _has_problem_substance(tail):
+                fragments.append(_polish_problem_clause(tail))
+
+        if not fragments:
+            for sentence in re.split(r"(?<=[.!?])\s+", text):
+                s = sentence.strip()
+                if _PROBLEM_MARKER.search(s):
+                    tail = _PROBLEM_MARKER.split(s, maxsplit=1)[-1]
+                    tail = _cut_before_open(tail)
+                    tail = _cut_before_morgen(tail)
+                    tail = _cut_before_customer(tail).strip(" .,;")
+                    if tail and _has_problem_substance(tail):
+                        fragments.append(_polish_problem_clause(tail))
 
     if not fragments:
-        for sentence in re.split(r"(?<=[.!?])\s+", text):
-            s = sentence.strip()
-            if _PROBLEM_MARKER.search(s):
-                tail = _PROBLEM_MARKER.split(s, maxsplit=1)[-1]
-                tail = _cut_before_open(tail)
-                tail = _cut_before_customer(tail).strip(" .,;")
-                if tail and _has_problem_substance(tail):
-                    fragments.append(_polish_problem_clause(tail))
+        fragments = _extract_implicit_problems(raw_text)
 
     return _dedupe(fragments)
 
 
 def extract_open_items_from_text(raw_text: str) -> list[str]:
     text = _normalize_probe(raw_text)
-    if not _OPEN_MARKER.search(text):
-        return []
-
     fragments: list[str] = []
-    for match in _OPEN_MARKER.finditer(text):
-        tail = text[match.end() :].lstrip(" :,-")
-        tail = _cut_before_customer(tail)
-        tail = _cut_before_problem(tail)
-        tail = tail.strip(" .,;")
-        if tail and _has_open_substance(tail):
-            fragments.append(_polish_open_clause(tail))
+
+    if _OPEN_MARKER.search(text):
+        for match in _OPEN_MARKER.finditer(text):
+            tail = text[match.end() :].lstrip(" :,-")
+            tail = _cut_before_customer(tail)
+            tail = _cut_before_problem(tail)
+            tail = tail.strip(" .,;")
+            if tail and _has_open_substance(tail):
+                fragments.append(_polish_open_clause(tail))
+
+        if not fragments:
+            for sentence in re.split(r"(?<=[.!?])\s+", text):
+                s = sentence.strip()
+                if _OPEN_MARKER.search(s):
+                    tail = _OPEN_MARKER.split(s, maxsplit=1)[-1]
+                    tail = _cut_before_customer(tail).strip(" .,;")
+                    if tail and _has_open_substance(tail):
+                        fragments.append(_polish_open_clause(tail))
 
     if not fragments:
-        for sentence in re.split(r"(?<=[.!?])\s+", text):
-            s = sentence.strip()
-            if _OPEN_MARKER.search(s):
-                tail = _OPEN_MARKER.split(s, maxsplit=1)[-1]
-                tail = _cut_before_customer(tail).strip(" .,;")
-                if tail and _has_open_substance(tail):
-                    fragments.append(_polish_open_clause(tail))
+        fragments = _extract_implicit_open_items(raw_text)
 
     return _dedupe(fragments)
 
 
 def _force_extract_problems(raw_text: str) -> list[str]:
+    forced = _force_extract_problems_markers(raw_text)
+    if forced:
+        return forced
+    return _extract_implicit_problems(raw_text)
+
+
+def _force_extract_problems_markers(raw_text: str) -> list[str]:
     text = _normalize_probe(raw_text)
     fragments: list[str] = []
     for match in _PROBLEM_MARKER.finditer(text):
@@ -275,6 +460,13 @@ def _force_extract_problems(raw_text: str) -> list[str]:
 
 
 def _force_extract_open_items(raw_text: str) -> list[str]:
+    forced = _force_extract_open_items_markers(raw_text)
+    if forced:
+        return forced
+    return _extract_implicit_open_items(raw_text)
+
+
+def _force_extract_open_items_markers(raw_text: str) -> list[str]:
     text = _normalize_probe(raw_text)
     fragments: list[str] = []
     for match in _OPEN_MARKER.finditer(text):

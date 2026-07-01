@@ -1592,6 +1592,28 @@ def _drop_conflicting_pipe_activities(activities: list[str], raw_text: str = "")
     return list(activities)
 
 
+def _drop_customer_sentiment_activities(activities: list[str]) -> list[str]:
+    out: list[str] = []
+    for act in activities:
+        low = str(act or "").strip().casefold()
+        if not low:
+            continue
+        if re.search(
+            r"\b(?:freut\s+sich|weitere\s+auftrag|weiterempfehl|kontaktkreis|"
+            r"sehr\s+zufrieden|mit\s+unserer\s+arbeit|empfiehlt\s+uns)\b",
+            low,
+        ):
+            continue
+        if re.search(r"\b(?:kundin|kunde|bauherr|auftraggeber)\b", low) and not re.search(
+            r"\b(?:verlegt|gelegt|gebaut|montiert|eingebaut|geschnitten|aufgetragen|"
+            r"geschlossen|betoniert|gegossen|grundiert)\b",
+            low,
+        ):
+            continue
+        out.append(str(act))
+    return out
+
+
 def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
     out: list[str] = []
     for act in activities:
@@ -1624,6 +1646,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     activities = _context_gate_activities(activities, raw_text)
     activities = _evidence_gate_activities(activities, raw_text)
     activities = _drop_runon_noise_activities(activities)
+    activities = _drop_customer_sentiment_activities(activities)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)
     confidence = _material_confidence_buckets(
         activities,
