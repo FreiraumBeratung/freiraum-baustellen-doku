@@ -21,6 +21,7 @@ _CUSTOMER_MARKERS = re.compile(
 _CUSTOMER_START = re.compile(
     r"(?:"
     r"mit\s+der\s+kundin|mit\s+dem\s+kunden|mit\s+der\s+bauherrin|mit\s+dem\s+bauherr|"
+    r"mit\s+dem\s+auftraggeber|mit\s+der\s+bauleitung|"
     r"kundengespräch|kundengespraech|"
     r"die\s+kundin|der\s+kunde|die\s+kunden|dem\s+kunden|"
     r"bauherr\s+war|bauherrin\s+war|bauleitung\s+war"
@@ -30,11 +31,12 @@ _CUSTOMER_START = re.compile(
 
 _WORK_POLLUTION = re.compile(
     r"\b("
-    r"gelegt|verlegt|montiert|eingebaut|gebaut|gemacht|gegossen|geschalt|"
-    r"pflaster|fliesen|beton|schotter|mauerwerk|schalung|bewehrung|"
+    r"gelegt|verlegt|montiert|eingebaut|gebaut|gemacht|gegossen|geschalt|gesetzt|"
+    r"pflaster|fliesen|beton|schotter|mauerwerk|schalung|bewehrung|palisaden|"
     r"erdarbeiten|graben|heizkörper|heizkoerper|wc|putz|trockenbau"
     r")\b|"
-    r"\d+(?:[.,]\d+)?\s*(?:qm|m²|m2|quadratmeter|kubik|m³|m3|lfm|meter)\b",
+    r"\d+(?:[.,]\d+)?\s*(?:qm|m²|m2|quadratmeter|kubik|m³|m3|lfm|meter)\b|"
+    r"\d+\s+laufende\s+meter\b",
     re.IGNORECASE,
 )
 
@@ -53,6 +55,26 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
     ),
     re.compile(
         r"bauherr(?:in)?\s+sehr\s+happy[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"auftraggeber\s+unterhalten[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"auftraggeber[^.!?]*(?:lobt|weiterempfehl|empfiehlt|auftrag)[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"nach\s+den\s+arbeiten[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kundin\s+(?:happy|gelobt)[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kundin[^.!?]*(?:gelobt|weiterempfehl|empfiehlt|auftrag)[^.!?]*",
         re.IGNORECASE,
     ),
     re.compile(
@@ -120,7 +142,8 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
 _PROBLEM_OPEN_SPLIT = re.compile(r"\b(?:problem|offen)\b", re.IGNORECASE)
 
 _TRANSITION_SPLIT = re.compile(
-    r"\s+(?=(?:anschließend|anschliessend|danach|dann|im\s+anschluss|hinterher|später|spaeter)\b)",
+    r"\s+(?=(?:anschließend|anschliessend|danach|dann|im\s+anschluss|hinterher|später|spaeter|"
+    r"nach\s+den\s+arbeiten)\b)",
     re.IGNORECASE,
 )
 
@@ -149,16 +172,34 @@ def _is_work_polluted(text: str) -> bool:
     return bool(_WORK_POLLUTION.search(low))
 
 
+_OPEN_ITEM_PREFIX = re.compile(
+    r"^(?:(?:offen|noch)\s+)?"
+    r"(?:fugen|silikon|spachtel|randstein|rest|kante|reihe|entlueftung|entlüftung|"
+    r"anstrich|endkappe|verfuellung|verfüllung|abschluss|nacharbeit)\s+"
+    r"(?:morgen|freitag|donnerstag|dienstag|samstag|montag|woche|nächste|naechste)\s+",
+    re.IGNORECASE,
+)
+
+
+def _strip_open_item_leading_noise(text: str) -> str:
+    t = _normalize_whitespace(text)
+    prev = ""
+    while t != prev:
+        prev = t
+        t = _OPEN_ITEM_PREFIX.sub("", t).strip(" .,;")
+    return t
+
+
 def _split_sentences(text: str) -> list[str]:
     t = _TRANSITION_SPLIT.sub(". ", str(text or "").strip())
     parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", t) if p.strip()]
-    if parts:
+    if len(parts) > 1:
         return parts
-    # Run-on ohne Satzzeichen: an Problem/Offen/Kundenhinweis splitten.
-    chunks = [c.strip() for c in _PROBLEM_OPEN_SPLIT.split(t) if c.strip()]
+    single = parts[0] if parts else t
+    chunks = [c.strip() for c in _PROBLEM_OPEN_SPLIT.split(single) if c.strip()]
     if len(chunks) > 1:
         return chunks
-    return [t] if t else []
+    return [single] if single else []
 
 
 def _strip_problem_open_noise(text: str) -> str:
@@ -199,6 +240,14 @@ def _extract_customer_fragment(sentence: str) -> str:
             if customer_parts:
                 return " und ".join(customer_parts)
         return ""
+
+    cleaned = _strip_open_item_leading_noise(s)
+    if cleaned and _has_customer_marker(cleaned):
+        tail = _extract_customer_tail(cleaned)
+        if tail:
+            return tail
+        if not _is_work_polluted(cleaned):
+            return cleaned
 
     return s
 
@@ -398,6 +447,8 @@ def _to_dependent_clause(text: str, *, gender: str) -> str:
     t = re.sub(r"^Der Kunde\b", "er", t, flags=re.IGNORECASE)
     t = re.sub(r"\bwar\s+sehr\b", "ist sehr", t, flags=re.IGNORECASE)
     t = re.sub(r"\bwar\s+zufrieden\b", "ist zufrieden", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdie\s+kundinnen\b", "die Kundin", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bkundinnen\b", "Kundin", t, flags=re.IGNORECASE)
     t = re.sub(r"^Bauherrin\b", "die Bauherrin", t, flags=re.IGNORECASE)
     t = re.sub(r"^Bauherr\b", "der Bauherr", t, flags=re.IGNORECASE)
     if gender == "m" and re.match(r"^er\s+ist\b", t, flags=re.IGNORECASE):
@@ -451,6 +502,46 @@ def enrich_thin_customer_talk(extracted: str, raw_text: str, *, gender: str = "n
     return f"{prefix}; {tail}."
 
 
+def _cleanup_customer_talk_text(text: str) -> str:
+    """Glättet Doppel-Satzzeichen und formuliert Präfix+Inhalt natürlicher."""
+    t = _normalize_whitespace(text)
+    if not t:
+        return t
+    t = re.sub(r"\s*;\s*;\s*", ". ", t)
+    t = re.sub(r"\s*;\s*", ". ", t)
+    t = re.sub(r"\s+\.", ".", t)
+    t = re.sub(r"\.{2,}", ".", t)
+    m = re.match(
+        r"^(Mit der Kundin gesprochen|Mit dem Kunden gesprochen|Mit der Kundin unterhalten|"
+        r"Mit dem Kunden unterhalten)\s*\.?\s*(.+)$",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m:
+        prefix = m.group(1).strip()
+        body = m.group(2).strip(" .,;")
+        if body and re.search(
+            r"\b(gelobt|zufrieden|weiterempfehl|auftrag|freut|einverstanden|happy|muster|farbe)\b",
+            body,
+            flags=re.IGNORECASE,
+        ):
+            if body[0].islower():
+                body = body[0].upper() + body[1:]
+            return f"{prefix}. {body}." if not body.endswith(".") else f"{prefix}. {body}"
+    t = _strip_open_item_leading_noise(t)
+    if re.match(r"^er\s+(?:war|ist)\s+einverstanden", t, flags=re.IGNORECASE) and not re.search(
+        r"\bkund", t, flags=re.IGNORECASE
+    ):
+        t = re.sub(r"^er\s+(?:war|ist)\b", "Der Kunde ist", t, flags=re.IGNORECASE)
+    if re.match(r"^sie\s+(?:war|ist)\s+einverstanden", t, flags=re.IGNORECASE) and not re.search(
+        r"\bkund", t, flags=re.IGNORECASE
+    ):
+        t = re.sub(r"^sie\s+(?:war|ist)\b", "Die Kundin ist", t, flags=re.IGNORECASE)
+    if t and not t.endswith("."):
+        t += "."
+    return t
+
+
 def _strip_trailing_work_from_customer(text: str) -> str:
     t = _normalize_whitespace(text)
     if not t or not _is_work_polluted(t):
@@ -493,8 +584,10 @@ def extract_customer_talk_from_text(raw_text: str) -> str:
     polished = [_polish_customer_clause(f, gender=gender) for f in fragments]
     polished = [p for p in polished if p]
     result = _normalize_whitespace(" ".join(polished))
-    return _strip_trailing_work_from_customer(
-        enrich_thin_customer_talk(result, text, gender=gender)
+    return _cleanup_customer_talk_text(
+        _strip_trailing_work_from_customer(
+            enrich_thin_customer_talk(result, text, gender=gender)
+        )
     )
 
 
@@ -515,7 +608,7 @@ def refine_customer_talk(
         if not v or v.casefold() == "keine angabe":
             return v
         v = enrich_thin_customer_talk(v, raw, gender=_detect_customer_gender([raw, v]))
-        return _strip_trailing_work_from_customer(v)
+        return _cleanup_customer_talk_text(_strip_trailing_work_from_customer(v))
 
     if current.casefold() in {"keine angabe", ""}:
         extracted = extract_customer_talk_from_text(raw)

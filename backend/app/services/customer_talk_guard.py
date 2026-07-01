@@ -21,7 +21,7 @@ def customer_talk_polish_is_safe(
 ) -> bool:
     t = str(polished or "").strip()
     det = str(deterministic or "").strip()
-    if len(t) < 12 or len(t) > 420:
+    if len(t) < 12 or len(t) > 650:
         return False
     if "{" in t or "}" in t or "[" in t:
         return False
@@ -49,6 +49,7 @@ def customer_talk_polish_is_safe(
 
     preserve_tokens = (
         "auftrag",
+        "auftraege",
         "einverstanden",
         "informiert",
         "abgestimmt",
@@ -59,6 +60,11 @@ def customer_talk_polish_is_safe(
         "meckert",
         "beschwert",
         "reklam",
+        "gelobt",
+        "weiterempfehl",
+        "kollegen",
+        "freunden",
+        "freut",
     )
     for token in preserve_tokens:
         if _has_word(det_low, token) and not _has_word(t_low, token):
