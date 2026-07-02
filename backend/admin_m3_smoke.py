@@ -95,6 +95,31 @@ write_blocked = client.post(
 )
 _expect(write_blocked.status_code == 403, "paused user write blocked")
 
+# Lizenz reaktivieren — Schreiben wieder erlaubt
+react_id, react_hdrs = _add_user("react")
+pause2 = client.patch(
+    f"/api/admin/users/{react_id}/license",
+    headers=admin_hdrs,
+    json={"licenseActive": False},
+)
+_expect(pause2.status_code == 200, f"pause react user: {pause2.text}")
+reactivate = client.patch(
+    f"/api/admin/users/{react_id}/license",
+    headers=admin_hdrs,
+    json={"licenseActive": True},
+)
+_expect(reactivate.status_code == 200, f"reactivate license: {reactivate.text}")
+_expect(reactivate.json().get("user", {}).get("licenseActive") is True, "license true in response")
+session = client.get("/api/auth/session", headers=react_hdrs)
+_expect(session.status_code == 200, f"auth session: {session.text}")
+_expect(session.json().get("licenseActive") is True, "session reports active license")
+write_ok = client.post(
+    "/api/projects",
+    headers=react_hdrs,
+    json={"name": "Wieder aktiv", "customer": "", "address": "", "contactPerson": "", "note": "", "status": "aktiv"},
+)
+_expect(write_ok.status_code == 200, f"reactivated user can write: {write_ok.text}")
+
 # Admin kann sich nicht selbst pausieren
 self_pause = client.patch(
     f"/api/admin/users/{admin_id}/license",

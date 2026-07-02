@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import {
   api,
   clearToken,
+  fetchAuthSession,
   getIsAdmin,
   getLicenseActive,
   getToken,
@@ -10,7 +11,7 @@ import {
   setLicenseActive,
   setToken,
 } from '../api/client'
-import { LICENSE_SUSPENDED_EVENT } from '../constants/license'
+import { LICENSE_REACTIVATED_EVENT, LICENSE_SUSPENDED_EVENT } from '../constants/license'
 
 type AuthState = {
   token: string | null
@@ -42,8 +43,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setReady(true)
 
     const onSuspended = () => setLicenseActiveState(false)
+    const onReactivated = () => {
+      setLicenseActiveState(true)
+      setIsAdminState(getIsAdmin())
+    }
     window.addEventListener(LICENSE_SUSPENDED_EVENT, onSuspended)
-    return () => window.removeEventListener(LICENSE_SUSPENDED_EVENT, onSuspended)
+    window.addEventListener(LICENSE_REACTIVATED_EVENT, onReactivated)
+
+    if (getToken()) {
+      void fetchAuthSession().then((session) => {
+        if (!session) return
+        setLicenseActiveState(session.licenseActive !== false)
+        setIsAdminState(session.isAdmin === true)
+      })
+    }
+
+    const onFocus = () => {
+      if (!getToken()) return
+      void fetchAuthSession().then((session) => {
+        if (!session) return
+        setLicenseActiveState(session.licenseActive !== false)
+        setIsAdminState(session.isAdmin === true)
+      })
+    }
+    window.addEventListener('focus', onFocus)
+
+    return () => {
+      window.removeEventListener(LICENSE_SUSPENDED_EVENT, onSuspended)
+      window.removeEventListener(LICENSE_REACTIVATED_EVENT, onReactivated)
+      window.removeEventListener('focus', onFocus)
+    }
   }, [])
 
   const login = useCallback(async (email: string, password: string) => {

@@ -759,6 +759,15 @@ def logout(_user: str = Depends(require_bearer)):
     return {"ok": True}
 
 
+@app.get("/api/auth/session")
+def auth_session(user_id: str = Depends(require_bearer)):
+    """Aktueller Lizenz-/Admin-Status (Token = User-ID). Für Frontend-Sync nach Reaktivierung."""
+    user = find_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    return {"ok": True, **_auth_session_fields(user)}
+
+
 # --- Admin (M3): Account-Metadaten, keine Mandantendaten ---
 class AdminLicenseBody(BaseModel):
     licenseActive: bool

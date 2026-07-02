@@ -1,5 +1,6 @@
 import {
   isLicenseSuspendedDetail,
+  LICENSE_REACTIVATED_EVENT,
   LICENSE_SUSPENDED_EVENT,
 } from '../constants/license'
 
@@ -109,6 +110,35 @@ function notifyLicenseSuspendedIfNeeded(detail: string | null | undefined) {
   if (!isLicenseSuspendedDetail(detail)) return
   setLicenseActive(false)
   window.dispatchEvent(new Event(LICENSE_SUSPENDED_EVENT))
+}
+
+export function notifyLicenseReactivated() {
+  if (!getLicenseActive()) {
+    setLicenseActive(true)
+    window.dispatchEvent(new Event(LICENSE_REACTIVATED_EVENT))
+  }
+}
+
+export type AuthSessionResponse = {
+  ok: boolean
+  licenseActive: boolean
+  isAdmin: boolean
+}
+
+/** Lizenzstatus vom Server holen (z. B. nach Admin-Reaktivierung). */
+export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
+  const token = getToken()
+  if (!token) return null
+  try {
+    const data = await api<AuthSessionResponse>('/api/auth/session')
+    const active = data.licenseActive !== false
+    setLicenseActive(active)
+    setIsAdmin(data.isAdmin === true)
+    if (active) notifyLicenseReactivated()
+    return data
+  } catch {
+    return null
+  }
 }
 
 function parseApiDetail(err: ApiError, fallback: string): string {
@@ -290,6 +320,7 @@ export async function uploadReportAudio(
     throw new Error(detail)
   }
 
+  notifyLicenseReactivated()
   return res.json() as Promise<AudioUploadResponse>
 }
 
@@ -342,6 +373,7 @@ export async function uploadReportPhoto(reportId: string, file: File): Promise<R
     throw new Error(detail)
   }
 
+  notifyLicenseReactivated()
   return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
 }
 
@@ -465,6 +497,10 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
 
   if (res.status === 204) return undefined as T
+  const method = (options.method || 'GET').toUpperCase()
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    notifyLicenseReactivated()
+  }
   return res.json() as Promise<T>
 }
 
