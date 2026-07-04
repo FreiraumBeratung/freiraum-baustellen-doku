@@ -9,6 +9,8 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
+from logo_image_utils import logo_bytes_for_export
+
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 from docx.shared import Cm, Pt, RGBColor
@@ -152,8 +154,11 @@ def _resolve_logo_path(
 
 
 def _logo_image_for_pdf(path: Path, max_width_cm: float, max_height_cm: float) -> Image | None:
+    stream = logo_bytes_for_export(path)
+    if stream is None:
+        return None
     try:
-        iw, ih = ImageReader(str(path)).getSize()
+        iw, ih = ImageReader(stream).getSize()
     except Exception:
         return None
     if iw <= 0 or ih <= 0:
@@ -162,7 +167,8 @@ def _logo_image_for_pdf(path: Path, max_width_cm: float, max_height_cm: float) -
     max_w = max_width_cm * cm
     max_h = max_height_cm * cm
     scale = min(max_w / float(iw), max_h / float(ih), 1.0)
-    img = Image(str(path), width=float(iw) * scale, height=float(ih) * scale)
+    stream.seek(0)
+    img = Image(stream, width=float(iw) * scale, height=float(ih) * scale)
     img.hAlign = "LEFT"
     return img
 
@@ -640,7 +646,11 @@ def build_docx_bytes(
         p_logo = logo_cell.paragraphs[0]
         p_logo.alignment = WD_PARAGRAPH_ALIGNMENT.LEFT
         try:
-            p_logo.add_run().add_picture(str(logo_path), width=Cm(5.0))
+            logo_stream = logo_bytes_for_export(logo_path)
+            if logo_stream is not None:
+                p_logo.add_run().add_picture(logo_stream, width=Cm(5.0))
+            else:
+                p_logo.add_run().add_picture(str(logo_path), width=Cm(5.0))
         except Exception:
             p_logo.add_run("")
     else:
@@ -987,7 +997,11 @@ def build_collective_docx_bytes(
     info_cell = head_tbl.rows[0].cells[1]
     if logo_path:
         try:
-            logo_cell.paragraphs[0].add_run().add_picture(str(logo_path), width=Cm(5.0))
+            logo_stream = logo_bytes_for_export(logo_path)
+            if logo_stream is not None:
+                logo_cell.paragraphs[0].add_run().add_picture(logo_stream, width=Cm(5.0))
+            else:
+                logo_cell.paragraphs[0].add_run().add_picture(str(logo_path), width=Cm(5.0))
         except Exception:
             logo_cell.text = ""
     else:

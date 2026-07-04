@@ -122,6 +122,10 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"kunde\s+gred[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"kunde\s+war\s+da(?:\s+und\s+happy)?[^.!?]*",
         re.IGNORECASE,
     ),

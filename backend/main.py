@@ -18,6 +18,7 @@ from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from logo_image_utils import normalize_logo_bytes
 from office_mail import send_collective_to_office, send_feedback_mail, send_report_to_office
 from report_export import (
     build_attachment_names,
@@ -853,6 +854,7 @@ async def upload_logo(file: UploadFile = File(...), store: TenantStore = Depends
     content = await file.read()
     if len(content) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+    content = normalize_logo_bytes(content, ext)
     dest.write_bytes(content)
 
     prof = store.read_json("company_profile.json", {})

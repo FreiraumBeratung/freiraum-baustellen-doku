@@ -40,7 +40,7 @@ export function DashboardPage() {
             Freiraum · Baustellen-Doku
           </p>
           {company?.logoUrl ? (
-            <div className="dashboard-company-logo flex items-center justify-center rounded-[1.35rem] bg-white px-5 py-3 shadow-[0_10px_32px_-10px_rgba(0,0,0,0.6)]">
+            <div className="dashboard-company-logo flex items-center justify-center">
               <img
                 src={resolveBackendPublicUrl(company.logoUrl) ?? company.logoUrl}
                 alt="Firmenlogo"

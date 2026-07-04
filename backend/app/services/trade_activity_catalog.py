@@ -90,7 +90,18 @@ _SHK_RULES: tuple[_CatalogRule, ...] = (
 )
 
 _TIEFBAU_RULES: tuple[_CatalogRule, ...] = (
-    _CatalogRule("graben_ausgehoben", "Graben ausgehoben", 79.0, (r"\b(graben|baugrube)\b", r"\b(ausgehoben|gezogen|erstellt)\b")),
+    _CatalogRule("asphalt_schneiden", "Asphalt schneiden", 84.0, (r"\basphalt\b", r"\b(schneiden|schneide|geschnitten|aufgeschnitten|trennen|aufschneiden)\b")),
+    _CatalogRule("asphalt_fraesen", "Asphalt fräsen", 84.0, (r"\b(asphalt|deckschicht)\b", r"\b(fräsen|fraesen|gefräst|gefraest|abgefräst|abgefraest|abfräsen|abfraesen)\b")),
+    _CatalogRule("asphalt_verdichten", "Asphalt verdichten", 81.0, (r"\basphalt\b", r"\b(walzen|verdichten|verdichtet)\b")),
+    _CatalogRule("frostschutzschicht_hergestellt", "Frostschutzschicht hergestellt", 81.5, (r"\bfrostschutz(?:schicht)?\b", r"\b(hergestellt|eingebaut|eingebracht|erstellt|verlegt)\b")),
+    _CatalogRule("schottertragschicht_hergestellt", "Schottertragschicht hergestellt", 81.0, (r"\b(schottertragschicht|sts)\b", r"\b(hergestellt|eingebaut|eingebracht|erstellt)\b")),
+    _CatalogRule("planum_hergestellt", "Planum hergestellt", 79.5, (r"\bplanum\b", r"\b(hergestellt|erstellt|verdichtet|gemacht)\b")),
+    _CatalogRule("borde_gesetzt", "Borde gesetzt", 83.5, (r"\b(hochbord|tiefbord|borde)\b", r"\b(gesetzt|verlegt|gestellt|montiert)\b")),
+    _CatalogRule("rinnensteine_gesetzt", "Rinnensteine gesetzt", 82.5, (r"\b(rinnenstein(?:e|en)?|muldenstein(?:e|en)?)\b", r"\b(gesetzt|verlegt|gestellt)\b")),
+    _CatalogRule("strassenablauf_gesetzt", "Straßenabläufe gesetzt", 82.0, (r"\b(stra(ß|ss)enabl(ä|ae)uf|gully)\b", r"\b(gesetzt|montiert|eingebaut)\b")),
+    _CatalogRule("schichtenverbund_hergestellt", "Schichtenverbund hergestellt", 79.0, (r"\b(schichtenverbund|haftbr(ü|ue)cke)\b", r"\b(hergestellt|aufgetragen|eingebracht)\b")),
+    _CatalogRule("naehte_hergestellt", "Nähte hergestellt", 78.5, (r"\b(naht|nähte|asphaltnaht)\b", r"\b(hergestellt|erstellt|verschlossen)\b")),
+    _CatalogRule("graben_ausgehoben", "Graben ausgehoben", 79.0, (r"\b(graben|baugrube|kopfloch)\b", r"\b(ausgehoben|gezogen|erstellt)\b")),
     _CatalogRule("untergrund_verdichtet", "Untergrund verdichtet", 76.5, (r"\b(untergrund|boden)\b", r"\b(verdichtet|verdichtung|abger(ü|ue)ttelt)\b")),
     _CatalogRule("kg_rohre_verlegt", "KG-Rohre verlegt", 89.0, (r"\b(kg-?\s*rohre?|kg\s*dn\s*\d+|\d+\s*(?:meter|m|lfm)?\s*kg)\b", r"\b(verlegt|eingebaut|montiert|gelegt)\b")),
     _CatalogRule("drainage_entwaesserung", "Drainage/Entwässerung eingebaut", 75.0, (r"\b(drainage|entw(ä|ae)sserung)\b", r"\b(eingebaut|verlegt|gelegt|hergestellt)\b")),

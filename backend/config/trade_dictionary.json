@@ -237,10 +237,182 @@
     "material_inference": {}
   },
   "tiefbau": {
-    "normalizations": {},
-    "activity_terms": [],
-    "material_terms": [],
-    "material_inference": {}
+    "normalizations": {
+      "asphalt trennen": "Asphalt schneiden",
+      "asphalt aufschneiden": "Asphalt schneiden",
+      "deckschicht schneiden": "Asphalt schneiden",
+      "deckschicht abfräsen": "Asphalt fräsen",
+      "deckschicht abfraesen": "Asphalt fräsen",
+      "asphaltieren": "Asphalt eingebaut",
+      "asphalt auftragen": "Asphalt eingebaut",
+      "deckschicht einbauen": "Asphalt eingebaut",
+      "asphalt reingemacht": "Asphalt eingebaut",
+      "asphalt gemacht": "Asphalt eingebaut",
+      "asphalt decke eingebaut": "Asphalt eingebaut",
+      "asphalt walzen": "Asphalt verdichten",
+      "walzen gemacht": "Asphalt verdichten",
+      "fss herstellen": "Frostschutzschicht hergestellt",
+      "frostschutz einbauen": "Frostschutzschicht hergestellt",
+      "frostschutz reingemacht": "Frostschutzschicht hergestellt",
+      "frostschutz eingebaut": "Frostschutzschicht hergestellt",
+      "sts herstellen": "Schottertragschicht hergestellt",
+      "tragschicht einbauen": "Schottertragschicht hergestellt",
+      "feinplanum": "Planum hergestellt",
+      "untergrund ebnen": "Planum hergestellt",
+      "planum gemacht": "Planum hergestellt",
+      "bordstein setzen": "Borde gesetzt",
+      "randstein setzen": "Borde gesetzt",
+      "borde gesetzt": "Borde gesetzt",
+      "muldensteine setzen": "Rinnensteine gesetzt",
+      "gully setzen": "Straßenabläufe gesetzt",
+      "straßenablauf montieren": "Straßenabläufe gesetzt",
+      "strassenablauf montieren": "Straßenabläufe gesetzt",
+      "haftbrücke herstellen": "Schichtenverbund hergestellt",
+      "haftbruecke herstellen": "Schichtenverbund hergestellt",
+      "asphaltnaht": "Nähte hergestellt",
+      "nahtverbindung": "Nähte hergestellt",
+      "graben gezogen": "Graben ausgehoben",
+      "boden verdichtet": "Verdichtungsarbeiten durchgeführt",
+      "kg-rohre gelegt": "KG-Rohre verlegt",
+      "kg rohre gelegt": "KG-Rohre verlegt",
+      "ht-rohre gelegt": "HT-Rohre verlegt",
+      "hausanschluss gemacht": "Hausanschluss hergestellt"
+    },
+    "activity_terms": [
+      "asphalt schneiden",
+      "asphalt fräsen",
+      "asphalt einbauen",
+      "asphalt eingebaut",
+      "asphalt verdichten",
+      "frostschutzschicht hergestellt",
+      "schottertragschicht hergestellt",
+      "planum hergestellt",
+      "borde gesetzt",
+      "rinnensteine gesetzt",
+      "straßenabläufe gesetzt",
+      "schichtenverbund hergestellt",
+      "nähte hergestellt",
+      "graben ausgehoben",
+      "graben verfüllt",
+      "untergrund verdichtet",
+      "verdichtungsarbeiten durchgeführt",
+      "kg-rohre verlegt",
+      "leitungstrasse hergestellt",
+      "hausanschluss hergestellt",
+      "kanal-/schachtarbeiten durchgeführt",
+      "drainage/entwässerung eingebaut"
+    ],
+    "material_terms": [
+      "asphalt",
+      "asphaltdeckschicht",
+      "asphaltbinderschicht",
+      "asphalttragschicht",
+      "asphaltmischgut",
+      "sma",
+      "gussasphalt",
+      "bitumenemulsion",
+      "heißbitumen",
+      "frostschutzkies",
+      "gesteinskörnung",
+      "schottertragschicht",
+      "hochbord",
+      "tiefbord",
+      "rinnensteine",
+      "muldensteine",
+      "straßenablauf",
+      "schachtrahmen",
+      "schachtunterteil",
+      "bindemittel",
+      "kies",
+      "schotter",
+      "rohrleitungen",
+      "kg-rohre",
+      "boden"
+    ],
+    "material_inference": {
+      "asphalt schneiden": [
+        "Asphalt"
+      ],
+      "asphalt fräsen": [
+        "Asphaltdeckschicht",
+        "Asphaltbinderschicht"
+      ],
+      "asphalt einbauen": [
+        "Asphaltmischgut AC",
+        "SMA",
+        "Bitumenemulsion"
+      ],
+      "asphalt eingebaut": [
+        "Asphaltmischgut AC",
+        "SMA"
+      ],
+      "asphalt verdichten": [
+        "Asphaltdeckschicht"
+      ],
+      "frostschutzschicht hergestellt": [
+        "Frostschutzkies 0/45",
+        "Gesteinskörnung 0/56"
+      ],
+      "frostschutz eingebaut": [
+        "Frostschutzkies 0/45"
+      ],
+      "schottertragschicht hergestellt": [
+        "Schottertragschicht STS 0/32",
+        "Gesteinskörnung 0/45"
+      ],
+      "planum hergestellt": [
+        "Boden"
+      ],
+      "borde gesetzt": [
+        "Hochbord 12x25x100",
+        "Tiefbord 18x30x100",
+        "Beton C12/15"
+      ],
+      "rinnensteine gesetzt": [
+        "Rinnensteine",
+        "Muldensteine",
+        "Bettungsmörtel"
+      ],
+      "straßenabläufe gesetzt": [
+        "Straßenablauf Guss",
+        "Schachtrahmen",
+        "Schachtunterteil"
+      ],
+      "schichtenverbund hergestellt": [
+        "Bitumenemulsion",
+        "Bindemittel"
+      ],
+      "nähte hergestellt": [
+        "Heißbitumen",
+        "Bitumenemulsion"
+      ],
+      "graben ausgehoben": [
+        "Bodenmaterial"
+      ],
+      "graben verfüllt": [
+        "Kies",
+        "Schotter"
+      ],
+      "untergrund verdichtet": [
+        "Frostschutzkies 0/45"
+      ],
+      "verdichtungsarbeiten durchgeführt": [
+        "Frostschutzkies 0/45",
+        "Gesteinskörnung 0/45"
+      ],
+      "kg-rohre verlegt": [
+        "KG-Rohre",
+        "Rohrleitungen"
+      ],
+      "leitungstrasse hergestellt": [
+        "Rohrleitungen",
+        "Kies"
+      ],
+      "hausanschluss hergestellt": [
+        "Rohrleitungen",
+        "Hausanschluss"
+      ]
+    }
   },
   "sanierung": {
     "normalizations": {

@@ -94,6 +94,7 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bgeotextiel\b", "geotextil", t, flags=re.IGNORECASE)
     t = re.sub(r"\bgeo\s+textil\b", "geotextil", t, flags=re.IGNORECASE)
     t = re.sub(r"\bpflanz\s+k(ü|ue)bel\b", "pflanzkübel", t, flags=re.IGNORECASE)
+    t = re.sub(r"\basphalt\s+iert\b", "asphaltiert", t, flags=re.IGNORECASE)
     t = re.sub(r"\bge\s+schnitten\b", "geschnitten", t, flags=re.IGNORECASE)
     t = re.sub(r"\bverti\s+kutiert\b", "vertikutiert", t, flags=re.IGNORECASE)
     t = re.sub(r"\bge\s+d(ü|ue|u)ngt\b", "gedüngt", t, flags=re.IGNORECASE)
@@ -133,6 +134,12 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\berd\s+arbeiten\b", "erdarbeiten", t, flags=re.IGNORECASE)
     t = re.sub(r"\bbau\s+grube\b", "baugrube", t, flags=re.IGNORECASE)
     t = re.sub(r"\bfrost\s+schutz\b", "frostschutz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfss\b", "frostschutz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bsts\b", "schottertragschicht", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bhoch\s+bord\b", "hochbord", t, flags=re.IGNORECASE)
+    t = re.sub(r"\btief\s+bord\b", "tiefbord", t, flags=re.IGNORECASE)
+    t = re.sub(r"\brinnen\s+steine\b", "rinnensteine", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bschot\s+ter\s+trag\s+schicht\b", "schottertragschicht", t, flags=re.IGNORECASE)
     t = re.sub(r"\bsplit\s+schicht\b", "splittschicht", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaus\s+anschluss\b", "hausanschluss", t, flags=re.IGNORECASE)
     t = re.sub(r"\bleitung\s+strasse\b", "leitungstrasse", t, flags=re.IGNORECASE)
@@ -670,6 +677,7 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bstein\s+wolle\b", "steinwolle", t, flags=re.IGNORECASE)
     t = re.sub(r"\babge\s+haengt\b", "abgehängt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bver\s+schraubt\b", "verschraubt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bver\s+legt\b", "verlegt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bge\s+schraubt\b", "geschraubt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bfugen\s+spachtel\b", "fugenspachtel", t, flags=re.IGNORECASE)
     t = re.sub(r"\bpro\s+file\b", "profile", t, flags=re.IGNORECASE)
@@ -722,6 +730,92 @@ def _split_chunks(text: str) -> list[str]:
     )
     t = re.sub(r"\bfür den untergrund\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bden graben\b", ". den graben", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(asphaltiert|eingebracht|eingebaut)\s+mit\b",
+        r"\1. mit",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\bleitungstrasse hergestellt\s+hausanschluss",
+        r"leitungstrasse hergestellt. hausanschluss",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(frostschutz|fss)\s+und\s+(schottertragschicht|sts)\s+hergestellt\b",
+        r"frostschutz hergestellt. schottertragschicht hergestellt",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\basphaltfräse\b", "asphalt fräse", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bbaustelle\s+mix\s*:\s*", "", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgehweg\s+saniert\s*:\s*", "gehweg saniert. ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdrainage\s+verlegt\s+", "drainage verlegt. ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgehweg\s+asphaltiert\b", "gehweg asphaltiert. ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bstra(ß|ss)e\s+asphaltiert\b", r"straße asphaltiert. ", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(schneiden|geschnitten)\s+(?:und\s+)?(?:\d+(?:[.,]\d+)?\s*(?:m²|m2|qm|meter)?\s+)?asphaltiert\b",
+        r"\1. asphaltiert",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\s+)?asphaltiert\s+(?=randstein|rasenkantenstein|kantenstein|bordstein|hochbord|borde|rinnenstein|pflasterstein)",
+        r"\1asphaltiert. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\basphalt\s+gefräst\b", "asphalt gefräst. ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bneue\s+deckschicht\s+", "neue deckschicht. ", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\bplanum\s+verdichtet\s+(?=asphalt)",
+        "planum verdichtet. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(asphalt)\s+(\d+(?:[.,]\d+)?\s*quadrat(?:e|en)?)\s+und\s+",
+        r"asphalt \2. und ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\bleitungstrasse hergestellt\s+stra(ß|ss)e\s+asphaltiert",
+        r"leitungstrasse hergestellt. straße asphaltiert",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(ausgehoben|ausgeschachtet)\s+(?=(?:\d+(?:[.,]\d+)?\s*)?(?:lfm|meter|m\s*)?(?:kg|ht|ka\s+ga))",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\s+)?asphaltiert\s+(?=pflasterstein)",
+        r"\1asphaltiert. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\basphaltiert\s+(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\s+)?unkraut",
+        r"asphaltiert. \1unkraut",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\bhochbord und (rinnenstein|muldenstein)",
+        r"hochbord gesetzt. \1",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(hochbord|tiefbord)\s+gesetzt\s+(rinnenstein|muldenstein)",
+        r"\1 gesetzt. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
     # Geteiltes Schluss-Verb ueber "und"-Aufzaehlungen verteilen, BEVOR "und" zum
     # Trenner wird. So wird aus "50 m² Unterputz und 50 m² Oberputz aufgebracht"
     # -> "... Unterputz aufgebracht und ... Oberputz aufgebracht". Rein additiv:
@@ -795,7 +889,16 @@ def _propagate_trailing_verb(clause: str) -> str:
                         chosen = verbs_per[j]
                         break
             if chosen:
-                seg = f"{seg} {chosen}"
+                if re.search(r"\basphalt\b", seg, flags=re.IGNORECASE) and re.search(
+                    r"gemacht|verf[uü]ll|gesetzt", chosen, flags=re.IGNORECASE
+                ):
+                    pass
+                elif re.search(r"\b(schneiden|schneide|geschnitten)\b", seg, flags=re.IGNORECASE) and re.search(
+                    r"gesetzt", chosen, flags=re.IGNORECASE
+                ):
+                    pass
+                else:
+                    seg = f"{seg} {chosen}"
         rebuilt.append(seg)
     return " und ".join(rebuilt)
 
@@ -1183,6 +1286,17 @@ def normalize_for_match(text: str) -> str:
 
 def _normalize_for_match(text: str) -> str:
     out = text.casefold()
+    out = re.sub(r"\bas\s+fault\b", "asphalt", out)
+    out = re.sub(r"\bfss\b", "frostschutz", out)
+    out = re.sub(r"\bsts\b", "schottertragschicht", out)
+    out = re.sub(r"\basphaltfräse\b", "asphalt fräse", out)
+    out = re.sub(r"\brinnen\s+steine\b", "rinnensteine", out)
+    out = re.sub(r"\bhoch\s+bord\b", "hochbord", out)
+    out = re.sub(r"\btief\s+bord\b", "tiefbord", out)
+    out = re.sub(r"\bver\s+legt\b", "verlegt", out)
+    out = re.sub(r"\bfrä\s+sen\b", "fräsen", out)
+    out = re.sub(r"\basphalt\s+iert\b", "asphaltiert", out)
+    out = re.sub(r"\bfrost\s+schutz\b", "frostschutz", out)
     # Whisper-Fehler im Rohrkontext: "den/de en/d n 150 kg" -> "dn 150 kg"
     out = re.sub(
         r"\b(?:den|de\s*en|d\s*n)\s*(\d{2,3})\s*(?=(?:kg|ht|kanal)\b)",
@@ -1196,7 +1310,8 @@ def _normalize_for_match(text: str) -> str:
         out,
         flags=re.IGNORECASE,
     )
-    out = re.sub(r"\bquadratmeter\b|\bqm\b", "m²", out)
+    out = re.sub(r"\bfrostschutz\s+reingemacht\b", "frostschutz eingebaut", out)
+    out = re.sub(r"\bfss\s+reingemacht\b", "frostschutz eingebaut", out)
     out = re.sub(r"\bmeter quadrat\b", "m²", out)
     # Gebrochenes Deutsch / Whisper: verkuerzte Flaecheneinheit "30 quadrat"
     # -> m². Nur wenn nicht bereits "quadratmeter" (oben schon ersetzt).
@@ -1212,7 +1327,14 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bgearbeitet\b", "gemacht", out)
     out = re.sub(r"\bfertig\s*gemacht\b", "gemacht", out)
     out = re.sub(r"\b(mache|machen|macht)\b", "gemacht", out)
-    out = re.sub(r"\bfertig\b(?!\s*gestellt)", "gemacht", out)
+    if not (
+        re.search(r"\basphalt\b", out)
+        and re.search(
+            r"\b(schneiden|schneide|geschnitten|aufgeschnitten|trennen|aufschneiden|fräsen|fraesen|abgefräst|abgefraest)\b",
+            out,
+        )
+    ):
+        out = re.sub(r"\bfertig\b(?!\s*gestellt)", "gemacht", out)
     # Häufige Whisper-Verhörer bei Trockenbau-Profilen.
     out = re.sub(r"\buwe\b(?=\s*[-]?\s*profil)", "uw", out)
     out = re.sub(r"\bcwe\b(?=\s*[-]?\s*profil)", "cw", out)
@@ -2250,7 +2372,12 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("schalung_erstellt", "Schalung erstellt", 83.0, False)
-    if "beton" in t and re.search(r"\b(gegossen|eingebracht|verarbeitet|gemacht)\b", t):
+    if re.search(r"\b(stra(ß|ss)enabl(ä|ae)uf|gully)\b", t) and re.search(
+        r"\b(gesetzt|montiert|eingebaut)\b",
+        t,
+    ):
+        return CanonicalActivity("strassenablauf_gesetzt", "Straßenabläufe gesetzt", 82.0, False)
+    if "beton" in t and "betonfundament" not in t and re.search(r"\b(gegossen|eingebracht|verarbeitet|gemacht)\b", t):
         qty = _extract_qty_m3(t)
         text = f"{qty} m³ Beton eingebracht" if qty else "Beton eingebracht"
         return CanonicalActivity("beton_eingebracht", text, 86.0, bool(qty))
@@ -2305,6 +2432,18 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("graben_verfuellt", "Graben verfüllt", 77.0, False)
     if "frostschutz" in t and re.search(r"\b(eingebaut|eingebracht|verlegt|reingepackt|reingemacht)\b", t):
         return CanonicalActivity("frostschutz_eingebaut", "Frostschutz eingebaut", 78.5, False)
+    if "planum" in t and re.search(r"\b(hergestellt|erstellt|gemacht)\b", t):
+        return CanonicalActivity("planum_hergestellt", "Planum hergestellt", 79.5, False)
+    if "planum" in t and re.search(r"\bverdichtet\b", t):
+        tiefbau_ctx = re.search(
+            r"\b(schotter|splitt|kg|graben|frostschutz|sand|erdaushub|erdarbeiten|bagger)\b",
+            t,
+        ) or re.search(
+            r"\b(schotter|splitt|kg\s*rohr|graben|frostschutz|erdaushub|bagger)\b",
+            (raw_text or "").casefold(),
+        )
+        if not tiefbau_ctx:
+            return CanonicalActivity("planum_hergestellt", "Planum hergestellt", 79.5, False)
     if re.search(r"\b(verdichtet|verdichtung|verdichten)\b", t) and (
         ("untergrund" in t or "grube" in t or "baugrube" in t or "sand" in t or "planum" in t)
         or (
@@ -2333,8 +2472,64 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("hausanschluss_hergestellt", "Hausanschluss hergestellt", 78.0, False)
-    if "asphalt" in t and re.search(r"\b(eingebaut|eingebracht|asphaltiert|verteilt|gemacht)\b", t):
-        return CanonicalActivity("asphalt_eingebaut", "Asphalt eingebaut", 77.0, False)
+    if "asphalt" in t and re.search(r"\b(quadrat|quadrate|quadraten|m²|m2|qm)\b", t):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        text = f"{_qty_prefix(raw_text)}{qty} m² Asphalt eingebaut" if qty else "Asphalt eingebaut"
+        return CanonicalActivity("asphalt_eingebaut", text, 77.5, bool(qty))
+    if "asphalt" in t and re.search(
+        r"\b(schneiden|schneide|geschnitten|aufgeschnitten|trennen|aufschneiden)\b",
+        t,
+    ):
+        qty = _extract_qty_lfm(t) or _extract_qty_lfm(raw_text or "")
+        text = f"{qty} m Asphalt schneiden" if qty else "Asphalt schneiden"
+        return CanonicalActivity("asphalt_schneiden", text, 84.0, bool(qty))
+    if re.search(r"\b(asphalt|deckschicht)\b", t) and re.search(r"\b(fräsen|fraesen|gefräst|gefraest|abgefräst|abgefraest|abfräsen|abfraesen)\b", t):
+        return CanonicalActivity("asphalt_fraesen", "Asphalt fräsen", 84.0, False)
+    if re.search(r"\basphalt\s*fräse\b", t):
+        return CanonicalActivity("asphalt_fraesen", "Asphalt fräsen", 84.0, False)
+    if "asphalt" in t and re.search(r"\b(eingebaut|eingebracht|asphaltiert|verteilt)\b", t):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        text = f"{_qty_prefix(raw_text)}{qty} m² Asphalt eingebaut" if qty else "Asphalt eingebaut"
+        return CanonicalActivity("asphalt_eingebaut", text, 77.0, bool(qty))
+    if "asphalt" in t and re.search(r"\b(walzen|verdichten|verdichtet)\b", t):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        text = f"{_qty_prefix(raw_text)}{qty} m² Asphalt verdichten" if qty else "Asphalt verdichten"
+        return CanonicalActivity("asphalt_verdichten", text, 81.0, bool(qty))
+    if re.search(r"\bfrostschutz(?:schicht)?\b", t) and re.search(
+        r"\b(hergestellt|eingebaut|eingebracht|erstellt|verlegt)\b",
+        t,
+    ):
+        return CanonicalActivity("frostschutzschicht_hergestellt", "Frostschutzschicht hergestellt", 81.5, False)
+    if re.search(r"\b(schottertragschicht|sts)\b", t) and re.search(
+        r"\b(hergestellt|eingebaut|eingebracht|erstellt)\b",
+        t,
+    ):
+        return CanonicalActivity("schottertragschicht_hergestellt", "Schottertragschicht hergestellt", 81.0, False)
+    if re.search(r"\b(hochbord|tiefbord|borde)\b", t) and re.search(
+        r"\b(gesetzt|verlegt|gestellt|montiert)\b",
+        t,
+    ):
+        return CanonicalActivity("borde_gesetzt", "Borde gesetzt", 83.5, False)
+    if re.search(r"\b(rinnenstein(?:e|en)?|muldenstein(?:e|en)?)\b", t) and re.search(
+        r"\b(gesetzt|verlegt|gestellt)\b",
+        t,
+    ):
+        return CanonicalActivity("rinnensteine_gesetzt", "Rinnensteine gesetzt", 82.5, False)
+    if re.search(r"\b(stra(ß|ss)enabl(ä|ae)uf|gully)\b", t) and re.search(
+        r"\b(gesetzt|montiert|eingebaut)\b",
+        t,
+    ):
+        return CanonicalActivity("strassenablauf_gesetzt", "Straßenabläufe gesetzt", 82.0, False)
+    if re.search(r"\b(schichtenverbund|haftbr(ü|ue)cke)\b", t) and re.search(
+        r"\b(hergestellt|aufgetragen|eingebracht)\b",
+        t,
+    ):
+        return CanonicalActivity("schichtenverbund_hergestellt", "Schichtenverbund hergestellt", 79.0, False)
+    if re.search(r"\b(naht|nähte|asphaltnaht)\b", t) and re.search(
+        r"\b(hergestellt|erstellt|verschlossen)\b",
+        t,
+    ):
+        return CanonicalActivity("naehte_hergestellt", "Nähte hergestellt", 78.5, False)
 
     catalog_match = match_catalog_activity(t)
     if catalog_match and not (

@@ -75,6 +75,8 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|(?:dichtung|pressfitting)\s+[^.!?]{0,40}(?:undicht|fehlt)"
     r"|grundwasser\s+[^.!?]{0,40}(?:stand|im\s+graben)"
     r"|gefälle\s+(?:war\s+)?(?:falsch|zu\s+flach)"
+    r"|(?:leider|wegen)\s+[^.!?]{0,40}material\s+knapp"
+    r"|keine\s+arbeit\s+wegen\s+regen"
     r")",
     re.IGNORECASE,
 )
@@ -83,7 +85,12 @@ _IMPLICIT_OPEN_FUTURE = re.compile(
     r"(?:"
     r"morgen\s+(?:müssen\s+wir|muessen\s+wir|muss\s+ich|müssen)\s+(?:noch\s+)?[^.!?]{4,120}"
     r"|morgen\s+(?:noch\s+)?[^.!?]{4,120}(?:schneiden|legen|verlegen|auftragen|abschließen|abschliessen|"
-    r"montieren|fertigstellen|fertig\s+machen|machen|erledigen|weitermachen|schalen|abziehen|verfuellen|verfüllen)"
+    r"montieren|fertigstellen|fertig\s+machen|machen|erledigen|weitermachen|schalen|abziehen|verfuellen|verfüllen|"
+    r"einbauen|asphaltieren|asphaltiert|weiter)"
+    r"|morgen\s+weiter[^.!?]{0,60}"
+    r"|warten\s+auf[^.!?]{0,80}(?:nächste|naechste)\s+woche"
+    r"|(?:noch\s+)?walzen\s+(?:nächste|naechste)\s+woche"
+    r"|morgen\s+(?:noch\s+)?(?:letzte|rest)[^.!?]{0,80}"
     r"|morgen\s+noch\s+[^.!?]{4,80}"
     r"|(?:am\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag)\s+"
     r"(?:müssen\s+wir|muessen\s+wir|noch\s+)?[^.!?]{4,120}"
@@ -327,6 +334,10 @@ def _implicit_problem_clause(match_text: str) -> str:
         return _polish_problem_clause("Wand nicht lotrecht")
     if re.search(r"abbrechen|stoppen|beenden", low) and re.search(r"kleber|hitze|abbindet", low):
         return _polish_problem_clause("Kleber bindet bei Hitze zu schnell ab")
+    if re.search(r"material\s+knapp", low):
+        return _polish_problem_clause("Material knapp")
+    if re.search(r"keine\s+arbeit\s+wegen\s+regen", low):
+        return _polish_problem_clause("Keine Arbeit wegen Regen")
     if re.search(r"abbrechen|stoppen|beenden", low):
         return _polish_problem_clause("Arbeiten mussten unterbrochen werden")
     if re.search(r"uneben", low) or (
@@ -408,6 +419,16 @@ def extract_problems_from_text(raw_text: str) -> list[str]:
 
     if not fragments:
         fragments = _extract_implicit_problems(raw_text)
+
+    full = _normalize_probe(raw_text)
+    for pattern, label in (
+        (r"keine\s+arbeit\s+wegen\s+regen", "Keine Arbeit wegen Regen"),
+        (r"(?:leider|wegen)\s+[^.!?]{0,40}material\s+knapp", "Material knapp"),
+    ):
+        if re.search(pattern, full, flags=re.IGNORECASE):
+            clause = _polish_problem_clause(label)
+            if clause:
+                fragments.append(clause)
 
     return _dedupe(fragments)
 

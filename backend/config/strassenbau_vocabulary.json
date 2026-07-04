@@ -1,0 +1,140 @@
+{
+  "gewerk": "Strassenbau",
+  "taetigkeiten": [
+    {
+      "name": "Asphalt schneiden",
+      "materialien": ["Asphalt", "Asphaltdeckschicht", "Asphaltbinderschicht"],
+      "vorschlaege": ["Trennscheibe Asphalt?", "Fugenschneider?", "Wasserbenetzung?"],
+      "synonyme": ["Asphalt trennen", "Asphalt aufschneiden", "Deckschicht schneiden"]
+    },
+    {
+      "name": "Asphalt fräsen",
+      "materialien": ["Asphaltdeckschicht", "Asphaltbinderschicht", "Asphalttragschicht"],
+      "vorschlaege": ["Kaltfräse?", "Fräswalze?", "Absaugung?"],
+      "synonyme": ["Fräsen", "Deckschicht abfräsen"]
+    },
+    {
+      "name": "Asphalt einbauen",
+      "materialien": ["Asphaltmischgut AC", "SMA", "DSH-V", "Gussasphalt"],
+      "vorschlaege": ["Asphaltfertiger?", "Walze 1-12t?", "Bindemittel-Spritzung?"],
+      "synonyme": ["Asphaltieren", "Asphalt auftragen", "Deckschicht einbauen"]
+    },
+    {
+      "name": "Asphalt verdichten",
+      "materialien": ["Asphaltdeckschicht", "Asphaltbinderschicht"],
+      "vorschlaege": ["Walzenzug?", "Gummiradwalze?", "Vibrationswalze?"],
+      "synonyme": ["Walzen", "Verdichten"]
+    },
+    {
+      "name": "Frostschutzschicht herstellen",
+      "materialien": ["Frostschutzkies 0/45", "Gesteinskörnung 0/56"],
+      "vorschlaege": ["Rüttelplatte 300kg?", "Walze 3-12t?", "Laser?"],
+      "synonyme": ["FSS herstellen", "Frostschutz einbauen"]
+    },
+    {
+      "name": "Schottertragschicht herstellen",
+      "materialien": ["Schottertragschicht STS 0/32", "Gesteinskörnung 0/45"],
+      "vorschlaege": ["Walze?", "Grader?", "Rüttelplatte?"],
+      "synonyme": ["STS herstellen", "Tragschicht einbauen"]
+    },
+    {
+      "name": "Planum herstellen",
+      "materialien": ["Boden", "Unterbau", "Untergrund"],
+      "vorschlaege": ["Laser?", "Grader?", "Rüttelplatte?"],
+      "synonyme": ["Feinplanum", "Untergrund ebnen"]
+    },
+    {
+      "name": "Borde setzen",
+      "materialien": ["Hochbord 12x25x100", "Tiefbord 18x30x100", "Rinnensteine"],
+      "vorschlaege": ["Beton C12/15?", "Rückenstütze?", "Schnurgerüst?"],
+      "synonyme": ["Bordstein setzen", "Randstein setzen"]
+    },
+    {
+      "name": "Rinnensteine setzen",
+      "materialien": ["Muldensteine", "Rinnensteine"],
+      "vorschlaege": ["Bettungsmörtel?", "Schnur?"],
+      "synonyme": ["Muldensteine setzen"]
+    },
+    {
+      "name": "Straßenabläufe setzen",
+      "materialien": ["Straßenablauf Guss", "Schachtrahmen", "Schachtunterteil"],
+      "vorschlaege": ["Betonfundament?", "Dichtmasse?"],
+      "synonyme": ["Gully setzen", "Straßenablauf montieren"]
+    },
+    {
+      "name": "Schichtenverbund herstellen",
+      "materialien": ["Bitumenemulsion", "Bindemittel"],
+      "vorschlaege": ["Spritzgerät?", "Bindemittelwagen?"],
+      "synonyme": ["Haftbrücke herstellen"]
+    },
+    {
+      "name": "Nähte herstellen",
+      "materialien": ["Heißbitumen", "Bitumenemulsion"],
+      "vorschlaege": ["Nahtspritze?", "Gasbrenner?"],
+      "synonyme": ["Asphaltnaht", "Nahtverbindung"]
+    }
+  ],
+  "materialkatalog": {
+    "asphaltarten": {
+      "AC": ["AC 11", "AC 16", "AC 22", "AC 32"],
+      "SMA": ["SMA 8", "SMA 11", "SMA 16"],
+      "DSH-V": ["Dünne Schicht im Heißeinbau"],
+      "Gussasphalt": ["GA 8", "GA 10"],
+      "OPA": ["Offenporiger Asphalt"]
+    },
+    "schichten": {
+      "frostschutz": ["0/45", "0/56"],
+      "schottertragschicht": ["STS 0/32", "STS 0/45"],
+      "asphalttragschicht": ["AT AC 32", "AT AC 22"],
+      "asphaltbinderschicht": ["AB AC 16", "AB AC 22"],
+      "asphaltdeckschicht": ["DS AC 11", "DS SMA 11"]
+    },
+    "gesteinskoernungen": {
+      "koernungen": ["0/16", "0/22", "0/32", "0/45", "0/56"],
+      "anforderungen": [
+        "Kornform",
+        "Zertrümmerungswiderstand",
+        "Polierwiderstand",
+        "Frostbeständigkeit",
+        "Wasserempfindlichkeit"
+      ]
+    },
+    "bindemittel": [
+      "Polymermodifiziertes Bitumen",
+      "Viskositätsverändertes Bitumen",
+      "Bitumenemulsion"
+    ],
+    "bauteile": {
+      "borde": ["Hochbord 12x25x100", "Tiefbord 18x30x100", "Rundbord", "Absenker"],
+      "rinnensteine": ["Muldenstein 30x25x100", "Muldenstein 30x30x100"],
+      "abläufe": ["Straßenablauf Guss", "Schachtrahmen", "Schachtunterteil DN 500/600"]
+    }
+  },
+  "werkzeuge": {
+    "maschinen": [
+      "Asphaltfertiger",
+      "Walzenzug 1-12t",
+      "Grader",
+      "Kaltfräse",
+      "Rüttelplatte 90/150/300kg",
+      "Stampfer",
+      "Bagger",
+      "Radlader"
+    ],
+    "handwerkzeuge": [
+      "Fugenschneider",
+      "Trennschleifer",
+      "Schaufel",
+      "Besen",
+      "Abziehschiene",
+      "Richtlatte",
+      "Schnurgerüst"
+    ],
+    "spezialwerkzeuge": [
+      "Nahtspritze",
+      "Bitumenkocher",
+      "Bindemittelspritzgerät",
+      "Saugheber für Platten"
+    ]
+  }
+}

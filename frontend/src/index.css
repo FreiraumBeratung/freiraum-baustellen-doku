@@ -91,7 +91,7 @@ body[data-photo-upload-busy='1'] nav[aria-label='Hauptnavigation'] {
   background-color: #09090b;
 }
 
-/* Dashboard: Firmenlogo auf Android-PWA mit voller Farbsaettigung (kein „ausgewaschen"). */
+/* Dashboard: Firmenlogo auf iOS/Android-PWA mit voller Farbsaettigung (kein „ausgewaschen"). */
 .dashboard-company-logo img {
   opacity: 1;
   filter: none;

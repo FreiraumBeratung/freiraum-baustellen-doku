@@ -3,6 +3,7 @@ uvicorn[standard]>=0.32.0
 python-multipart>=0.0.12
 email-validator>=2.0.0
 python-dotenv>=1.0.0
+Pillow>=10.0.0
 reportlab
 openai>=1.40.0
 cryptography>=42.0.0
