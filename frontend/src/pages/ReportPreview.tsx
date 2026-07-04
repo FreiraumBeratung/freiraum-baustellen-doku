@@ -80,9 +80,18 @@ function formatHoursDe(h: number | null | undefined): string {
   return `${String(h).replace('.', ',')} h`
 }
 
+function formatBookedEmployeeNames(names: string[]): string {
+  const cleaned = names.map((n) => n.trim()).filter(Boolean)
+  if (cleaned.length === 0) return ''
+  if (cleaned.length === 1) return cleaned[0]!
+  if (cleaned.length === 2) return `${cleaned[0]} und ${cleaned[1]}`
+  return `${cleaned.slice(0, -1).join(', ')} und ${cleaned[cleaned.length - 1]}`
+}
+
 function timeBookingMessage(booking: {
   created?: number
   hoursPerEmployee?: number | null
+  bookedNames?: string[]
   skippedNames?: string[]
   reason?: string | null
 } | null | undefined): { ok: string; warn: string } {
@@ -90,6 +99,19 @@ function timeBookingMessage(booking: {
   const created = booking.created ?? 0
   if (created > 0) {
     const per = formatHoursDe(booking.hoursPerEmployee)
+    const names = formatBookedEmployeeNames(booking.bookedNames ?? [])
+    if (names) {
+      if (created === 1) {
+        return {
+          ok: `Auf dem Stundenkonto von ${names} wurden ${per} gebucht.`,
+          warn: '',
+        }
+      }
+      return {
+        ok: `Auf den Stundenkonten von ${names} wurden je ${per} gebucht.`,
+        warn: '',
+      }
+    }
     return {
       ok: `Stunden gebucht: ${created} Mitarbeiter à je ${per}.`,
       warn: '',
@@ -888,6 +910,7 @@ export function ReportPreviewPage() {
         timeBooking?: {
           created?: number
           hoursPerEmployee?: number | null
+          bookedNames?: string[]
           skippedNames?: string[]
           reason?: string | null
         }

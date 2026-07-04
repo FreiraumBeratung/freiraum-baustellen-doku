@@ -105,6 +105,12 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(
+        r"\b(rindenmulch\s+eingedeckt)\s+(?=(?:im\s+anschluss|anschließend|anschliessend|danach|dann|zwischendurch)\s+)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
         r"\b(rindenmulch|mulch)\s+eingedeckt\s+(?=kunde|problem|offen|bauherr|bauleitung|auftraggeber)",
         r"\1 eingedeckt. ",
         t,
@@ -139,7 +145,14 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bhoch\s+bord\b", "hochbord", t, flags=re.IGNORECASE)
     t = re.sub(r"\btief\s+bord\b", "tiefbord", t, flags=re.IGNORECASE)
     t = re.sub(r"\brinnen\s+steine\b", "rinnensteine", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bterras\s+sen\s+platten\b", "terrassenplatten", t, flags=re.IGNORECASE)
     t = re.sub(r"\bschot\s+ter\s+trag\s+schicht\b", "schottertragschicht", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\bfrostschutz\s+eingebaut\s+(?=schottertragschicht|sts\b)",
+        "frostschutz eingebaut. ",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bsplit\s+schicht\b", "splittschicht", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaus\s+anschluss\b", "hausanschluss", t, flags=re.IGNORECASE)
     t = re.sub(r"\bleitung\s+strasse\b", "leitungstrasse", t, flags=re.IGNORECASE)
@@ -761,8 +774,74 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(
+        r"\b(\d+(?:[.,]\d+)?\s*(?:meter|m|lfm|laufende\s+meter)?\s+)?asphalt\s+schneiden\s+(?=\d+(?:[.,]\d+)?\s*(?:quadratmeter|qm|m²|m2|quadrat))",
+        r"\1asphalt schneiden. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(rinden\s+mulch|mulch)\s+eingedeckt\b",
+        r"rindenmulch eingedeckt",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm|quadratmeter)\s+)?asphaltiert\s+(?=\d+(?:[.,]\d+)?\s*(?:m²|m2|qm|quadratmeter)\s+pflaster)",
+        r"\1asphaltiert. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
         r"\b(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\s+)?asphaltiert\s+(?=randstein|rasenkantenstein|kantenstein|bordstein|hochbord|borde|rinnenstein|pflasterstein)",
         r"\1asphaltiert. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(rinnenstein(?:e|en)?\s+(?:verlegt|gesetzt))\s+(?=gully|stra(ß|ss)enabl)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(terrassenplatten\s+verlegt)\s+(?=\d|zwei|drei|vier|fünf|fuenf|ein|schotter|kubik)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(kg[\s-]?rohre?\s+verlegt)\s+(?=stra(ß|ss)e\s+asphaltiert)",
+        r"\1. straße asphaltiert",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(stra(ß|ss)e\s+asphaltiert)\s+(?=\d)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(abgefräst|abgefraest|gefräst|gefraest)\s+(?=\d+(?:[.,]\d+)?\s*(?:quadratmeter|qm|m²|m2|sma))",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(schottertragschicht\s+hergestellt)\s+(?=(?:im\s+anschluss|anschließend|anschliessend|danach|dann)\s+)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(asphalt\s+eingebaut)\s+(?=(?:im\s+anschluss|anschließend|anschliessend|zwischendurch)\s+(?:hochbord|tiefbord|borde))",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\s+)?keramikterrasse\s+verlegt)\s+(?=gehweg\s+pflaster)",
+        r"\1. ",
         t,
         flags=re.IGNORECASE,
     )
@@ -1967,6 +2046,14 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("pflegearbeiten", "Pflegearbeiten durchgeführt", 55.0, False)
+    if re.search(r"\bterrassenplatten\b", t) and re.search(r"\b(verlegt|gelegt)\b", t):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        text = (
+            f"{_qty_prefix(raw_text)}{qty} m² Terrassenplatten verlegt"
+            if qty
+            else "Terrassenplatten verlegt"
+        )
+        return CanonicalActivity("terrassenplatten_verlegt", text, 101.0, bool(qty))
     if "pflaster" in t and re.search(r"\b(verlegt|gelegt|gemacht)\b", t):
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Pflaster verlegt" if qty else "Pflaster verlegt"
@@ -1978,7 +2065,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Gartenmauer gebaut" if qty else "Gartenmauer gebaut"
         return CanonicalActivity("gartenmauer_gebaut", text, 95.0, bool(qty))
-    if "schotter" in t and re.search(
+    if "schotter" in t and "schottertragschicht" not in t and re.search(
         r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt)\b",
         t,
     ):
@@ -2442,8 +2529,9 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             r"\b(schotter|splitt|kg\s*rohr|graben|frostschutz|erdaushub|bagger)\b",
             (raw_text or "").casefold(),
         )
-        if not tiefbau_ctx:
-            return CanonicalActivity("planum_hergestellt", "Planum hergestellt", 79.5, False)
+        if tiefbau_ctx:
+            return CanonicalActivity("untergrund_verdichtet", "Untergrund verdichtet", 76.5, False)
+        return CanonicalActivity("planum_verdichtet", "Planum verdichtet", 79.5, False)
     if re.search(r"\b(verdichtet|verdichtung|verdichten)\b", t) and (
         ("untergrund" in t or "grube" in t or "baugrube" in t or "sand" in t or "planum" in t)
         or (
@@ -2472,6 +2560,18 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("hausanschluss_hergestellt", "Hausanschluss hergestellt", 78.0, False)
+    if re.search(r"\basphaltiert\b", t) and not re.search(
+        r"\b(schneiden|schneide|geschnitten|fräsen|fraesen|gefräst|gefraest|abgefräst|abgefraest)\b",
+        t,
+    ):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        text = f"{_qty_prefix(raw_text)}{qty} m² Asphalt eingebaut" if qty else "Asphalt eingebaut"
+        return CanonicalActivity("asphalt_eingebaut", text, 78.0, bool(qty))
+    if re.search(r"\basphalt\b", t) and re.search(r"\b(fertig|fertiggestellt|gemacht)\b", t) and not re.search(
+        r"\b(schneiden|schneide|geschnitten|fräsen|fraesen|verlegt|eingebaut|eingebracht)\b",
+        t,
+    ):
+        return CanonicalActivity("asphalt_eingebaut", "Asphalt eingebaut", 77.0, False)
     if "asphalt" in t and re.search(r"\b(quadrat|quadrate|quadraten|m²|m2|qm)\b", t):
         qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
         text = f"{_qty_prefix(raw_text)}{qty} m² Asphalt eingebaut" if qty else "Asphalt eingebaut"

@@ -60,8 +60,12 @@ _OPEN_SUBSTANCE = re.compile(
 
 _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"(?:"
-    r"(?:leider\s+)?(?:mussten\s+wir|hamma|mussten)\s+(?:[^.!?]{0,70}?)?(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
-    r"|mussten\s+leider\s+abbrechen(?:\s+(?:weil|da)\s+[^.!?]{4,80})?"
+    r"(?:leider\s+)?(?:wir\s+)?mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
+    r"|(?:leider\s+)?wir\s+mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
+    r"|(?:mussten\s+wir|hamma)\s+(?:[^.!?]{0,70}?)?(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
+    r"|(?:leider\s+)?mussten\s+wir\s+abbrechen(?:\s+(?:morgen|weil|da|denn))?"
+    r"|mussten\s+leider\s+abbrechen(?:\s+(?:weil|da|morgen))?"
+    r"|mussten\s+abbrechen\s+(?:weil|da|morgen)\s+[^.!?]{0,80}"
     r"|mussten\s+abbrechen\s+(?:weil|da)\s+[^.!?]{4,80}"
     r"|(?:leider\s+)?(?:mussten|müssen)\s+(?:wir\s+)?stoppen\s+(?:weil|da)\s+[^.!?]{4,80}"
     r"|(?:weil|da)\s+es\s+(?:angefangen\s+hat\s+zu\s+)?(?:regnen|geregnet\s+hat)"
@@ -70,6 +74,8 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|(?:die\s+)?wand\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
     r"|was\s+zu\s+problemen\s+geführt\s+hat"
     r"|(?:weil|da)\s+(?:die\s+)?wand\s+nicht\s+lotrecht\s+ist"
+    r"|(?:leider\s+)?maschine\s+kaputt\s+mussten\s+stoppen"
+    r"|leider\s+[^.!?]{0,50}regen[^.!?]{0,50}abbrechen"
     r"|(?:leider|wegen)\s+[^.!?]{0,80}(?:regen|wetter|sturm|frost|kaputt|defekt|undicht|staub|liefer)"
     r"|(?:zu\s+)?(?:spaet|spät)(?:er)?\s+(?:kam|geliefert|geworden)"
     r"|(?:dichtung|pressfitting)\s+[^.!?]{0,40}(?:undicht|fehlt)"
@@ -354,15 +360,20 @@ def _implicit_problem_clause(match_text: str) -> str:
 
 
 def _extract_implicit_problems(raw_text: str) -> list[str]:
-    text = _cut_before_customer(_normalize_probe(raw_text))
+    text = _normalize_probe(raw_text)
     if not text:
         return []
     fragments: list[str] = []
-    for match in _IMPLICIT_PROBLEM_INTERRUPT.finditer(text):
-        chunk = re.split(r"\bmorgen\b", match.group(0), maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,;")
-        clause = _implicit_problem_clause(chunk)
-        if clause and _has_problem_substance(clause):
-            fragments.append(clause)
+    # Volltext und Kunden-Vorschnitt: Probleme nach Kundengespräch (z. B. Maschine kaputt)
+    # dürfen nicht verloren gehen.
+    for probe in (text, _cut_before_customer(text)):
+        if not probe:
+            continue
+        for match in _IMPLICIT_PROBLEM_INTERRUPT.finditer(probe):
+            chunk = re.split(r"\bmorgen\b", match.group(0), maxsplit=1, flags=re.IGNORECASE)[0].strip(" .,;")
+            clause = _implicit_problem_clause(chunk)
+            if clause and _has_problem_substance(clause):
+                fragments.append(clause)
     cleaned = [f for f in fragments if not re.match(r"^Weil\b", f.strip())]
     if cleaned:
         fragments = cleaned

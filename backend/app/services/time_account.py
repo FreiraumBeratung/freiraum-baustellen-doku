@@ -326,6 +326,7 @@ def sync_entries_for_report(
         return {
             "created": 0,
             "hoursPerEmployee": None,
+            "bookedNames": [],
             "skippedNames": [],
             "skippedEmployeeIds": [],
             "reason": "missing_report_id",
@@ -342,6 +343,7 @@ def sync_entries_for_report(
         return {
             "created": 0,
             "hoursPerEmployee": None,
+            "bookedNames": [],
             "skippedNames": [],
             "skippedEmployeeIds": [],
             "reason": "invalid_work_time",
@@ -365,6 +367,7 @@ def sync_entries_for_report(
         return {
             "created": 0,
             "hoursPerEmployee": hours,
+            "bookedNames": [],
             "skippedNames": skipped_names,
             "skippedEmployeeIds": skipped if match_mode == "ids" else [],
             "reason": reason,
@@ -393,12 +396,19 @@ def sync_entries_for_report(
         }
         entries.append(entry)
 
+    booked_names = [
+        str(emp.get("name") or label).strip()
+        for emp, label in matched
+        if str(emp.get("name") or label).strip()
+    ]
+
     doc["entries"] = entries
     _write_entries_doc(write_json, doc)
 
     return {
         "created": len(matched),
         "hoursPerEmployee": hours,
+        "bookedNames": booked_names,
         "skippedNames": skipped_names,
         "skippedEmployeeIds": [],
         "reason": None,
