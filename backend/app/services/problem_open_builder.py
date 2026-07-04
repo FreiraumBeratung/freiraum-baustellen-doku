@@ -39,7 +39,7 @@ _PROBLEM_SUBSTANCE = re.compile(
     r"schrauben|mörtel|moertel|genehmigung|leitungs|kran|anlegeplatz|profil|"
     r"abpumpen|verspät|verspaet|lotrecht|schnitt|dichtband|strom|"
     r"untergrund|uneben|abbrechen|unterbrochen|regnen|geregnet|staub|lieferung|pressfitting|"
-    r"kleber|hitze|anschluss|eng|grundwasser"
+    r"kleber|hitze|anschluss|eng|grundwasser|probleme?"
     r")\b",
     re.IGNORECASE,
 )
@@ -72,6 +72,7 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|(?:das\s+war\s+)?(?:ein\s+)?(?:sehr\s+)?großes\s+problem"
     r"|untergrund\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
     r"|(?:die\s+)?wand\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
+    r"|(?:die\s+)?wand\s+(?:war\s+)?nicht\s+lotrecht(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
     r"|was\s+zu\s+problemen\s+geführt\s+hat"
     r"|(?:weil|da)\s+(?:die\s+)?wand\s+nicht\s+lotrecht\s+ist"
     r"|(?:leider\s+)?maschine\s+kaputt\s+mussten\s+stoppen"
@@ -338,6 +339,8 @@ def _implicit_problem_clause(match_text: str) -> str:
         return _polish_problem_clause("Gefälle nicht in Ordnung")
     if re.search(r"lotrecht", low):
         return _polish_problem_clause("Wand nicht lotrecht")
+    if re.search(r"was\s+zu\s+problemen\s+gef", low):
+        return _polish_problem_clause("Es gab Probleme auf der Baustelle")
     if re.search(r"abbrechen|stoppen|beenden", low) and re.search(r"kleber|hitze|abbindet", low):
         return _polish_problem_clause("Kleber bindet bei Hitze zu schnell ab")
     if re.search(r"material\s+knapp", low):

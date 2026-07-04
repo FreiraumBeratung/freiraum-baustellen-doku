@@ -50,6 +50,10 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"bauleitung\s+kurz\s+da[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"bauherr(?:in)?\s+kurz\s+da[^.!?]*",
         re.IGNORECASE,
     ),

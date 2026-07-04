@@ -1547,7 +1547,14 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
     if "pflanzen gesetzt" in low:
         return bool(re.search(r"\bpflanz", raw) and re.search(r"(gesetzt|gepflanzt|bepflanzt|eingepflanzt)", raw))
     if "hecke geschnitten" in low:
-        return bool(re.search(r"\bhecke\b", raw) and re.search(r"(geschnitten|getrimmt|zurückgeschnitten|zurueckgeschnitten|schneiden|schneide)", raw))
+        return bool(
+            re.search(r"\b(hecken?|str(ä|ae)ucher)\b", raw, flags=re.IGNORECASE)
+            and re.search(
+                r"(geschnitten|getrimmt|zurückgeschnitten|zurueckgeschnitten|schneiden|schneide)",
+                raw,
+                flags=re.IGNORECASE,
+            )
+        )
     if "rasen gemäht" in low:
         return bool(
             re.search(r"\brasen\b", raw)
