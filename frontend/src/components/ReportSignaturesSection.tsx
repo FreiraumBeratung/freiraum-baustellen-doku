@@ -18,7 +18,7 @@ type ReportSignaturesSectionProps = {
   customerName?: string
   /** In Detail-Karte eingebettet — ohne oberen Trennstrich. */
   embedded?: boolean
-  /** Toggle initial geoeffnet (z.B. nach iOS-Foto-Redirect). */
+  /** Toggle initial geoeffnet (z.B. per URL ?signatures=1). */
   initialOpen?: boolean
 }
 

@@ -779,7 +779,7 @@ function ReportPhotoRecoveryPage({ reportId }: { reportId: string }) {
           iosGalleryRedirect
           onUploadComplete={() => setPageWakeKey((k) => k + 1)}
         />
-        <ReportSignaturesSection reportId={reportId} enabled embedded initialOpen />
+        <ReportSignaturesSection reportId={reportId} enabled embedded />
       </Card>
       <div className="mt-6 space-y-3">
         <BigButton variant="secondary" type="button" onClick={() => nav(`/berichte/${reportId}`)}>

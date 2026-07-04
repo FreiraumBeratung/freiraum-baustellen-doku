@@ -1,4 +1,4 @@
-/** Steuert iOS-PWA-Hacks waehrend Foto-Upload (Nav ohne backdrop-blur). */
+/** Steuert iOS/Android-PWA-Hacks waehrend Foto-Upload (Nav ohne backdrop-blur). */
 export function setPhotoUploadBusy(active: boolean): void {
   if (active) {
     document.body.dataset.photoUploadBusy = '1'

@@ -84,9 +84,18 @@ body {
   animation: freiraum-mic-record-pulse 1.05s ease-in-out infinite;
 }
 
-/* Foto-Upload: iOS-PWA — backdrop-blur an der Nav kann Black-Screen ausloesen. */
+/* Foto-Upload: iOS/Android-PWA — backdrop-blur an der Nav kann Black-Screen ausloesen. */
 body[data-photo-upload-busy='1'] nav[aria-label='Hauptnavigation'] {
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
   background-color: #09090b;
+}
+
+/* Dashboard: Firmenlogo auf Android-PWA mit voller Farbsaettigung (kein „ausgewaschen"). */
+.dashboard-company-logo img {
+  opacity: 1;
+  filter: none;
+  mix-blend-mode: normal;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }

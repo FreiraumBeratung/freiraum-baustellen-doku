@@ -11,8 +11,10 @@ import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { InlineCameraModal } from './InlineCameraModal'
 import { PhotoUploadOverlay, type PhotoUploadOverlayMode } from './PhotoUploadOverlay'
 import { compressImageForUpload } from '../utils/compressImage'
-import { iosHardRedirectAfterPhotoUpload } from '../utils/iosPhotoRedirect'
-import { isIosDevice } from '../utils/isIosDevice'
+import {
+  mobileHardRedirectAfterPhotoUpload,
+  needsMobilePhotoHardRedirect,
+} from '../utils/mobilePhotoRedirect'
 import { setPhotoUploadBusy } from '../utils/photoUploadBusy'
 import { forcePwaRepaint, wakePageAfterPhotoUpload, yieldForPaint } from '../utils/pwaRepaint'
 import { BigButton } from './ui'
@@ -25,9 +27,9 @@ type ReportPhotosSectionProps = {
   enabled: boolean
   /** Wird nach erfolgreichem Upload aufgerufen (Seite kurz „wecken“). */
   onUploadComplete?: () => void
-  /** iOS: nach erfolgreichem Upload hart zur Detailseite (Kamera + Galerie). */
+  /** Mobil (iOS/Android): nach erfolgreichem Upload hart zur Detailseite (Kamera + Galerie). */
   iosGalleryRedirect?: boolean
-  /** Toggle initial geoeffnet (z.B. nach iOS-Redirect). */
+  /** Toggle initial geoeffnet (z.B. nach Foto-Redirect). */
   initialOpen?: boolean
   /** In Detail-Karte eingebettet — ohne oberen Trennstrich. */
   embedded?: boolean
@@ -81,20 +83,20 @@ export function ReportPhotosSection({
 
   const closeOverlaySoft = useCallback(
     async (opts: { success?: boolean; message?: string; source?: PhotoSource } = {}) => {
-      const shouldIosHardRedirect =
+      const shouldMobileHardRedirect =
         Boolean(opts.success) &&
         iosGalleryRedirect &&
-        isIosDevice() &&
+        needsMobilePhotoHardRedirect() &&
         reportId &&
         (opts.source === 'gallery' || opts.source === 'inline-camera')
 
-      if (shouldIosHardRedirect) {
+      if (shouldMobileHardRedirect) {
         setPhase('idle')
         setStatusLine(opts.message ?? 'Foto übernommen.')
         setOverlayMode('success')
         await yieldForPaint(600)
         setPhotoUploadBusy(false)
-        iosHardRedirectAfterPhotoUpload(reportId)
+        mobileHardRedirectAfterPhotoUpload(reportId)
         return
       }
 
