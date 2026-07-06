@@ -482,6 +482,7 @@ def build_pdf_bytes(
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
     mats = _list_or_keine(st.get("materials"))
+    machine_hours = _list_or_keine(st.get("machineHours"))
     probs = _list_or_keine(st.get("problems"))
     opens = _list_or_keine(st.get("openItems"))
     ktalk = str(st.get("customerTalk") or "Keine Angabe")
@@ -574,6 +575,9 @@ def build_pdf_bytes(
 
     story.append(sec("Material"))
     bullets(mats)
+
+    story.append(sec("Maschinenstunden"))
+    bullets(machine_hours)
 
     story.append(sec("Probleme"))
     bullets(probs)
@@ -720,6 +724,7 @@ def build_docx_bytes(
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
     mats = _list_or_keine(st.get("materials"))
+    machine_hours = _list_or_keine(st.get("machineHours"))
     probs = _list_or_keine(st.get("problems"))
     opens = _list_or_keine(st.get("openItems"))
     ktalk = str(st.get("customerTalk") or "Keine Angabe")
@@ -732,6 +737,7 @@ def build_docx_bytes(
 
     _section_list_docx(d, "Tätigkeiten", acts)
     _section_list_docx(d, "Material", mats)
+    _section_list_docx(d, "Maschinenstunden", machine_hours)
     _section_list_docx(d, "Probleme", probs)
     _section_list_docx(d, "Offene Punkte", opens)
 

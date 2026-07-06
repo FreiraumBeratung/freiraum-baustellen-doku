@@ -1372,6 +1372,7 @@ def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
         "radlader": r"\bradlader\b",
         "walze": r"\bwalze(nzug)?\b|\bgrabenwalze\b",
         "kran": r"\b(autokran|turmdrehkran|kran)\b",
+        "lkw": r"\blkw\b",
     }
     machine_pattern = machine_patterns.get(machine_key, "")
     if not machine_pattern:
@@ -1405,6 +1406,7 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
         ("Radlader", r"\bradlader\b"),
         ("Walze", r"\bwalze(nzug)?\b|\bgrabenwalze\b"),
         ("Kran", r"\b(?:autokran|turmdrehkran|kran)\b"),
+        ("LKW", r"\blkw\b"),
     )
     gap = r"(?:\s+\S+){0,8}\s+"
     for label, pattern in machine_patterns:
@@ -1414,7 +1416,8 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
             flags=re.IGNORECASE,
         )
         if m_after:
-            out.append(f"{label}: {m_after.group(1)} h")
+            hours = m_after.group(1).replace(".", ",")
+            out.append(f"{label}: {hours} h")
             continue
         m_before = re.search(
             r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b" + gap + pattern,
@@ -1422,7 +1425,8 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
             flags=re.IGNORECASE,
         )
         if m_before:
-            out.append(f"{label}: {m_before.group(1)} h")
+            hours = m_before.group(1).replace(".", ",")
+            out.append(f"{label}: {hours} h")
     return _dedupe(out)
 
 
@@ -1713,6 +1717,9 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     materials = _resolve_bettmoertel_conflicts(materials)
     materials = _prefer_specific_material_labels(materials)
     materials = _enforce_pipe_family_consistency(materials, activities, raw_text)
+    from app.services.material_quantity_builder import enrich_materials_list
+
+    materials = enrich_materials_list(materials, raw_text)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     activities = _drop_material_echo_activities(activities, materials)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)
