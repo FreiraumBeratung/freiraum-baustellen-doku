@@ -537,7 +537,7 @@ _MACHINE_RULES: tuple[tuple[str, str, str, str], ...] = (
     ("radlader", r"\bradlader\b", "Radlader eingesetzt", "Radladerstunden erfassen?"),
     (
         "walze",
-        r"\bwalze(nzug)?\b|\bgrabenwalze\b",
+        r"\b(?:walze(?:nzug)?|grabenwalze)\b",
         "Walzenarbeiten durchgeführt",
         "Walzenstunden erfassen?",
     ),
@@ -1404,7 +1404,7 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
         ("Rüttelplatte", r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b"),
         ("Stampfer", r"\bstampfer\b"),
         ("Radlader", r"\bradlader\b"),
-        ("Walze", r"\bwalze(nzug)?\b|\bgrabenwalze\b"),
+        ("Walze", r"\b(?:walze(?:nzug)?|grabenwalze)\b"),
         ("Kran", r"\b(?:autokran|turmdrehkran|kran)\b"),
         ("LKW", r"\blkw\b"),
     )
@@ -1415,7 +1415,7 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
             raw,
             flags=re.IGNORECASE,
         )
-        if m_after:
+        if m_after and m_after.group(1):
             hours = m_after.group(1).replace(".", ",")
             out.append(f"{label}: {hours} h")
             continue
@@ -1424,7 +1424,7 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
             raw,
             flags=re.IGNORECASE,
         )
-        if m_before:
+        if m_before and m_before.group(1):
             hours = m_before.group(1).replace(".", ",")
             out.append(f"{label}: {hours} h")
     return _dedupe(out)
