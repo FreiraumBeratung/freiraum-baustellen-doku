@@ -634,6 +634,13 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\baltputz\s+runter\b", "altputz entfernt", t, flags=re.IGNORECASE)
     t = re.sub(r"\barm\s+ie\s+rung\b", "armierung", t, flags=re.IGNORECASE)
     t = re.sub(r"\bw\s+d\s+v\s+s\b", "wdvs", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(unter|ober|grund|sanier|alt|innen|sockel|reib|kratz)\s+putz\b",
+        r"\1putz",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\b(au(?:ß|ss)en)\s+putz\b", r"\1putz", t, flags=re.IGNORECASE)
     t = re.sub(r"\bschim\s+mel\b", "schimmel", t, flags=re.IGNORECASE)
     t = re.sub(r"\bge\s+schliffen\b", "geschliffen", t, flags=re.IGNORECASE)
     t = re.sub(r"\ban\s+ge\s+schliffen\b", "angeschliffen", t, flags=re.IGNORECASE)
@@ -647,6 +654,29 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bsanier\s+putz\b", "sanierputz", t, flags=re.IGNORECASE)
     t = re.sub(r"\breib\s+putz\b", "reibputz", t, flags=re.IGNORECASE)
     t = re.sub(r"\bkratz\s+putz\b", "kratzputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bd(ä|ae|ae)mm\s+platten\b", "dämmplatten", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bd(ä|ae|ae)emm\s+platten\b", "daemmplatten", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgips\s+putz\b", "gipsputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bkalk\s+putz\b", "kalkputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bsilikonharz\s+putz\b", "silikonharzputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bsilikat\s+putz\b", "silikatputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfein\s+putz\b", "feinputz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfil\s+ziert\b", "filziert", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfiliziert\b", "filziert", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgl(ä|ae)\s+tten\b", "glätten", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfil\s+zen\b", "filzen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bge\s+d(ü|ue)belt\b", "gedübelt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bteller\s+d(ü|ue)bel\b", "tellerdübel", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bd(ä|ae)\s+mmung\s+kleben\b", "dämmung kleben", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bwdvs\s+kleben\b", "wdvs kleben", t, flags=re.IGNORECASE)
+    t = re.sub(r"\ban\s+putz\s+leiste\b", "anputzleiste", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bapu\s+leiste\b", "apu-leiste", t, flags=re.IGNORECASE)
+    t = re.sub(r"\beck\s+schutz\b", "eckschutz", t, flags=re.IGNORECASE)
+    t = re.sub(r"\beck\s+profil\b", "eckprofil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bleibungs\s+profil\b", "leibungsprofil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\blaibungs\s+profil\b", "laibungsprofil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bsockel\s+profil\b", "sockelprofil", t, flags=re.IGNORECASE)
+    t = re.sub(r"\btropf\s+kante\b", "tropfkante", t, flags=re.IGNORECASE)
     t = re.sub(r"\bge\s+sims\b", "gesims", t, flags=re.IGNORECASE)
     t = re.sub(r"\bputz\s+ab\s*getragen\b", "putz abgetragen", t, flags=re.IGNORECASE)
     t = re.sub(
@@ -698,6 +728,170 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(
+        r"\b(wdvs\s+(?:dämmung\s+)?geklebt|wdvs\s+daemmung\s+geklebt)\s+(?=armierungs\s*gewebe|armierungsgewebe|gewebe|armierung)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+gedübelt|wdvs\s+geduebelt|wdvs\s+dübeln|wdvs\s+duebeln)\s+(?=tropfkanten|sockelprofil|sockelprofile|apu|anputzleiste|eckschutz|leibungs|laibungs|innenputz|außenputz|aussenputz|oberputz|unterputz|reibputz|kratzputz|armierungs|gewebe)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(sanierputz\s+drauf|sanierputz\s+aufgebracht|sanierputz\s+aufgetragen)\s+(?=unterputz|oberputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(grundierung(?:\s+drauf)?)\s+(?=unterputz|oberputz|innenputz|grundputz|sockelputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(oberputz\s+glatt|ober\s+putz\s+glatt)\s+(?=putz\s+geglättet|putz\s+geglaettet)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:außen|aussen)putz)\s+(?=kratzputz)\b",
+        r"\1 aufgetragen. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(innenputz(?:\s+(?:mit\s+)?\w+putz)?(?:\s+\d+(?:[.,]\d+)?(?:\s*(?:quadratmeter|qm|m²|m2))?)?)\s+(?=sockelputz|oberputz|kratzputz|reibputz)\b",
+        r"\1 aufgetragen. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(innenputz[^.]{0,50}aufgetragen)\s+(?=oberputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(grundputz\s+aufgetragen)\s+(?=innenputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(sockelputz\s+gemacht|sockelputz\s+aufgetragen)\s+(?=leibungs|laibungs|eckschutz|apu|anputzleiste|tropfkanten)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(reibputz(?:\s+aufgetragen|\s+drauf))\s+(?=tropfkanten|eckschutz|eckprofil|eckschutzschiene|sockelprofil|apu|anputzleiste|leibungs|laibungs)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(tropfkanten(?:profil|profile)?\s+gesetzt)\s+(?=eckschutz|eckprofil|eckschutzschiene|apu|anputzleiste|leibungs|laibungs|sockelprofil)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(altputz\s+(?:abgetragen|ab\s*getragen|entfernt|runter)|putz\s+abgetragen)\s+(?=wand|decke|fassade)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(mittags|nachmittags|vormittags|morgens|abends)\s+(?=grundierung|unterputz|oberputz|innenputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(unterputz\s+aufgetragen)\s+(?=nachmittags|mittags|vormittags|morgens|abends)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(putz\s+geglättet|putz\s+geglaettet)\s+(?=außenputz|aussenputz|kratzputz|innenputz|und am ende)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(putz\s+filziert)\s+(?=außenputz|aussenputz|innenputz|oberputz|silikat|silikonharz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:außen|aussen)putz\s+aufgetragen)\s+(?=silikat|silikonharz|kalkputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(kratzputz)\s+(?=reibputz|putz\s+filziert)\b",
+        r"\1 aufgetragen. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(reibputz)\s+(?=putz\s+filziert)\b",
+        r"\1 aufgetragen. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(apu(?:-|\s)?leiste(?:n)?\s+montiert|anputzleiste\s+montiert)\s+(?=eckschutz|eckprofil|eckschutzschiene)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(sockelprofil(?:\s+\d+[^.]{0,20})?\s+montiert|sockelprofile\s+montiert)\s+(?=tropfkante|tropfkantenprofil)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(schimmel\s+beseitigt|schimmel\s+weg\s+gemacht)\s+mit\s+schimmelentferner\s+(?=sanierputz)\b",
+        r"\1 mit schimmelentferner. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\beps\s+platten\b", "eps dämmplatten", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(oberputz\s+aufgetragen)\s+(?=nach\s+unterputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(putz\s+geglättet|putz\s+geglaettet)\s+(?=oberputz\s+glatt)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(armierungsmörtel|armierungsmoertel|klebe-armierungsmoertel)\s+(?=wdvs\s+gedübelt|wdvs\s+geduebelt)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(tellerdübel|tellerduebel)\s+(?=armierungs|gewebe)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\barmierungs\s+gewebe\b", "armierungsgewebe", t, flags=re.IGNORECASE)
+    t = re.sub(
         r"\b(eingebettet)\s+reibputz\b",
         r"\1. reibputz",
         t,
@@ -712,6 +906,211 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(
         r"\bkratzputz\s+aufgetragen\s+reibputz\b",
         r"kratzputz aufgetragen. reibputz",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(r"\b(reibputz)\s+drauf\b", r"\1 aufgetragen", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(silikatputz|silikonharzputz|kalkzementputz)\s+(?=kratzputz|reibputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(außenputz|aussenputz)\s+(?=silikatputz|silikonharzputz|kratzputz|reibputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(kratzputz(?:\s+aufgetragen)?)\s+(?=putz\s+filziert)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(oberputz\s+aufgetragen)\s+(?=nachmittags|vormittags|mittags|morgens|putz\s+geglättet|putz\s+geglaettet)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(unterputz\s+aufgetragen)\s+(?=während|waehrend|wdvs|während)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(reibputz(?:\s+nachgearbeitet|\s+aufgetragen)?)\s+(?=silikonharzputz|silikatputz|kalkzementputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(apu(?:-|\s)?leiste(?:n)?\s+montiert|anputzleiste\s+montiert)\s+(?=tropfkanten)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(dämmung\s+geklebt|daemmung\s+geklebt)\s+(gedübelt|geduebelt|dübeln|duebeln|wdvs\s+gedübelt|wdvs\s+geduebelt)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(gedübelt|geduebelt|wdvs\s+gedübelt|wdvs\s+geduebelt)\s+(?=armierung\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(armierung)\s+(?=reibputz)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(reibputz(?:\s+aufgetragen)?)\s+(?=sockelprofil|sockelprofile)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(putz\s+geglättet|putz\s+geglaettet)\s+(?=oberputz\s+(?:aufgetragen|glatt))\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(tropfkanten(?:profile|profil)?)\s+(?=eckschutz|eckprofil)\b",
+        r"\1 gesetzt. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+dämmung\s+geklebt|wdvs\s+daemmung\s+geklebt)\s+(wdvs\s+gedübelt|wdvs\s+geduebelt|wdvs\s+dübeln|wdvs\s+duebeln)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+gedübelt|wdvs\s+geduebelt|wdvs\s+dübeln|wdvs\s+duebeln)\s+(armierungs(?:gewebe)?|gewebe)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(morgens|vormittags|mittags|nachmittags|abends)\s+(?=wdvs)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+dämmung\s+geklebt|wdvs\s+daemmung\s+geklebt)\s+(mittags|nachmittags|vormittags)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(mittags|nachmittags|vormittags)\s+(wdvs\s+gedübelt|wdvs\s+geduebelt|wdvs\s+dübeln|wdvs\s+duebeln)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+gedübelt|wdvs\s+geduebelt|wdvs\s+dübeln|wdvs\s+duebeln)\s+(nachmittags|vormittags)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(nachmittags|vormittags)\s+(armierungs(?:gewebe)?|gewebe)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(kratzputz\s+aufgetragen)\s+(putz\s+filziert)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(putz\s+filziert)\s+((?:außen|aussen)putz\s+strukturiert)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(unterputz\s+aufgetragen)\s+(oberputz\s+aufgetragen)\s+(putz\s+geglättet|putz\s+geglaettet)\b",
+        r"\1. \2. \3",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(sockelprofile\s+montiert|sockelprofil\s+montiert)\s+(apu(?:-|\s)?leiste|anputzleiste)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(apu(?:-|\s)?leiste(?:n)?\s+montiert|anputzleiste\s+montiert)\s+(leibungsprofil|laibungsprofil|eckschutz)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(leibungsprofile\s+gesetzt|leibungsprofil\s+gesetzt|laibungsprofil\s+gesetzt)\s+(eckschutz|eckprofil)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(eckschutzprofile\s+gesetzt|eckschutzschiene\s+gesetzt|eckprofil\s+gesetzt)\s+(tropfkante|tropfkantenprofil)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(wdvs\s+dämmung\s+geklebt|wdvs\s+ausgeführt|wdvs\s+ausgefuehrt)\s+(sockelprofil)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:sockelprofil|startprofil)\s+montiert)\s+(apu(?:-|\s)?leiste(?:n)?\s+montiert|anputzleiste\s+montiert)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(apu(?:-|\s)?leiste(?:n)?\s+montiert|anputzleiste\s+montiert)\s+(leibungsprofil\s+gesetzt|laibungsprofil\s+gesetzt|leibungsprofile\s+gesetzt)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(leibungsprofile\s+gesetzt|leibungsprofil\s+gesetzt|laibungsprofil\s+gesetzt)\s+(?=eckschutzprofile|eckschutzprofil|eckschutzschiene|eckschutz|eckprofil)\b",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(armierungsgewebe\s+eingebettet|armierung\s+ausgeführt|armierung\s+ausgefuehrt|gewebe\s+reingemacht)\s+(sockelprofil)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(sockelprofil\s+montiert)\s+(apu-leisten\s+montiert|apu\s+leisten\s+montiert)\b",
+        r"\1. \2",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(apu-leisten\s+montiert|apu\s+leisten\s+montiert)\s+(leibungsprofile\s+gesetzt)\b",
+        r"\1. \2",
         t,
         flags=re.IGNORECASE,
     )
@@ -929,6 +1328,8 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(r"\bgrundierung\s+drauf\b", "grundierung drauf. ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\binnen\s+und\s+außen\b", "innen_und_aussen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\binnen\s+und\s+aussen\b", "innen_und_aussen", t, flags=re.IGNORECASE)
     t = re.sub(r"\beingebettet\b", "eingebettet. ", t, flags=re.IGNORECASE)
     t = re.sub(r"\berdaushub\s+gemacht\b", "erdaushub gemacht. ", t, flags=re.IGNORECASE)
     t = re.sub(
@@ -1132,7 +1533,14 @@ def _split_chunks(text: str) -> list[str]:
     _clause_pieces = [p.strip() for p in re.split(r"[.]", t) if p.strip()]
     if _clause_pieces:
         t = ". ".join(_propagate_trailing_verb(p) for p in _clause_pieces)
+    t = re.sub(
+        r"\bklebe-\s+und\s+armierungsm[oö]rtel\b",
+        "klebe-armierungsmoertel",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bund\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\binnen_und_aussen\b", "innen und außen", t, flags=re.IGNORECASE)
     parts = [p.strip(" ,.;") for p in re.split(r"[.]", t) if p.strip(" ,.;")]
     out: list[str] = []
     for part in parts:
@@ -1200,6 +1608,12 @@ def _propagate_trailing_verb(clause: str) -> str:
             if chosen:
                 if re.search(r"\basphalt\b", seg, flags=re.IGNORECASE) and re.search(
                     r"gemacht|verf[uü]ll|gesetzt", chosen, flags=re.IGNORECASE
+                ):
+                    pass
+                elif re.search(
+                    r"\b(klebeputz|spachtelmasse|armierungsmörtel|armierungsmoertel|klebe- und armierungsmörtel|noppenbahn|sockeldämmung|sockeldaemmung)\b",
+                    seg,
+                    flags=re.IGNORECASE,
                 ):
                     pass
                 elif re.search(r"\b(schneiden|schneide|geschnitten)\b", seg, flags=re.IGNORECASE) and re.search(
@@ -1595,6 +2009,7 @@ def normalize_for_match(text: str) -> str:
 
 def _normalize_for_match(text: str) -> str:
     out = text.casefold()
+    out = re.sub(r"\barmierungs\s+m(?:ö|oe)rtel\b", "armierungsmörtel", out)
     out = re.sub(r"\bas\s+fault\b", "asphalt", out)
     out = re.sub(r"\bfss\b", "frostschutz", out)
     out = re.sub(r"\bsts\b", "schottertragschicht", out)
@@ -1788,6 +2203,7 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bdruckprufung\b", "druckprüfung", out)
     # Whisper-Trennung von Putz-Komposita: "unter putz" -> "unterputz" usw.
     out = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", out)
+    out = re.sub(r"\barmierungs\s+gewebe\b", "armierungsgewebe", out)
     out = re.sub(r"\bunter\s+putz\b", "unterputz", out)
     out = re.sub(
         r"\b(unter|ober|grund|sanier|alt|innen|sockel|reib|kratz)\s+putz\b",
@@ -1795,6 +2211,23 @@ def _normalize_for_match(text: str) -> str:
         out,
     )
     out = re.sub(r"\b(au(?:ß|ss)en)\s+putz\b", r"\1putz", out)
+    out = re.sub(r"\bd(ä|ae|ae)mm\s+platten\b", "dämmplatten", out)
+    out = re.sub(r"\bd(ä|ae|ae)emm\s+platten\b", "daemmplatten", out)
+    out = re.sub(r"\bgips\s+putz\b", "gipsputz", out)
+    out = re.sub(r"\bkalk\s+putz\b", "kalkputz", out)
+    out = re.sub(r"\bsilikonharz\s+putz\b", "silikonharzputz", out)
+    out = re.sub(r"\bsilikat\s+putz\b", "silikatputz", out)
+    out = re.sub(r"\bfein\s+putz\b", "feinputz", out)
+    out = re.sub(r"\bfil\s+ziert\b", "filziert", out)
+    out = re.sub(r"\bgl(ä|ae)\s+tten\b", "glätten", out)
+    out = re.sub(r"\ban\s+putz\s+leiste\b", "anputzleiste", out)
+    out = re.sub(r"\bapu\s+leiste\b", "apu-leiste", out)
+    out = re.sub(r"\beck\s+schutz\b", "eckschutz", out)
+    out = re.sub(r"\beck\s+profil\b", "eckprofil", out)
+    out = re.sub(r"\bleibungs\s+profil\b", "leibungsprofil", out)
+    out = re.sub(r"\blaibungs\s+profil\b", "laibungsprofil", out)
+    out = re.sub(r"\bsockel\s+profil\b", "sockelprofil", out)
+    out = re.sub(r"\btropf\s+kante\b", "tropfkante", out)
     out = re.sub(r"\becke geschnitten\b", "hecke geschnitten", out)
     out = re.sub(r"\becke zurückgeschnitten\b|\becke zurueckgeschnitten\b", "hecke zurückgeschnitten", out)
     out = re.sub(r"\becke getrimmt\b", "hecke getrimmt", out)
@@ -2117,7 +2550,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if re.search(
         r"\b(platten|mosaik|feinsteinzeug|mosaikfliesen|wandfliesen|bodenfliesen)\b",
         t,
-    ) and re.search(r"\b(verlegt|gelegt|gesetzt|geklebt)\b", t):
+    ) and re.search(r"\b(verlegt|gelegt|gesetzt|geklebt)\b", t) and not re.search(
+        r"\b(wdvs|dämmung\s+geklebt|daemmung\s+geklebt|eps|dämmplatten|daemmplatten|mineralwolle|holzfaser)\b",
+        f"{t} {str(raw_text or '').casefold()}",
+    ):
         if _is_keramikterrasse_context(t, raw_text=raw_text):
             qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
             text = f"{_qty_prefix(raw_text)}{qty} m² Keramikterrasse verlegt" if qty else "Keramikterrasse verlegt"
@@ -2133,6 +2569,8 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("naturstein_verlegt", text, 70.0, bool(qty))
     if "silikonfugen" in t or (
         "silikon" in t
+        and "silikonharzputz" not in t
+        and "silikonharz" not in t
         and re.search(
             r"\b(gemacht|gezogen|silikoniert|hergestellt|abgeschlossen|verarbeitet|"
             r"aufgetragen|nachgearbeitet|ausgef(ü|ue)hrt|fertig(gemacht|gestellt))\b",
@@ -2417,6 +2855,50 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("brandschutzwand_hergestellt", "Brandschutzwand hergestellt", 72.0, False)
     if re.search(r"\bakustikdecke\b", t) and re.search(r"\b(eingebaut|montiert)\b", t):
         return CanonicalActivity("akustikdecke_eingebaut", "Akustikdecke eingebaut", 70.0, False)
+    # Welle 17: Putz-/Fassadenprofile vor Trockenbau-„profile“-Heuristik
+    if re.search(r"\b(eckschutz(?:profile|profil|schiene)?|eckprofil|kantenschutz)\b", t) and re.search(
+        r"\b(gesetzt|montiert|angebracht|verarbeitet|eingebaut|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("eckschutzprofile_gesetzt", "Eckschutzprofile gesetzt", 72.0, False)
+    if re.search(r"\b(apu(?:-|\s)?leiste|anputzleiste|fensteranschlussprofil)\b", t) and re.search(
+        r"\b(montiert|gesetzt|angebracht|verarbeitet|eingebaut|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("apu_leisten_montiert", "APU-Leisten montiert", 72.0, False)
+    if re.search(r"\bapu\b", t) and re.search(r"\b(montiert|gesetzt|angebracht|gemacht)\b", t):
+        return CanonicalActivity("apu_leisten_montiert", "APU-Leisten montiert", 72.0, False)
+    if re.search(r"\b(leibungsprofile|leibungsprofil|laibungsprofile|laibungsprofil|fensterleibung|laibung|leibung)\b", t) and re.search(
+        r"\b(gesetzt|montiert|angebracht|verarbeitet|eingebaut|gemacht)\b",
+        t,
+    ) and not re.search(r"\b(cw|uw|cd|ud|ua)[-\s]*profil", t):
+        return CanonicalActivity("leibungsprofile_gesetzt", "Leibungsprofile gesetzt", 72.0, False)
+    if re.search(r"\b(sockelprofile|sockelprofil|sockelschiene|startprofil)\b", t) and re.search(
+        r"\b(montiert|gesetzt|angebracht|verarbeitet|eingebaut|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("sockelprofile_montiert", "Sockelprofile montiert", 72.0, False)
+    if re.search(r"\bwdvs\b", t) and re.search(
+        r"\b(gedübelt|geduebelt|dübeln|duebeln|tellerdübel|tellerduebel)\b",
+        t,
+    ):
+        return CanonicalActivity("wdvs_geduebelt", "WDVS gedübelt", 73.5, False)
+    if re.search(r"^(gedübelt|geduebelt|dübeln|duebeln)\s*$", t.strip(), flags=re.IGNORECASE):
+        raw_probe = _normalize_for_match(str(raw_text or ""))
+        if re.search(r"\bwdvs\b", raw_probe):
+            return CanonicalActivity("wdvs_geduebelt", "WDVS gedübelt", 73.5, False)
+    if re.search(r"^reibputz\s*$", t.strip(), flags=re.IGNORECASE):
+        return CanonicalActivity("reibputz_aufgetragen", "Reibputz aufgetragen", 73.0, False)
+    if re.search(r"\b(tropfkanten(?:profile|profil)?)\b", t) and re.search(
+        r"\b(gesetzt|montiert)\b",
+        t,
+    ) and not re.search(r"\b(apu|anputzleiste)\b", t):
+        return CanonicalActivity("tropfkantenprofile_gesetzt", "Tropfkantenprofile gesetzt", 72.0, False)
+    if re.search(r"\b(tropfkanten(?:profile|profil)?|abtropfkante|tropfkante)\b", t) and re.search(
+        r"\b(gesetzt|montiert|angebracht|verarbeitet|eingebaut|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("tropfkantenprofile_gesetzt", "Tropfkantenprofile gesetzt", 72.0, False)
     if (
         "ständerwerk" in t
         or "staenderwerk" in t
@@ -2641,6 +3123,17 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         f"{t} {str(raw_text or '').casefold()}",
     ):
         return CanonicalActivity("sanierputz_aufgebracht", "Sanierputz aufgebracht", 92.0, False)
+    if re.search(r"\bgrundierung\b", t) and (
+        re.search(
+            r"\b(aufgetragen|aufgebracht|benutzt|verwendet|verarbeitet|gemacht|drauf|draufgezogen|grundiert)\b",
+            t,
+        )
+        or re.search(
+            r"\b(mittags|vormittags|nachmittags|morgens|abends|wand|decke|fassade|untergrund|geschiffen|geschliffen|altputz)\b",
+            f"{t} {str(raw_text or '').casefold()}",
+        )
+    ):
+        return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
     if "grundputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
         return CanonicalActivity("grundputz_aufgetragen", "Grundputz aufgetragen", 77.0, False)
     if "unterputz" in t and re.search(
@@ -2658,11 +3151,55 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         if "fassade" in t or re.search(r"\bfassade|fassaden|fas\s+sade\b", raw_probe):
             return CanonicalActivity("fassadenarmierung", "Fassadenarmierung ausgeführt", 72.0, False)
         return CanonicalActivity("armierung_ausgefuehrt", "Armierung ausgeführt", 71.5, False)
+    if re.search(r"\barmierung\b", t) and not re.search(
+        r"\barmierungs(?:gewebe|mörtel|moertel)\b", t
+    ):
+        raw_probe = _normalize_for_match(str(raw_text or ""))
+        if re.search(
+            r"\b(wdvs|gedübelt|geduebelt|dämmung|daemmung|reibputz|gewebe|armierung)\b",
+            f"{t} {raw_probe}",
+        ):
+            return CanonicalActivity("armierung_ausgefuehrt", "Armierung ausgeführt", 71.5, False)
+    if re.search(r"\baußenputz\b|\baussenputz\b", t) and re.search(
+        r"\b(silikatputz|silikonharzputz|kalkzementputz|kratzputz|reibputz|gipsputz)\b", t
+    ) and (
+        re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|strukturiert|gemacht)\b", t)
+        or re.search(r"\b(kratzputz|putz\s+filziert)\b", t)
+    ):
+        return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.5, False)
+    if re.search(r"\b(innenputz|außenputz|aussenputz|putz|feinputz)\b", t) and re.search(
+        r"\b(glätten|glaetten|geglättet|geglaettet|finishen|finisht)\b",
+        t,
+    ):
+        return CanonicalActivity("putz_glaettet", "Putz geglättet", 72.5, False)
+    if "kratzputz" in t and re.search(
+        r"\b(reibputz|putz\s+filziert|außenputz|aussenputz|quadratmeter|qm|m²|m2)\b",
+        f"{t} {str(raw_text or '').casefold()}",
+    ) and (
+        re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t) or "reibputz" in t
+    ):
+        return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
+    if re.search(r"\b(innenputz|außenputz|aussenputz|putz|feinputz)\b", t) and re.search(
+        r"\b(filzen|filziert)\b",
+        t,
+    ):
+        return CanonicalActivity("putz_filziert", "Putz filziert", 72.5, False)
+    if re.search(r"\b(silikonharzputz|silikatputz|kalkzementputz)\b", t) and re.search(
+        r"\b(aufgetragen|aufgebracht|verarbeitet|strukturiert)\b",
+        t,
+    ):
+        return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.0, False)
     if "reibputz" in t and re.search(
         r"\b(aufgetragen|aufgebracht|verarbeitet|abgerieben|gemacht|geschliffen|angeschliffen|nachgearbeitet)\b",
         t,
     ):
         return CanonicalActivity("reibputz_aufgetragen", "Reibputz aufgetragen", 73.0, False)
+    if re.search(r"\bwdvs\b", t) and re.search(r"\b(kleben|geklebt)\b", t):
+        return CanonicalActivity("wdvs_daemmung_geklebt", "WDVS Dämmung geklebt", 73.5, False)
+    if re.search(r"\bwdvs\b", t) and re.search(r"\b(dübeln|duebeln|gedübelt|geduebelt)\b", t):
+        return CanonicalActivity("wdvs_geduebelt", "WDVS gedübelt", 73.5, False)
+    if re.search(r"^\s*d(ü|ue)beln\b", t) and re.search(r"\bwdvs\b", _normalize_for_match(str(raw_text or ""))):
+        return CanonicalActivity("wdvs_geduebelt", "WDVS gedübelt", 73.5, False)
     if ("innenputz" in t or "aussenputz" in t or "außenputz" in t) and re.search(
         r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|strukturiert|gezogen|aufgezogen)\b",
         t,
@@ -2670,10 +3207,22 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         if "innenputz" in t:
             return CanonicalActivity("innenputz_aufgetragen", "Innenputz aufgetragen", 76.0, False)
         return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.0, False)
+    if "innenputz" in t and not re.search(
+        r"\b(sockelputz|leibungs|laibungs|eckschutz|apu|tropfkanten|oberputz|kratzputz|reibputz)\b",
+        t,
+    ) and (
+        re.search(r"\b(gipsputz|kalkputz|feinputz|silikatputz|silikonharzputz)\b", t)
+        or re.search(r"\b\d+(?:[.,]\d+)?\s*(?:quadratmeter|qm|m²|m2)\b", t)
+    ):
+        return CanonicalActivity("innenputz_aufgetragen", "Innenputz aufgetragen", 76.0, False)
     if "sockelputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
         return CanonicalActivity("sockelputz_aufgetragen", "Sockelputz aufgetragen", 73.0, False)
     if "kratzputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
         return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
+    if re.search(r"^kratzputz\s*$", t.strip(), flags=re.IGNORECASE):
+        raw_probe = _normalize_for_match(str(raw_text or ""))
+        if re.search(r"\b(außenputz|aussenputz|kratzputz|putz|fassade)\b", raw_probe):
+            return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
     if "oberputz" in t and re.search(
         r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|gezogen|aufgezogen|glatt)\b",
         t,
@@ -2691,6 +3240,22 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("oberputz_aufgetragen", "Oberputz aufgetragen", 78.0, False)
     if re.search(r"\bputz\b", t) and re.search(r"\b(aufgebracht|aufgetragen|verarbeitet)\b", t):
         return CanonicalActivity("putz_aufgebracht", "Putz aufgebracht", 76.0, False)
+    if re.search(
+        r"\b(wdvs|dämmplatten|daemmplatten|dämmung|daemmung|eps|mineralwolle|holzfaser)\b",
+        t,
+    ) and re.search(
+        r"\b(dübeln|duebeln|gedübelt|geduebelt|tellerdübel|tellerduebel|schlagdübel|schlagduebel)\b",
+        t,
+    ):
+        return CanonicalActivity("wdvs_geduebelt", "WDVS gedübelt", 73.5, False)
+    if re.search(r"\b(wdvs|dämmplatten|daemmplatten|dämmung|daemmung)\b", t) and re.search(
+        r"\b(dämmung\s+kleben|wdvs\s+kleben|geklebt|klebemörtel|klebemoertel|kleben)\b",
+        t,
+    ) and not re.search(
+        r"\b(dübeln|duebeln|gedübelt|geduebelt|tellerdübel|tellerduebel)\b",
+        t,
+    ):
+        return CanonicalActivity("wdvs_daemmung_geklebt", "WDVS Dämmung geklebt", 73.5, False)
     if "wdvs" in t and re.search(
         r"\b(gedämmt|gedaemmt|angebracht|montiert|ausgeführt|ausgefuehrt|gemacht|angeklebt)\b",
         t,

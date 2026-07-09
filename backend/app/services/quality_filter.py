@@ -80,6 +80,17 @@ _ACTIVITY_REWRITE_RULES: tuple[tuple[str, str], ...] = (
     (r"\bsockelputz gemacht\b", "Sockelputz aufgetragen"),
     (r"\breibputz gemacht\b", "Reibputz aufgetragen"),
     (r"\bkratzputz gemacht\b", "Kratzputz aufgetragen"),
+    (r"\bsilikonharzputz\s+(?:aussen|außen\s+)?aufgebracht\b", "Außenputz aufgetragen"),
+    (r"\bsilikatputz\s+(?:an der fassade\s+)?aufgetragen\b", "Außenputz aufgetragen"),
+    (r"\bwdvs\s+gedübelt\b|\bwdvs\s+geduebelt\b", "WDVS gedübelt"),
+    (r"\bwdvs\s+dämmung\s+geklebt\b|\bwdvs\s+daemmung\s+geklebt\b", "WDVS Dämmung geklebt"),
+    (r"\bputz\s+geglättet\b|\bputz\s+geglaettet\b", "Putz geglättet"),
+    (r"\bputz\s+filziert\b", "Putz filziert"),
+    (r"\beckschutzprofile\s+gesetzt\b", "Eckschutzprofile gesetzt"),
+    (r"\bapu-leisten\s+montiert\b|\bapu\s+leisten\s+montiert\b", "APU-Leisten montiert"),
+    (r"\bleibungsprofile\s+gesetzt\b", "Leibungsprofile gesetzt"),
+    (r"\bsockelprofile\s+montiert\b", "Sockelprofile montiert"),
+    (r"\btropfkantenprofile\s+gesetzt\b", "Tropfkantenprofile gesetzt"),
 )
 
 _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], tuple[str, ...]], ...] = (
@@ -135,6 +146,15 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bsockelputz aufgetragen\b", ("Sockelputz",), ("Grundierung",), ()),
     (r"\breibputz aufgetragen\b", ("Reibputz",), (), ()),
     (r"\bkratzputz aufgetragen\b", ("Kratzputz",), (), ()),
+    (r"\bwdvs gedübelt\b|\bwdvs geduebelt\b", ("Tellerdübel",), ("Klebe- und Armierungsmörtel",), ()),
+    (r"\bwdvs dämmung geklebt\b|\bwdvs daemmung geklebt\b", ("Klebe- und Armierungsmörtel",), ("EPS Dämmplatten", "Mineralwolle Dämmplatten"), ()),
+    (r"\bputz geglättet\b|\bputz geglaettet\b", ("Feinputz", "Glättspachtel"), (), ()),
+    (r"\bputz filziert\b", ("Feinputz",), (), ()),
+    (r"\beckschutzprofile gesetzt\b", ("Eckschutzschiene",), ("Klebeputz", "Spachtelmasse"), ()),
+    (r"\bapu-leisten montiert\b|\bapu leisten montiert\b", ("APU-Leiste",), ("Klebeputz",), ()),
+    (r"\bleibungsprofile gesetzt\b", ("Leibungsprofil",), ("Klebeputz",), ()),
+    (r"\bsockelprofile montiert\b", ("Sockelprofil",), ("Klebeputz",), ()),
+    (r"\btropfkantenprofile gesetzt\b", ("Tropfkantenprofil",), ("Klebeputz", "Armierungsmörtel"), ()),
     (r"\bhausanschluss hergestellt\b", ("Hausanschluss",), (), ()),
     (r"\basphalt schneiden\b", ("Asphalt",), (), ("Trennscheibe Asphalt?")),
     (r"\basphalt fräsen\b", ("Asphaltdeckschicht",), (), ("Kaltfräse?")),
@@ -222,6 +242,8 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bkratzputz\b", "Kratzputz"),
     (r"\bfliesenkleber\b", "Fliesenkleber"),
     (r"\bfugenspachtel\b", "Fugenspachtel"),
+    (r"\bmineralwolle\b(?:\s+\w+){0,8}\s+d(ä|ae)mmplatten\b|\bd(ä|ae)mmplatten\b(?:\s+\w+){0,8}\s+mineralwolle\b", "Mineralwolle Dämmplatten"),
+    (r"\beps\s+d(ä|ae)mmplatten\b", "EPS Dämmplatten"),
     (r"\bsteinwolle\b", "Steinwolle"),
     (r"\bmineralwolle\b", "Mineralwolle"),
     (r"\barmierungsgewebe\b", "Armierungsgewebe"),
@@ -236,6 +258,33 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bmauerm(ö|oe)rtel\b", "Mauermörtel"),
     (r"\bbaukleber\b", "Baukleber"),
     (r"\bbeton\b", "Beton"),
+    (r"\bgipsputz\b", "Gipsputz"),
+    (r"\bkalkputz\b", "Kalkputz"),
+    (r"\bkalkzementputz\b", "Kalkzementputz"),
+    (r"\blehmputz\b", "Lehmputz"),
+    (r"\bsilikonharzputz\b", "Silikonharzputz"),
+    (r"\bsilikatputz\b", "Silikatputz"),
+    (r"\bfeinputz\b", "Feinputz"),
+    (r"\bgl(ä|ae)ttspachtel\b", "Glättspachtel"),
+    (r"\btellerd(ü|ue)bel\b", "Tellerdübel"),
+    (r"\beps\b", "EPS Dämmplatten"),
+    (r"\bklebe- und armierungsm(ö|oe)rtel\b|\bklebe und armierungsm(ö|oe)rtel\b", "Klebe- und Armierungsmörtel"),
+    (r"\bholzfaserplatten\b", "Holzfaserplatten"),
+    (r"\bpu-stuckprofil\b", "PU-Stuckprofil"),
+    (r"\bgips-stuckprofil\b", "Gips-Stuckprofil"),
+    (r"\bstuckkleber\b", "Stuckkleber"),
+    (r"\barmierungsmörtel\b|\barmierungsmoertel\b|\barmierungs\s+m(?:ö|oe)rtel\b", "Armierungsmörtel"),
+    (r"\bd(ä|ae)mmplatten\b", "Dämmplatten"),
+    (r"\bklebeputz\b", "Klebeputz"),
+    (r"\bspachtelmasse\b", "Spachtelmasse"),
+    (r"\beckschutzprofile\b", "Eckschutzschiene"),
+    (r"\bapu(?:-|\s)?leiste\b", "APU-Leiste"),
+    (r"\banputzleiste\b", "APU-Leiste"),
+    (r"\bleibungsprofil\b", "Leibungsprofil"),
+    (r"\blaibungsprofil\b", "Leibungsprofil"),
+    (r"\bsockelprofil\b", "Sockelprofil"),
+    (r"\btropfkantenprofil\b", "Tropfkantenprofil"),
+    (r"\btropfkante\b", "Tropfkantenprofil"),
 )
 
 _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
@@ -334,8 +383,17 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
     (
         r"\binnenputz aufgetragen\b|\baussenputz aufgetragen\b|\baußenputz aufgetragen\b|\bsanierputz aufgebracht\b",
         (
+            ("Putzmaschine benutzt?", r"\bputzmaschine\b"),
+            ("Kartätsche benutzt?", r"\bkartätsche\b|\bkartaetsche\b"),
             ("Haftgrund benutzt?", r"\bhaftgrund\b|\btiefgrund\b|\bbetonkontakt\b"),
             ("Armierungsgewebe benutzt?", r"\barmierungsgewebe\b"),
+        ),
+    ),
+    (
+        r"\b(aussenputz aufgetragen|außenputz aufgetragen)\b",
+        (
+            ("Haftbrücke benutzt?", r"\bhaftbr(ü|ue)cke\b"),
+            ("Gewebeeinlage benutzt?", r"\bgewebeeinlage\b"),
         ),
     ),
     (
@@ -344,6 +402,12 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
             ("Grundierung benutzt?", r"\b(grundierung|haftgrund|tiefgrund|betonkontakt)\b"),
             ("Haftgrund benutzt?", r"\b(grundierung|haftgrund|tiefgrund|betonkontakt)\b"),
             ("Unterputz aufgetragen?", r"\b(unterputz|grundputz)\b"),
+        ),
+    ),
+    (
+        r"\bsockelputz aufgetragen\b|\bsockelputz gemacht\b",
+        (
+            ("Grundierung benutzt?", r"\b(grundierung|haftgrund|tiefgrund|betonkontakt)\b"),
         ),
     ),
     (
@@ -379,6 +443,81 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         (
             ("Armierungsmörtel benutzt?", r"\barmierungsm(ö|oe)rtel\b"),
             ("Armierungsgewebe benutzt?", r"\barmierungsgewebe\b"),
+        ),
+    ),
+    (
+        r"\bwdvs gedübelt\b|\bwdvs geduebelt\b",
+        (
+            ("Tellerdübel benutzt?", r"\btellerd(ü|ue)bel\b"),
+            ("Schraubdübel benutzt?", r"\bschraubd(ü|ue)bel\b"),
+            ("Schlagdübel benutzt?", r"\bschlagd(ü|ue)bel\b"),
+        ),
+    ),
+    (
+        r"\bwdvs dämmung geklebt\b|\bwdvs daemmung geklebt\b",
+        (
+            ("Zahntraufel benutzt?", r"\bzahntraufel\b"),
+            ("Klebe- und Armierungsmörtel benutzt?", r"\bklebe"),
+            ("Gewebe benutzt?", r"\bgewebe\b"),
+        ),
+    ),
+    (
+        r"\bputz geglättet\b|\bputz geglaettet\b",
+        (
+            ("Glättkelle benutzt?", r"\bgl(ä|ae)ttkelle\b"),
+            ("Schwammbrett benutzt?", r"\bschwammbrett\b"),
+            ("Feinputz benutzt?", r"\bfeinputz\b"),
+        ),
+    ),
+    (
+        r"\bputz filziert\b",
+        (
+            ("Filzbrett benutzt?", r"\bfilzbrett\b"),
+            ("Schwammbrett benutzt?", r"\bschwammbrett\b"),
+        ),
+    ),
+    (
+        r"\beckschutzprofile gesetzt\b",
+        (
+            ("Klebeputz benutzt?", r"\bklebeputz\b"),
+            ("Spachtelmasse benutzt?", r"\bspachtelmasse\b"),
+        ),
+    ),
+    (
+        r"\bapu-leisten montiert\b|\bapu leisten montiert\b",
+        (
+            ("PVC-APU benutzt?", r"\bapu\s+pvc\b|\bpvc[-\s]*apu\b"),
+            ("Alu-APU benutzt?", r"\bapu\s+alu\b|\balu[-\s]*apu\b"),
+            ("Dichtlippe benutzt?", r"\bdichtlippe\b"),
+            ("Klebeputz benutzt?", r"\bklebeputz\b"),
+        ),
+    ),
+    (
+        r"\bleibungsprofile gesetzt\b",
+        (
+            ("Dichtlippe benutzt?", r"\bdichtlippe\b"),
+            ("Klebeputz benutzt?", r"\bklebeputz\b"),
+        ),
+    ),
+    (
+        r"\bsockelprofile montiert\b",
+        (
+            ("Sockeldämmung benutzt?", r"\bsockeld(ä|ae)mmung\b"),
+            ("Noppenbahn benutzt?", r"\bnoppenbahn\b"),
+        ),
+    ),
+    (
+        r"\btropfkantenprofile gesetzt\b",
+        (
+            ("Klebeputz benutzt?", r"\bklebeputz\b"),
+            ("Armierung benutzt?", r"\barmierungs(?:gewebe|mörtel)\b"),
+        ),
+    ),
+    (
+        r"\bstuckarbeiten durchgeführt\b",
+        (
+            ("Montagekleber benutzt?", r"\b(stuckkleber|montagekleber)\b"),
+            ("Feinspachtel benutzt?", r"\bfeinspachtel\b"),
         ),
     ),
     (
@@ -831,6 +970,10 @@ def _material_confidence_buckets(
         elif c in acts_join:
             medium.append(clean)
 
+    if "Mineralwolle" in high and "Dämmplatten" in high:
+        high = [v for v in high if v not in ("Mineralwolle", "Dämmplatten")]
+        high.append("Mineralwolle Dämmplatten")
+
     return {
         "high": _dedupe([x for x in high if x]),
         "medium": _dedupe([x for x in medium if x]),
@@ -1074,6 +1217,41 @@ def _build_material_suggestions(activities: list[str], materials: list[str], raw
             # Bereits im finalen Material oder im Rohtext/Activities erwähnt -> kein Vorschlag.
             if core and (core in mats_probe or core in raw_probe or core in acts_probe):
                 continue
+            # Werkzeug/Maschine bereits im Rohtext → kein Vorschlag (auch Teilwörter).
+            if re.search(r"\bputzmaschine\b", raw_probe) and "putzmaschine" in core:
+                continue
+            if re.search(r"\bschwammbrett\b", raw_probe) and "filzbrett" in core:
+                continue
+            if re.search(r"\bfilzbrett\b", raw_probe) and "filzbrett" in core:
+                continue
+            if re.search(r"\bfilzbrett\b", raw_probe) and "schwammbrett" in core:
+                continue
+            if "schimmelentferner" in core and re.search(r"\bschimmel\s+beseitigt\b", raw_probe) and re.search(
+                r"\bsanierputz\b", raw_probe
+            ) and re.search(r"\b(unterputz|oberputz|haftgrund)\b", raw_probe):
+                continue
+            if re.search(r"\bglättkelle\b|\bglaettkelle\b", raw_probe) and ("glättkelle" in core or "glaettkelle" in core):
+                continue
+            if re.search(r"\bzahntraufel\b", raw_probe) and "zahntraufel" in core:
+                continue
+            if re.search(r"\btellerd(ü|ue)bel\b", raw_probe) and "tellerd" in core:
+                continue
+            if re.search(r"\bschlagd(ü|ue)bel\b", raw_probe) and "schlagd" in core:
+                continue
+            if re.search(r"\bschraubd(ü|ue)bel\b", raw_probe) and "schraubd" in core:
+                continue
+            if re.search(r"\bklebeputz\b", raw_probe) and "klebeputz" in core:
+                continue
+            if re.search(r"\b(teller|schraub|schlag)d(ü|ue)bel\b", raw_probe) and re.search(
+                r"d(ü|ue)bel", core
+            ):
+                continue
+            if re.search(r"\bkartätsche\b|\bkartaetsche\b", raw_probe) and (
+                "kartätsche" in core or "kartaetsche" in core or "putzmaschine" in core
+            ):
+                continue
+            if re.search(r"\b(stuckkleber|montagekleber)\b", raw_probe) and ("kleber" in core or "montagekleber" in core):
+                continue
             if key and key in material_keys:
                 continue
             if re.search(explicit_pattern, raw_probe, flags=re.IGNORECASE):
@@ -1307,6 +1485,7 @@ def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
     has_specific_ks = bool(
         re.search(r"\b\d{1,2}(?:[.,]5)?er\s*(?:ks|kalksandstein)\b", probe, flags=re.IGNORECASE)
     )
+    has_armierungsmoertel = "armierungsmörtel" in probe or "armierungsmoertel" in probe
 
     out: list[str] = []
     for value in vals:
@@ -1322,6 +1501,8 @@ def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
         if has_specific_porenbeton and low in ("porenbetonsteine", "porenbeton", "porit", "ytong"):
             continue
         if has_specific_ks and low in ("kalksandsteine", "kalksandstein", "ks", "ks-steine", "ks-stein"):
+            continue
+        if has_armierungsmoertel and low in ("mörtel", "moertel"):
             continue
         out.append(value)
     return _dedupe(out)
@@ -1373,6 +1554,7 @@ def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
         "walze": r"\bwalze(nzug)?\b|\bgrabenwalze\b",
         "kran": r"\b(autokran|turmdrehkran|kran)\b",
         "lkw": r"\blkw\b",
+        "putzmaschine": r"\bputzmaschine\b",
     }
     machine_pattern = machine_patterns.get(machine_key, "")
     if not machine_pattern:
@@ -1407,6 +1589,7 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
         ("Walze", r"\b(?:walze(?:nzug)?|grabenwalze)\b"),
         ("Kran", r"\b(?:autokran|turmdrehkran|kran)\b"),
         ("LKW", r"\blkw\b"),
+        ("Putzmaschine", r"\bputzmaschine\b"),
     )
     gap = r"(?:\s+\S+){0,8}\s+"
     for label, pattern in machine_patterns:

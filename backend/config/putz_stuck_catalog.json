@@ -1,0 +1,269 @@
+{
+  "gewerk": "Putz_und_Stuck",
+  "taetigkeiten": [
+    {
+      "name": "Innenputz auftragen",
+      "materialien": [
+        "Gipsputz",
+        "Kalkputz",
+        "Kalkzementputz",
+        "Lehmputz",
+        "Haftgrund"
+      ],
+      "vorschlaege": [
+        "Putzmaschine?",
+        "Kartätsche?",
+        "Abziehleiste?",
+        "Feinputz?"
+      ],
+      "synonyme": ["Innenputz", "Weißputz", "Maschinenputz"]
+    },
+    {
+      "name": "Außenputz auftragen",
+      "materialien": [
+        "Kalkzementputz",
+        "Silikonharzputz",
+        "Silikatputz",
+        "Reibeputz",
+        "Kratzputz"
+      ],
+      "vorschlaege": [
+        "Putzmaschine?",
+        "Gewebeeinlage?",
+        "Haftbrücke?"
+      ],
+      "synonyme": ["Fassadenputz", "Außenputz"]
+    },
+    {
+      "name": "Putz glätten",
+      "materialien": ["Feinputz", "Glättspachtel"],
+      "vorschlaege": ["Glättkelle?", "Schwammbrett?"],
+      "synonyme": ["Glätten", "Finishen"]
+    },
+    {
+      "name": "Putz filzen",
+      "materialien": ["Feinputz"],
+      "vorschlaege": ["Filzbrett?", "Schwammbrett?"],
+      "synonyme": ["Filzen", "Strukturieren"]
+    },
+    {
+      "name": "Eckschutzprofile setzen",
+      "materialien": [
+        "Eckschutzschiene",
+        "PVC-Eckprofil",
+        "Alu-Eckprofil",
+        "Gewebe-Eckprofil"
+      ],
+      "vorschlaege": ["Klebeputz?", "Spachtelmasse?"],
+      "synonyme": ["Eckprofil", "Kantenschutz"]
+    },
+    {
+      "name": "APU-Leisten montieren",
+      "materialien": [
+        "APU-Leiste 3mm",
+        "APU-Leiste 6mm",
+        "APU-Leiste 9mm",
+        "APU-Leiste mit Gewebe",
+        "APU-Leiste ohne Gewebe"
+      ],
+      "vorschlaege": [
+        "PVC-APU?",
+        "Alu-APU?",
+        "Dichtlippe?",
+        "Klebeputz?"
+      ],
+      "synonyme": ["Anputzleiste", "Fensteranschlussprofil"]
+    },
+    {
+      "name": "Leibungsprofile setzen",
+      "materialien": [
+        "Leibungsprofil PVC",
+        "Leibungsprofil Alu",
+        "Leibungsprofil mit Gewebe"
+      ],
+      "vorschlaege": ["Dichtlippe?", "Klebeputz?"],
+      "synonyme": ["Laibungsprofil", "Fensterprofil"]
+    },
+    {
+      "name": "WDVS Dämmung kleben",
+      "materialien": [
+        "EPS Dämmplatten",
+        "Mineralwolle Dämmplatten",
+        "Holzfaserplatten",
+        "Klebe- und Armierungsmörtel"
+      ],
+      "vorschlaege": ["Zahntraufel?", "Gewebe?"],
+      "synonyme": ["WDVS kleben", "Dämmplatten setzen"]
+    },
+    {
+      "name": "WDVS dübeln",
+      "materialien": [
+        "Tellerdübel 120mm",
+        "Tellerdübel 160mm",
+        "Tellerdübel 200mm"
+      ],
+      "vorschlaege": ["Schraubdübel?", "Schlagdübel?"],
+      "synonyme": ["Dämmung dübeln", "WDVS befestigen"]
+    },
+    {
+      "name": "Armierungsgewebe einbetten",
+      "materialien": [
+        "Armierungsgewebe 160g",
+        "Armierungsgewebe 200g",
+        "Armierungsmörtel"
+      ],
+      "vorschlaege": ["Gewebeüberlappung 10cm?", "Eckschutz?"],
+      "synonyme": ["Gewebe einlegen", "Armieren"]
+    },
+    {
+      "name": "Sockelprofile montieren",
+      "materialien": [
+        "Sockelprofil 6mm",
+        "Sockelprofil 8mm",
+        "Sockelprofil 10mm",
+        "Sockelprofil mit Tropfkante"
+      ],
+      "vorschlaege": ["Sockeldämmung?", "Noppenbahn?"],
+      "synonyme": ["Sockelschiene", "Startprofil"]
+    },
+    {
+      "name": "Tropfkantenprofile setzen",
+      "materialien": [
+        "Tropfkantenprofil PVC",
+        "Tropfkantenprofil Alu",
+        "Tropfkantenprofil mit Gewebe"
+      ],
+      "vorschlaege": ["Klebeputz?", "Armierung?"],
+      "synonyme": ["Tropfkante", "Abtropfkante"]
+    },
+    {
+      "name": "Stuckprofile montieren",
+      "materialien": [
+        "PU-Stuckprofil",
+        "Gips-Stuckprofil",
+        "Stuckkleber"
+      ],
+      "vorschlaege": ["Montagekleber?", "Feinspachtel?"],
+      "synonyme": ["Zierleisten", "Stuckleisten"]
+    }
+  ],
+  "materialkatalog": {
+    "putzarten_innen": [
+      "Gipsputz",
+      "Gipsmaschinenputz",
+      "Kalkputz",
+      "Kalkfeinputz",
+      "Kalkglätte",
+      "Kalkzementputz",
+      "Lehmputz",
+      "Lehmfeinputz"
+    ],
+    "putzarten_aussen": [
+      "Kalkzementputz",
+      "Silikonharzputz",
+      "Silikatputz",
+      "Kratzputz",
+      "Reibeputz 1mm",
+      "Reibeputz 1.5mm",
+      "Reibeputz 2mm",
+      "Reibeputz 3mm",
+      "Scheibenputz",
+      "Edelputz"
+    ],
+    "profile": {
+      "apu_leisten": [
+        "APU 3mm",
+        "APU 6mm",
+        "APU 9mm",
+        "APU 6mm mit Gewebe",
+        "APU 9mm mit Gewebe",
+        "APU PVC",
+        "APU Alu"
+      ],
+      "leibungsprofile": [
+        "Leibungsprofil PVC",
+        "Leibungsprofil Alu",
+        "Leibungsprofil mit Gewebe"
+      ],
+      "eckschutzprofile": [
+        "Eckschutzschiene Alu",
+        "Eckschutzschiene PVC",
+        "Eckschutzschiene mit Gewebe",
+        "Eckschutzschiene verzinkt"
+      ],
+      "sockelprofile": [
+        "Sockelprofil 6mm",
+        "Sockelprofil 8mm",
+        "Sockelprofil 10mm",
+        "Sockelprofil mit Tropfkante"
+      ],
+      "tropfkantenprofile": [
+        "Tropfkante PVC",
+        "Tropfkante Alu",
+        "Tropfkante mit Gewebe"
+      ],
+      "wdvs_profile": [
+        "WDVS Anschlussprofil",
+        "WDVS Tropfkantenprofil",
+        "WDVS Sockelprofil",
+        "WDVS Gewebeprofil"
+      ]
+    },
+    "armierung": {
+      "gewebe": [
+        "Armierungsgewebe 160g",
+        "Armierungsgewebe 200g",
+        "Armierungsgewebe 330g",
+        "Eckgewebe",
+        "Gewebewinkel"
+      ],
+      "moertel": [
+        "Armierungsmörtel",
+        "Klebe- und Armierungsmörtel",
+        "Spachtelmasse"
+      ]
+    },
+    "wdvs_daemmstoffe": [
+      "EPS 60mm",
+      "EPS 80mm",
+      "EPS 100mm",
+      "Mineralwolle 60mm",
+      "Mineralwolle 80mm",
+      "Mineralwolle 100mm",
+      "Holzfaserplatten 40–200mm"
+    ],
+    "stuck": [
+      "PU-Stuckprofil",
+      "Gips-Stuckprofil",
+      "Rosetten",
+      "Gesimse"
+    ]
+  },
+  "werkzeuge": {
+    "handwerkzeuge": [
+      "Glättkelle",
+      "Traufel",
+      "Kartätsche",
+      "Reibebrett",
+      "Filzbrett",
+      "Schwammbrett",
+      "Kelle",
+      "Spachtel",
+      "Abziehlatte"
+    ],
+    "maschinen": [
+      "Putzmaschine",
+      "Mischpumpe",
+      "Rührwerk",
+      "Schleifgiraffe"
+    ],
+    "hilfsmittel": [
+      "Eckschutzschienen",
+      "Gewebe",
+      "Abdeckfolie",
+      "Gerüst",
+      "Laser",
+      "Wasserwaage"
+    ]
+  }
+}

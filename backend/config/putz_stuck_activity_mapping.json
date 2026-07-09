@@ -1,0 +1,106 @@
+{
+  "gewerk": "Putz_und_Stuck",
+  "engine_welle": 17,
+  "hinweis": "Additive Zuordnung JSON-Katalog → Engine-Activities. Bestehende Activities bleiben unverändert.",
+  "mappings": [
+    {
+      "json_taetigkeit": "Innenputz auftragen",
+      "activity_id": "innenputz_aufgetragen",
+      "activity_text": "Innenputz aufgetragen",
+      "status": "vorhanden",
+      "welle": null
+    },
+    {
+      "json_taetigkeit": "Außenputz auftragen",
+      "activity_id": "aussenputz_aufgetragen",
+      "activity_text": "Außenputz aufgetragen",
+      "status": "vorhanden",
+      "welle": null
+    },
+    {
+      "json_taetigkeit": "Putz glätten",
+      "activity_id": "putz_glaettet",
+      "activity_text": "Putz geglättet",
+      "status": "neu",
+      "welle": 16
+    },
+    {
+      "json_taetigkeit": "Putz filzen",
+      "activity_id": "putz_filziert",
+      "activity_text": "Putz filziert",
+      "status": "neu",
+      "welle": 16
+    },
+    {
+      "json_taetigkeit": "Eckschutzprofile setzen",
+      "activity_id": "eckschutzprofile_gesetzt",
+      "activity_text": "Eckschutzprofile gesetzt",
+      "status": "neu",
+      "welle": 17
+    },
+    {
+      "json_taetigkeit": "APU-Leisten montieren",
+      "activity_id": "apu_leisten_montiert",
+      "activity_text": "APU-Leisten montiert",
+      "status": "neu",
+      "welle": 17
+    },
+    {
+      "json_taetigkeit": "Leibungsprofile setzen",
+      "activity_id": "leibungsprofile_gesetzt",
+      "activity_text": "Leibungsprofile gesetzt",
+      "status": "neu",
+      "welle": 17
+    },
+    {
+      "json_taetigkeit": "WDVS Dämmung kleben",
+      "activity_id": "wdvs_daemmung_geklebt",
+      "activity_text": "WDVS Dämmung geklebt",
+      "status": "neu",
+      "welle": 16
+    },
+    {
+      "json_taetigkeit": "WDVS dübeln",
+      "activity_id": "wdvs_geduebelt",
+      "activity_text": "WDVS gedübelt",
+      "status": "neu",
+      "welle": 16
+    },
+    {
+      "json_taetigkeit": "Armierungsgewebe einbetten",
+      "activity_id": "armierung_ausgefuehrt",
+      "activity_text": "Armierung ausgeführt",
+      "status": "vorhanden",
+      "welle": null,
+      "alias_text": "Fassadenarmierung ausgeführt"
+    },
+    {
+      "json_taetigkeit": "Sockelprofile montieren",
+      "activity_id": "sockelprofile_montiert",
+      "activity_text": "Sockelprofile montiert",
+      "status": "neu",
+      "welle": 17
+    },
+    {
+      "json_taetigkeit": "Tropfkantenprofile setzen",
+      "activity_id": "tropfkantenprofile_gesetzt",
+      "activity_text": "Tropfkantenprofile gesetzt",
+      "status": "neu",
+      "welle": 17
+    },
+    {
+      "json_taetigkeit": "Stuckprofile montieren",
+      "activity_id": "stuckarbeiten",
+      "activity_text": "Stuckarbeiten durchgeführt",
+      "status": "vorhanden",
+      "welle": null
+    }
+  ],
+  "fallback_activities": {
+    "wdvs_allgemein": {
+      "activity_id": "wdvs_ausgefuehrt",
+      "activity_text": "WDVS ausgeführt",
+      "hinweis": "Bleibt Fallback für angeklebt/gedämmt/montiert ohne explizites kleben/dübeln"
+    }
+  }
+}

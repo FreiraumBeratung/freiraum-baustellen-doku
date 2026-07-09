@@ -123,6 +123,68 @@ _HOCHBAU_RULES: tuple[_CatalogRule, ...] = (
 )
 
 _STUCK_RULES: tuple[_CatalogRule, ...] = (
+    # Welle 16 / putz_stuck_catalog.json — additive, spezifisch vor generisch
+    _CatalogRule(
+        "wdvs_geduebelt",
+        "WDVS gedübelt",
+        73.5,
+        (
+            r"\b(wdvs|d(ä|ae)mmplatten|d(ä|ae)mmung)\b",
+            r"\b(d(ü|ue)beln|ged(ü|ue)belt|tellerd(ü|ue)bel|schlagd(ü|ue)bel)\b",
+        ),
+    ),
+    _CatalogRule(
+        "wdvs_daemmung_geklebt",
+        "WDVS Dämmung geklebt",
+        73.5,
+        (
+            r"\b(wdvs|d(ä|ae)mmplatten|eps|mineralwolle|holzfaser)\b",
+            r"\b(kleben|geklebt|klebem(ö|oe)rtel|d(ä|ae)mmung\s+kleben|wdvs\s+kleben)\b",
+        ),
+    ),
+    _CatalogRule(
+        "putz_glaettet",
+        "Putz geglättet",
+        72.5,
+        (r"\b(putz|feinputz)\b", r"\b(gl(ä|ae)tten|glaetten|gegl(ä|ae)ttet|geglaettet|finishen|finisht)\b"),
+    ),
+    _CatalogRule(
+        "putz_filziert",
+        "Putz filziert",
+        72.5,
+        (r"\b(putz|feinputz)\b", r"\b(filzen|filziert)\b"),
+    ),
+    # Welle 17 / Fassaden- und Putzprofile
+    _CatalogRule(
+        "eckschutzprofile_gesetzt",
+        "Eckschutzprofile gesetzt",
+        72.0,
+        (r"\b(eckschutz(?:profile|profil|schiene)?|eckprofil|kantenschutz)\b", r"\b(gesetzt|montiert|angebracht)\b"),
+    ),
+    _CatalogRule(
+        "apu_leisten_montiert",
+        "APU-Leisten montiert",
+        72.0,
+        (r"\b(apu(?:-|\s)?leiste|anputzleiste|fensteranschlussprofil)\b", r"\b(montiert|gesetzt|angebracht)\b"),
+    ),
+    _CatalogRule(
+        "leibungsprofile_gesetzt",
+        "Leibungsprofile gesetzt",
+        72.0,
+        (r"\b(leibungsprofile|leibungsprofil|laibungsprofile|laibungsprofil|fensterleibung|laibung)\b", r"\b(gesetzt|montiert|angebracht)\b"),
+    ),
+    _CatalogRule(
+        "sockelprofile_montiert",
+        "Sockelprofile montiert",
+        72.0,
+        (r"\b(sockelprofile|sockelprofil|sockelschiene|startprofil)\b", r"\b(montiert|gesetzt|angebracht)\b"),
+    ),
+    _CatalogRule(
+        "tropfkantenprofile_gesetzt",
+        "Tropfkantenprofile gesetzt",
+        72.0,
+        (r"\b(tropfkanten(?:profile|profil)?|abtropfkante|tropfkante)\b", r"\b(gesetzt|montiert|angebracht)\b"),
+    ),
     _CatalogRule("innenputz_aufgetragen", "Innenputz aufgetragen", 74.0, (r"\b(innenputz|gipsputz|kalkputz|lehmputz)\b", r"\b(aufgetragen|aufgebracht|verarbeitet)\b")),
     _CatalogRule("aussenputz_aufgetragen", "Außenputz aufgetragen", 74.0, (r"\b(aussenputz|au(ß|ss)enputz|fassade)\b", r"\b(aufgetragen|aufgebracht|strukturiert)\b")),
     _CatalogRule("wdvs_ausgefuehrt", "WDVS ausgeführt", 73.0, (r"\bwdvs|d(ä|ae)mmplatten|eps|mineralwolle|holzfaser|fassade\b", r"\b(angebracht|ged(ä|ae)mmt|ausgef(ü|ue)hrt|ged(ü|ue)belt|angeklebt)\b")),
