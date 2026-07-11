@@ -1,34 +1,57 @@
-import { FileText, Trash2 } from 'lucide-react'
+import { ChevronRight, FileText } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { deleteProtocol, listProtocols, api, type ProtocolMode, type SiteProtocol } from '../api/client'
+import { listProtocols, api, type SiteProtocol } from '../api/client'
 import { Card, PageTitle } from '../components/ui'
-import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type Project = { id: string; name: string }
+
+type ProtocolGroup = {
+  projectId: string
+  projectName: string
+  signed: SiteProtocol[]
+  quick: SiteProtocol[]
+  latestDate: string
+}
 
 function formatDateDe(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso)
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso
 }
 
-function modeLabel(mode: ProtocolMode, seq: number | null): string {
-  if (mode === 'signed' && seq) return `Begehung Nr. ${seq}`
-  if (mode === 'signed') return 'Mit Unterschrift'
-  return 'Schnellnotiz'
+function seqRange(signed: SiteProtocol[]): string {
+  const nums = signed.map((p) => p.sequenceNumber).filter((n): n is number => typeof n === 'number' && n > 0)
+  if (!nums.length) return ''
+  const lo = Math.min(...nums)
+  const hi = Math.max(...nums)
+  return lo === hi ? `Nr. ${lo}` : `Nr. ${lo}–${hi}`
 }
 
-function previewText(p: SiteProtocol): string {
-  return (p.polishedText || p.rawText || '').trim()
+function groupProtocols(protocols: SiteProtocol[]): ProtocolGroup[] {
+  const map = new Map<string, ProtocolGroup>()
+  for (const p of protocols) {
+    const pid = p.projectId || 'unknown'
+    let g = map.get(pid)
+    if (!g) {
+      g = { projectId: pid, projectName: p.projectName || 'Baustelle', signed: [], quick: [], latestDate: '' }
+      map.set(pid, g)
+    }
+    if (p.mode === 'signed') g.signed.push(p)
+    else g.quick.push(p)
+    if (p.date && p.date > g.latestDate) g.latestDate = p.date
+  }
+  for (const g of map.values()) {
+    g.signed.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
+    g.quick.sort((a, b) => b.date.localeCompare(a.date))
+  }
+  return Array.from(map.values()).sort((a, b) => b.latestDate.localeCompare(a.latestDate))
 }
 
 export function ProtocolsListPage() {
-  const { writeBlocked } = useWriteBlocked()
   const [protocols, setProtocols] = useState<SiteProtocol[]>([])
   const [projects, setProjects] = useState<Project[]>([])
   const [projFilter, setProjFilter] = useState('')
   const [month, setMonth] = useState('')
-  const [msg, setMsg] = useState('')
 
   const query = useMemo(
     () => ({
@@ -51,25 +74,11 @@ export function ProtocolsListPage() {
     load().catch(() => {})
   }, [load])
 
-  async function confirmDelete(p: SiteProtocol) {
-    setMsg('')
-    if (writeBlocked) return
-    const ok = window.confirm('Protokoll wirklich löschen?')
-    if (!ok) return
-    try {
-      await deleteProtocol(p.id)
-      setMsg('Protokoll gelöscht.')
-      window.setTimeout(() => setMsg(''), 4000)
-      await load()
-    } catch {
-      setMsg('Protokoll konnte nicht gelöscht werden.')
-      window.setTimeout(() => setMsg(''), 6000)
-    }
-  }
+  const groups = useMemo(() => groupProtocols(protocols), [protocols])
 
   return (
     <div className="overflow-x-hidden">
-      <PageTitle title="Protokolle" subtitle="Chronologie · gefiltert nach Projekt oder Monat" />
+      <PageTitle title="Protokolle" subtitle="Nach Baustelle · Begehungen gebündelt" />
 
       <div className="mb-5 space-y-3.5">
         <label className="block">
@@ -109,73 +118,59 @@ export function ProtocolsListPage() {
         </label>
       </div>
 
-      {msg ? (
-        <p className={`mb-3 text-sm ${msg.includes('Konnte nicht') ? 'text-red-400' : 'text-orange-300'}`}>{msg}</p>
-      ) : null}
+      <div className="space-y-4">
+        {groups.map((g) => {
+          const range = seqRange(g.signed)
+          const visitLabel =
+            g.signed.length === 1 ? '1 Begehung' : `${g.signed.length} Begehungen`
+          const quickLabel =
+            g.quick.length === 1 ? '1 Schnellnotiz' : `${g.quick.length} Schnellnotizen`
 
-      <div className="space-y-5">
-        {protocols.map((p) => {
-          const text = previewText(p)
           return (
             <Card
-              key={p.id}
-              className="relative overflow-hidden border-transparent bg-[linear-gradient(168deg,rgba(255,255,255,0.045)_0%,transparent_56%)] px-7 py-10 shadow-none ring-1 ring-white/[0.07]"
+              key={g.projectId}
+              className="overflow-hidden border-transparent bg-[linear-gradient(168deg,rgba(255,255,255,0.045)_0%,transparent_56%)] px-6 py-6 shadow-none ring-1 ring-white/[0.07]"
             >
-              <div className="absolute right-5 top-5 flex shrink-0 items-center gap-1 rounded-full bg-orange-500/[0.17] px-2.5 py-[0.4rem] ring-1 ring-orange-400/[0.34]">
-                <FileText className="h-3.5 w-3.5 text-orange-400" aria-hidden />
-                <span className="text-xs font-semibold text-orange-400">{modeLabel(p.mode, p.sequenceNumber)}</span>
-              </div>
-
-              <div className="pr-[5.25rem]">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                  Datum <span className="text-orange-400/95">{formatDateDe(p.date)}</span>
-                </p>
-                <h3 className="mt-3 text-[1.12rem] font-semibold tracking-tight text-white">{p.projectName}</h3>
-                {p.participants ? (
-                  <p className="mt-2 text-sm">
-                    <span className="text-zinc-500">Teilnehmer</span>{' '}
-                    <span className="font-medium text-zinc-300">{p.participants}</span>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-[1.1rem] font-semibold tracking-tight text-white">{g.projectName}</h3>
+                  <p className="mt-2 text-sm text-zinc-500">
+                    {g.latestDate ? `Zuletzt: ${formatDateDe(g.latestDate)}` : 'Kein Datum'}
                   </p>
-                ) : null}
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-black/42 px-[0.7rem] py-[0.28rem] text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 ring-1 ring-white/[0.07]">
-                    Protokoll gespeichert
-                  </span>
                 </div>
-                <div className="mt-3 min-h-[2.375rem]">
-                  {text ? (
-                    <p className="line-clamp-2 text-sm leading-snug text-zinc-400">{text}</p>
-                  ) : (
-                    <p className="text-[0.78rem] leading-relaxed text-zinc-600">Kein Text vorhanden</p>
-                  )}
-                </div>
+                <FileText className="h-5 w-5 shrink-0 text-orange-400/80" aria-hidden />
               </div>
 
-              <div className="mt-6 grid grid-cols-2 gap-3">
-                <Link
-                  to={`/protokolle/${p.id}`}
-                  className="inline-flex h-11 items-center justify-center rounded-2xl bg-white/[0.08] text-[0.9rem] font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/55 active:scale-[0.98]"
-                >
-                  Öffnen
-                </Link>
-                <button
-                  type="button"
-                  disabled={writeBlocked}
-                  onClick={() => void confirmDelete(p)}
-                  className="inline-flex h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-500/28 bg-red-950/35 text-[0.9rem] font-semibold text-red-300 transition hover:bg-red-950/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/55 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
-                >
-                  <Trash2 strokeWidth={2} className="h-4 w-4 shrink-0" aria-hidden /> Löschen
-                </button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {g.signed.length ? (
+                  <span className="rounded-full bg-orange-500/15 px-3 py-1 text-xs font-semibold text-orange-300 ring-1 ring-orange-400/25">
+                    {visitLabel}
+                    {range ? ` (${range})` : ''}
+                  </span>
+                ) : null}
+                {g.quick.length ? (
+                  <span className="rounded-full bg-black/40 px-3 py-1 text-xs font-medium text-zinc-400 ring-1 ring-white/[0.08]">
+                    {quickLabel}
+                  </span>
+                ) : null}
               </div>
+
+              <Link
+                to={`/protokolle/baustelle/${encodeURIComponent(g.projectId)}`}
+                className="mt-5 flex h-11 items-center justify-between rounded-2xl bg-white/[0.08] px-4 text-sm font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.12] active:scale-[0.99]"
+              >
+                <span>{g.signed.length ? 'Begehungen & Gesamtprotokoll' : 'Protokolle anzeigen'}</span>
+                <ChevronRight className="h-4 w-4 text-zinc-500" aria-hidden />
+              </Link>
             </Card>
           )
         })}
-        {protocols.length === 0 ? (
+        {groups.length === 0 ? (
           <p className="text-center text-sm text-zinc-500">Keine Protokolle für den gewählten Filter.</p>
         ) : null}
       </div>
 
-      {!protocols.length ? (
+      {!groups.length ? (
         <div className="mt-8 rounded-2xl border border-dashed border-zinc-800 p-6 text-center text-sm text-zinc-500">
           Gespeicherte Protokolle erscheinen hier automatisch nach dem Speichern.
         </div>

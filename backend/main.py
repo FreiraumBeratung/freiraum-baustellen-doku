@@ -19,12 +19,20 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from logo_image_utils import normalize_logo_bytes
-from office_mail import send_collective_to_office, send_feedback_mail, send_protocol_to_office, send_report_to_office
+from office_mail import (
+    send_collective_protocol_to_office,
+    send_collective_to_office,
+    send_feedback_mail,
+    send_protocol_to_office,
+    send_report_to_office,
+)
 from report_export import (
     build_attachment_names,
     build_collective_attachment_names,
     build_collective_docx_bytes,
     build_collective_pdf_bytes,
+    build_collective_protocol_attachment_names,
+    build_collective_protocol_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
     build_protocol_attachment_names,
@@ -85,6 +93,7 @@ from services.ai_report_service import (
 from app.services.activity_canonicalizer import collect_unmatched_chunks
 from app.services.speech_telemetry import record_unmatched_speech
 from app.services import collective_report as collective
+from app.services import collective_protocol as collective_proto
 from services.trade_language_service import (
     build_professional_summary,
     extract_activity_hints,
@@ -1308,6 +1317,89 @@ def _build_collective(store: TenantStore, project_id: str, run_id: str | None) -
     except Exception:
         pass
     return payload
+
+
+def _build_collective_protocol(store: TenantStore, project_id: str) -> dict[str, Any]:
+    projects = store.read_json("projects.json", {"projects": []}).get("projects", [])
+    project = next((p for p in projects if p.get("id") == project_id), None)
+    if project is None:
+        raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")
+    protocols = read_protocols(store)
+    payload = collective_proto.build_collective_protocol_payload(project, protocols)
+    if not payload.get("entries"):
+        raise HTTPException(status_code=400, detail="Keine Begehungsprotokolle für diese Baustelle vorhanden.")
+    return payload
+
+
+@app.get("/api/projects/{project_id}/collective-protocol")
+def get_collective_protocol(project_id: str, store: TenantStore = Depends(get_tenant_store)):
+    return _build_collective_protocol(store, project_id)
+
+
+@app.get("/api/projects/{project_id}/collective-protocol/export/pdf")
+def export_collective_protocol_pdf(
+    project_id: str,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    payload = _build_collective_protocol(store, project_id)
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_collective_protocol_pdf_bytes(
+            payload,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_signature=_export_resolve_signature(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Gesamtprotokoll-Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_collective_protocol_attachment_names(payload, "pdf")
+    return Response(
+        content=blob,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
+    )
+
+
+@app.post("/api/projects/{project_id}/collective-protocol/send-office", response_model=SendOfficeResponse)
+def send_collective_protocol_to_office_endpoint(
+    project_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+) -> SendOfficeResponse:
+    payload = _build_collective_protocol(store, project_id)
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == user_id:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
+        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_collective_protocol_to_office(
+        payload,
+        prof,
+        office,
+        mail_config=mail_config,
+        resolve_logo=_export_resolve_logo(store),
+        resolve_signature=_export_resolve_signature(store),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Gesamtprotokoll konnte nicht gesendet werden.")
+    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 
 @app.get("/api/projects/{project_id}/collective-report")

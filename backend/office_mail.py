@@ -27,6 +27,8 @@ from report_export import (
     build_attachment_names,
     build_collective_attachment_names,
     build_collective_pdf_bytes,
+    build_collective_protocol_attachment_names,
+    build_collective_protocol_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
     build_protocol_attachment_names,
@@ -43,6 +45,7 @@ MSG_SENT = "Bericht wurde ans Büro gesendet."
 MSG_SENT_WITH_PHOTOS = "Bericht mit {count} Foto(s) wurde ans Büro gesendet."
 MSG_SENT_PROTOCOL = "Protokoll wurde ans Büro gesendet."
 MSG_SENT_PROTOCOL_WITH_PHOTOS = "Protokoll mit {count} Foto(s) wurde ans Büro gesendet."
+MSG_SENT_COLLECTIVE_PROTOCOL = "Gesamtprotokoll wurde ans Büro gesendet."
 MSG_FEEDBACK_SENT = "Feedback wurde gesendet."
 
 
@@ -568,3 +571,91 @@ def send_feedback_mail(
         return False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
     return True, MSG_FEEDBACK_SENT
+
+
+def send_collective_protocol_to_office(
+    payload: dict[str, Any],
+    profile: dict[str, Any],
+    to_email: str,
+    *,
+    mail_config: dict[str, Any] | None = None,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> tuple[bool, bool, str]:
+    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+        return False, False, MSG_NOT_CONFIGURED
+
+    from_addr = str(mail_config.get("email") or "").strip()
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+
+    if not from_addr or not user or not password or not host or not port:
+        return False, False, MSG_NOT_CONFIGURED
+
+    site = str(payload.get("projectName") or "—")
+    zeitraum = str(payload.get("dateRange") or "—")
+    count = int(payload.get("visitCount") or 0)
+    subject = f"Gesamtprotokoll: {site} ({count} Begehungen, {zeitraum})"
+
+    try:
+        blob = build_collective_protocol_pdf_bytes(
+            payload,
+            profile,
+            resolve_logo=resolve_logo,
+            resolve_signature=resolve_signature,
+        )
+        ascii_fn, _desc = build_collective_protocol_attachment_names(payload, "pdf")
+    except Exception:
+        logger.exception("Gesamtprotokoll-Anhang für Mail konnte nicht erzeugt werden")
+        return False, False, "Der Gesamtprotokoll-Anhang konnte nicht erzeugt werden."
+
+    body = (
+        "Hallo,\n\n"
+        f"anbei das Gesamtprotokoll zur Baustelle {site}.\n\n"
+        f"Begehungen: {count}\n"
+        f"Zeitraum: {zeitraum}\n\n"
+        "Mit freundlichen Grüßen\n"
+        f"{_company_signoff_name(profile)}\n\n\n"
+        "Powered by Freiraum Beratung"
+    )
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.set_content(body)
+    msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Gesamtprotokoll-Versand")
+        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Gesamtprotokoll-Versand fehlgeschlagen")
+        return (
+            False,
+            False,
+            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
+        )
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Gesamtprotokoll-Versand")
+        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+
+    return True, False, MSG_SENT_COLLECTIVE_PROTOCOL

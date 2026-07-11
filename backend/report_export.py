@@ -1356,3 +1356,224 @@ def build_protocol_pdf_bytes(
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()
+
+
+def build_collective_protocol_base_name(payload: dict[str, Any]) -> str:
+    site = sanitize_export_slug(str(payload.get("projectName") or "Baustelle"))
+    rng = str(payload.get("sequenceRange") or "").replace(" ", "")
+    if rng:
+        return f"gesamtprotokoll_{site}_{sanitize_export_slug(rng)}"
+    return f"gesamtprotokoll_{site}"
+
+
+def build_collective_protocol_attachment_names(payload: dict[str, Any], ext: str) -> tuple[str, str]:
+    base = build_collective_protocol_base_name(payload).lower()
+    ascii_nm = f"{sanitize_export_slug_ascii(base)}.{ext}"
+    desc = f"{build_collective_protocol_base_name(payload)}.{ext}"
+    return ascii_nm, desc
+
+
+def build_collective_protocol_pdf_bytes(
+    payload: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> bytes:
+    from app.services.site_protocol import protocol_for_pdf_signatures
+
+    buf = BytesIO()
+    doc_tpl = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        title="Gesamtprotokoll",
+        leftMargin=1.8 * cm,
+        rightMargin=1.8 * cm,
+        topMargin=1.4 * cm,
+        bottomMargin=1.8 * cm,
+    )
+    styles = getSampleStyleSheet()
+    meta_style = ParagraphStyle(
+        name="CollProtMeta",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=GREY_META_HEX,
+        spaceAfter=1,
+        leading=11,
+    )
+    body_style = ParagraphStyle(
+        name="CollProtBody",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=14,
+        textColor=TEXT_DARK_HEX,
+        spaceAfter=8,
+    )
+    title_style = ParagraphStyle(
+        name="CollProtTitle",
+        parent=styles["Heading1"],
+        fontSize=15,
+        textColor=TEXT_DARK_HEX,
+        spaceBefore=4,
+        spaceAfter=6,
+        alignment=1,
+        fontName="Helvetica-Bold",
+    )
+    company_style = ParagraphStyle(
+        name="CollProtCompany",
+        parent=styles["Heading1"],
+        fontSize=13,
+        textColor=TEXT_DARK_HEX,
+        spaceAfter=2,
+        fontName="Helvetica-Bold",
+    )
+    info_label_style = ParagraphStyle(
+        name="CollProtInfoLabel",
+        parent=meta_style,
+        fontName="Helvetica-Bold",
+        textColor=SECTION_HEX,
+    )
+    info_value_style = ParagraphStyle(
+        name="CollProtInfoValue",
+        parent=body_style,
+        fontSize=9.2,
+        spaceAfter=0,
+    )
+    section_head = ParagraphStyle(
+        name="CollProtSectionHead",
+        parent=styles["Heading2"],
+        fontSize=10.5,
+        textColor=SECTION_HEX,
+        spaceBefore=10,
+        spaceAfter=4,
+        leading=13,
+        fontName="Helvetica-Bold",
+    )
+    visit_head = ParagraphStyle(
+        name="CollProtVisitHead",
+        parent=styles["Heading3"],
+        fontSize=10,
+        textColor=SECTION_HEX,
+        spaceBefore=12,
+        spaceAfter=4,
+        leading=12,
+        fontName="Helvetica-Bold",
+    )
+
+    company_name = str(payload.get("companyName") or company_profile.get("companyName") or "Firma")
+    emails = str(company_profile.get("officeEmail") or "")
+    phone = str(company_profile.get("phone") or "")
+
+    def footer(canv: Any, __: Any) -> None:
+        canv.saveState()
+        canv.setFont("Helvetica", 7)
+        canv.setFillColor(GREY_META_HEX)
+        canv.drawCentredString(A4[0] / 2.0, 1.2 * cm, "Erstellt mit Freiraum Baustellen-Doku")
+        canv.restoreState()
+
+    story: list[Any] = []
+    logo_path = _resolve_logo_path(payload, company_profile, resolve_logo=resolve_logo)
+    logo_img = _logo_image_for_pdf(logo_path, max_width_cm=5.0, max_height_cm=2.9) if logo_path else None
+
+    company_lines: list[Any] = [Paragraph(_xml_para_text(company_name), company_style)]
+    if emails:
+        company_lines.append(Paragraph(_xml_para_text(f"Büro-E-Mail: {emails}"), meta_style))
+    if phone:
+        company_lines.append(Paragraph(_xml_para_text(f"Telefon: {phone}"), meta_style))
+
+    if logo_img:
+        head_tbl = Table([[logo_img, company_lines]], colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
+    else:
+        head_tbl = Table([[company_lines]], colWidths=[doc_tpl.width])
+    head_tbl.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(head_tbl)
+    story.append(Spacer(1, 3))
+    story.append(Paragraph("GESAMTPROTOKOLL", title_style))
+    story.append(Spacer(1, 4))
+
+    meta_rows = [
+        [Paragraph("Baustelle", info_label_style), Paragraph(_xml_para_text(str(payload.get("projectName") or "—")), info_value_style)],
+        [Paragraph("Kunde", info_label_style), Paragraph(_xml_para_text(str(payload.get("customerName") or "—")), info_value_style)],
+        [Paragraph("Zeitraum", info_label_style), Paragraph(_xml_para_text(str(payload.get("dateRange") or "—")), info_value_style)],
+        [Paragraph("Begehungen", info_label_style), Paragraph(_xml_para_text(str(payload.get("visitCount") or 0)), info_value_style)],
+    ]
+    if payload.get("sequenceRange"):
+        meta_rows.append(
+            [
+                Paragraph("Nummern", info_label_style),
+                Paragraph(_xml_para_text(str(payload.get("sequenceRange"))), info_value_style),
+            ]
+        )
+    tbl = Table(meta_rows, colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND", (0, 0), (-1, -1), SOFT_BG_HEX),
+                ("BOX", (0, 0), (-1, -1), 0.5, LINE_HEX),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE_HEX),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(tbl)
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(_xml_para_text("Chronologische Begehungsprotokolle"), section_head))
+
+    entries = payload.get("entries") or []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        seq = entry.get("sequenceNumber")
+        seq_txt = f"Nr. {seq}" if isinstance(seq, int) and seq > 0 else "Begehung"
+        day = _format_date_de(str(entry.get("date") or "—"))
+        story.append(Paragraph(_xml_para_text(f"Begehung {seq_txt} — {day}"), visit_head))
+        participants = str(entry.get("participants") or "").strip()
+        if participants:
+            story.append(
+                Paragraph(
+                    _xml_para_text(f"Teilnehmer: {participants}"),
+                    ParagraphStyle(
+                        name="CollProtParticipants",
+                        parent=meta_style,
+                        spaceAfter=6,
+                    ),
+                )
+            )
+        for para in _protocol_body_paragraphs(str(entry.get("text") or "")):
+            story.append(Paragraph(_xml_para_text(para), body_style))
+
+        sig_source = {
+            "date": entry.get("date"),
+            "participants": participants,
+            "companyName": company_name,
+            "signatures": entry.get("signatures") if isinstance(entry.get("signatures"), dict) else {},
+        }
+        _append_pdf_signatures(
+            story,
+            doc_tpl,
+            protocol_for_pdf_signatures(sig_source, company_profile),
+            section_head=section_head,
+            info_label_style=info_label_style,
+            meta_style=meta_style,
+            resolve_signature=resolve_signature,
+            signature_customer_label="Unternehmer",
+            signature_employee_label="Gesprächspartner",
+        )
+
+    doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
