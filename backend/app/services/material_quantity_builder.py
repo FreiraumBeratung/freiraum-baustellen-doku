@@ -164,6 +164,12 @@ def _disposal_label(substance: str) -> str:
 def _clean_desc(text: str) -> str:
     t = re.sub(r"\s+", " ", str(text or "").strip(" .,;:-"))
     t = re.sub(r"\b(und|sowie|dann|danach|außerdem|ausserdem)\b$", "", t, flags=re.IGNORECASE).strip()
+    t = re.sub(
+        r"\s+(?:verdichtet|verarbeitet|eingebaut|eingebracht|verlegt|gelegt)$",
+        "",
+        t,
+        flags=re.IGNORECASE,
+    )
     if not t:
         return ""
     return t[0].upper() + t[1:] if t[0].islower() else t
@@ -322,6 +328,12 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
         unit = _norm_unit(m.group("unit") or "")
         if unit in {"m²", "m2", "qm", "quadratmeter"} and re.fullmatch(
             r"pflaster(?:steine)?", low_desc.strip()
+        ):
+            continue
+        if re.search(
+            r"\b(?:legen|verlegen|schneiden|auftragen|montieren|fertigstellen|"
+            r"abschließen|abschliessen|betonieren|asphaltieren|einbauen)\s*$",
+            low_desc,
         ):
             continue
         _add(

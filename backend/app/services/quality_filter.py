@@ -925,6 +925,9 @@ def _material_confidence_buckets(
         ):
             high.append(value)
 
+    if re.search(r"\bmorgen\b.*\bpflaster\s+(?:legen|verlegen)\b", raw_probe, flags=re.IGNORECASE):
+        high.append("Pflastersteine")
+
     # Sonderfall "Bettmoertel" ohne klares Praefix: Whisper macht aus
     # "Duennbettmoertel" gelegentlich "den Bettmoertel" (zentral schon repariert),
     # in anderen Faellen bleibt nur "Bettmoertel" stehen. Kontextabhaengig aufloesen:
@@ -1872,6 +1875,48 @@ def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
     return out
 
 
+def _raw_future_segment(raw_text: str) -> str:
+    m = re.search(r"\b(?:und\s+)?morgen\b", str(raw_text or ""), flags=re.IGNORECASE)
+    if not m:
+        return ""
+    return str(raw_text or "")[m.start() :]
+
+
+def _is_future_only_pflaster_activity(activity: str, raw_text: str) -> bool:
+    low_act = str(activity or "").casefold()
+    raw = str(raw_text or "").casefold()
+    if not re.search(r"\bpflaster\b", low_act):
+        return False
+    if not re.search(r"\b(?:verlegt|gelegt|eingebaut)\b", low_act):
+        return False
+    future = _raw_future_segment(raw_text).casefold()
+    if not future or not re.search(r"\bpflaster\s+(?:legen|verlegen)\b", future):
+        return False
+    before = raw.split("morgen", 1)[0]
+    return not re.search(r"\bpflaster\s+(?:verlegt|gelegt|eingebaut)\b", before)
+
+
+def _drop_future_work_activities(activities: list[str], raw_text: str) -> list[str]:
+    """Entfernt Zukunfts-/Plan-Arbeiten aus der Tätigkeitsliste (z. B. morgen Pflaster legen)."""
+    out: list[str] = []
+    for act in activities:
+        low = str(act or "").strip().casefold()
+        if not low:
+            continue
+        if re.match(r"^morgen\s+m(?:ü|ue)ssen\b", low):
+            continue
+        if re.match(
+            r"^(?:morgen|montag|dienstag|mittwoch|donnerstag|freitag|samstag|"
+            r"nächste\s+woche|naechste\s+woche)\b",
+            low,
+        ):
+            continue
+        if _is_future_only_pflaster_activity(act, raw_text):
+            continue
+        out.append(str(act))
+    return out
+
+
 def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
     """Entfernt Satzfragmente und Tätigkeits-Echos aus der Materialliste."""
     out: list[str] = []
@@ -1884,6 +1929,8 @@ def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
         if re.search(r"\b(danach|und dann|eingebaut und|eingebaut danach)\b", low):
             continue
         if re.search(r"\beingebaut\b", low) and re.search(r"\b(pflaster|schotter|splitt|split)\b", low):
+            continue
+        if re.search(r"\b(?:legen|verlegen)\b", low):
             continue
         out.append(str(mat))
     return _dedupe(out)
@@ -1967,6 +2014,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     activities = _context_gate_activities(activities, raw_text)
     activities = _evidence_gate_activities(activities, raw_text)
     activities = _drop_runon_noise_activities(activities)
+    activities = _drop_future_work_activities(activities, raw_text)
     activities = _drop_customer_sentiment_activities(activities)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)
     confidence = _material_confidence_buckets(

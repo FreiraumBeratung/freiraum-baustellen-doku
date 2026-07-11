@@ -291,6 +291,20 @@ def _polish_open_clause(text: str) -> str:
     t = t.strip(" .,;")
     if not t:
         return ""
+    m_pfl = re.search(
+        r"morgen\s+(?:müssen\s+wir|muessen\s+wir|muss\s+ich)\s+(?:noch\s+)*(?:dann\s+)*(?:auch\s+)*"
+        r"(\d+(?:[.,]\d+)?\s*(?:m²|m2|qm|quadratmeter)\s+)?pflaster\s+legen",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_pfl:
+        qty = (m_pfl.group(1) or "").strip()
+        lead = f"Morgen müssen wir noch {qty} Pflaster legen".strip()
+        lead = re.sub(r"\s+", " ", lead)
+        return f"{lead} noch offen."
+    t = re.sub(r"\b(dann|auch|halt|eben|mal)\b", " ", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t).strip(" .,;")
+    t = re.sub(r"\s+noch\s+offen\.?$", "", t, flags=re.IGNORECASE).strip(" .,;")
     t = re.sub(r"\brest\s+montag\b", "Rest am Montag noch offen", t, flags=re.IGNORECASE)
     t = re.sub(r"\brest\s+nächste\s+woche\b", "Rest nächste Woche noch offen", t, flags=re.IGNORECASE)
     t = re.sub(r"\brest\s+naechste\s+woche\b", "Rest nächste Woche noch offen", t, flags=re.IGNORECASE)
@@ -313,6 +327,8 @@ def _polish_open_clause(text: str) -> str:
         t = f"{t} noch offen"
     elif t and t[0].islower():
         t = t[0].upper() + t[1:]
+    t = re.sub(r"\bnoch\s+noch\b", "noch", t, flags=re.IGNORECASE)
+    t = re.sub(r"\s+", " ", t).strip()
     if not t.endswith("."):
         t += "."
     return t

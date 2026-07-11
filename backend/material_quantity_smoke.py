@@ -154,6 +154,60 @@ def _integration_tests() -> None:
         not any(re.search(r"\bm²\b.*pflaster", x, flags=re.IGNORECASE) for x in galabau_mats),
         f"pflaster flaeche echo in materials: {galabau_mats}",
     )
+    _expect(
+        not any("verdichtet" in x.casefold() for x in galabau_mats),
+        f"verdichtet gehoert nicht ins material: {galabau_mats}",
+    )
+
+    morgen_out = api_structure_report(
+        StructureReportBody(
+            projectId="mat-qty-morgen",
+            projectName="Schmitz Aussenanlage",
+            customerName="Kunde",
+            date="2026-07-11",
+            employeeNames=["Max"],
+            startTime="08:00",
+            endTime="17:00",
+            exportFormat="PDF",
+            rawText=(
+                "Heute haben wir den Graben frei gebaggert dann mit 5 m³ Schotter null 32 verdichtet "
+                "und danach zwei Kubik Split zwei Fünfer verarbeitet und morgen müssen wir dann "
+                "30 m² Pflaster legen"
+            ),
+        ),
+        store=_STORE,
+    )
+    morgen_s = (morgen_out.get("structured") or {})
+    morgen_acts = [str(x) for x in (morgen_s.get("activities") or [])]
+    morgen_opens = [str(x) for x in (morgen_s.get("openItems") or [])]
+    morgen_summary = str(morgen_s.get("summary") or "")
+    _expect(
+        not any("pflaster verlegt" in x.casefold() for x in morgen_acts),
+        f"zukunfts-pflaster in activities: {morgen_acts}",
+    )
+    _expect(
+        not any(x.casefold().startswith("morgen müssen") for x in morgen_acts),
+        f"morgen-fragment in activities: {morgen_acts}",
+    )
+    _expect(
+        "pflaster verlegt" not in morgen_summary.casefold(),
+        f"zukunfts-pflaster in summary: {morgen_summary}",
+    )
+    _expect(morgen_opens, f"offener punkt fehlt: {morgen_opens}")
+    _expect(
+        not re.search(r"\bdann\b.*\bnoch offen\b", morgen_opens[0], flags=re.IGNORECASE),
+        f"offener punkt grammatik: {morgen_opens}",
+    )
+    _expect(
+        re.search(r"morgen.*pflaster.*offen", morgen_opens[0], flags=re.IGNORECASE),
+        f"offener punkt inhalt: {morgen_opens}",
+    )
+    morgen_mats = [str(x) for x in (morgen_s.get("materials") or [])]
+    _expect(_contains_any(morgen_mats, "Pflastersteine"), f"pflastersteine fehlt: {morgen_mats}")
+    _expect(
+        not any("legen" in x.casefold() for x in morgen_mats),
+        f"zukunfts-pflaster in materials: {morgen_mats}",
+    )
 
     pdf = build_pdf_bytes(
         {
