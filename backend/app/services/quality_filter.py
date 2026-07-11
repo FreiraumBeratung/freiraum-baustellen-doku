@@ -1889,7 +1889,7 @@ def _drop_putz_layer_material_echo(materials: list[str], activities: list[str]) 
         if not low:
             continue
         if re.search(
-            r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert)\b",
+            r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert|gelegt|verlegt|gesetzt|gemäht|gemaeht|geschnitten)\b",
             low,
         ):
             continue

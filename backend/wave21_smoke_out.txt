@@ -1,0 +1,31 @@
+VIRTUAL-SPEECH-PUTZ-STUCK-WAVE21-SMOKE: FEHLER
+Total cases: 1800
+ - PutzStuck21_097_N: Putzschicht-Dublette in Materialien ['Grundputz'] (got=['Grundputz'])
+ - PutzStuck21_100_B: Putzschicht-Dublette in Materialien ['Grundputz'] (got=['Grundputz'])
+ - PutzStuck21_229_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz'])
+ - PutzStuck21_232_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz'])
+ - PutzStuck21_235_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Armierungsgewebe'])
+ - PutzStuck21_238_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Armierungsgewebe'])
+ - PutzStuck21_241_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz'])
+ - PutzStuck21_244_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz'])
+ - PutzStuck21_1010_W: zu wenige Tõtigkeiten (1 < 2) got=['Kratzputz aufgetragen']
+ - PutzStuck21_1011_H: zu wenige Tõtigkeiten (1 < 2) got=['Kratzputz aufgetragen']
+ - PutzStuck21_1012_B: zu wenige Tõtigkeiten (1 < 2) got=['Kratzputz aufgetragen']
+ - PutzStuck21_1012_B: zu wenige passende Tõtigkeiten (1 < 2) expect=('Reibputz aufgetragen', 'Kratzputz aufgetragen') got=['Kratzputz aufgetragen']
+ - PutzStuck21_1110_M: zu wenige passende Tõtigkeiten (1 < 2) expect=('Armierung ausgef³hrt', 'Armierungsm÷rtel verarbeitet') got=['Armierung ausgef³hrt']
+ - PutzStuck21_1142_W: zu wenige Tõtigkeiten (2 < 3) got=['Altputz entfernt', 'Putz geglõttet']
+ - PutzStuck21_1142_W: zu wenige passende Tõtigkeiten (2 < 3) expect=('Altputz entfernt', 'Putz geglõttet', 'Grundierung aufgetragen') got=['Altputz entfernt', 'Putz geglõttet']
+ - PutzStuck21_1143_H: zu wenige Tõtigkeiten (2 < 3) got=['Altputz entfernt', 'Putz geglõttet']
+ - PutzStuck21_1143_H: zu wenige passende Tõtigkeiten (2 < 3) expect=('Altputz entfernt', 'Putz geglõttet', 'Grundierung aufgetragen') got=['Altputz entfernt', 'Putz geglõttet']
+ - PutzStuck21_1405_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1408_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1477_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1480_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1549_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1552_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1621_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1624_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1693_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1696_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1765_N: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])
+ - PutzStuck21_1768_B: Putzschicht-Dublette in Materialien ['Reibputz'] (got=['Reibputz', 'Feinputz'])

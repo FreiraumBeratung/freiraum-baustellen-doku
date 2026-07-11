@@ -43,6 +43,12 @@ def _unit_tests() -> None:
     enriched = enrich_materials_list(["Schotter"], "15 ton Schotter 0/45 eingebaut.")
     _expect(any("15" in x and "Schotter" in x for x in enriched), f"qty attach: {enriched}")
 
+    pflaster_extracted = extract_quantified_materials("heute haben wir 50 Quadratmeter Pflaster gelegt")
+    _expect(
+        not any("pflaster gelegt" in x.casefold() for x in pflaster_extracted),
+        f"pflaster activity must not be material: {pflaster_extracted}",
+    )
+
 
 def _integration_tests() -> None:
     os.environ["OPENAI_API_KEY"] = ""
@@ -74,6 +80,27 @@ def _integration_tests() -> None:
     _expect(_contains_any(mats, "TOK") or _contains_any(mats, "Asphalt"), f"integration asphalt/tok: {mats}")
     _expect(any("Bagger" in x for x in machine_hours), f"bagger std: {machine_hours}")
     _expect(any("LKW" in x for x in machine_hours), f"lkw std: {machine_hours}")
+
+    pflaster_out = api_structure_report(
+        StructureReportBody(
+            projectId="mat-qty-pflaster",
+            projectName="Pflaster Test",
+            customerName="Kunde",
+            date="2026-07-11",
+            employeeNames=["Max"],
+            startTime="08:00",
+            endTime="17:00",
+            exportFormat="PDF",
+            rawText="heute haben wir 50 Quadratmeter Pflaster gelegt",
+        ),
+        store=_STORE,
+    )
+    pflaster_mats = [str(x) for x in ((pflaster_out.get("structured") or {}).get("materials") or [])]
+    _expect(_contains_any(pflaster_mats, "Pflastersteine"), f"pflastersteine fehlt: {pflaster_mats}")
+    _expect(
+        not any("pflaster gelegt" in x.casefold() for x in pflaster_mats),
+        f"pflaster activity echo in materials: {pflaster_mats}",
+    )
 
     pdf = build_pdf_bytes(
         {

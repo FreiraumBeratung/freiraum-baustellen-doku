@@ -86,6 +86,18 @@ _QTY_UNIT_DESC = re.compile(
     re.IGNORECASE,
 )
 
+# Mengen + Oberflächenarbeit (z. B. „50 m² Pflaster gelegt“) sind Tätigkeiten, keine Materialzeilen.
+_WORK_SURFACE_MAT_SKIP = re.compile(
+    r"\b(?:"
+    r"pflaster|rasen|rasenkante|borde|randstein|hecke|unkraut|laub|terrasse|"
+    r"oberputz|unterputz|innenputz|außenputz|aussenputz|grundputz|sockelputz|reibputz|kratzputz"
+    r")\b.*\b(?:"
+    r"gelegt|verlegt|gesetzt|gemäht|gemaeht|getrimmt|geschnitten|entfernt|"
+    r"aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert|eingedeckt"
+    r")\b",
+    re.IGNORECASE,
+)
+
 _TOK_BAND = re.compile(
     r"(?P<qty>\d+(?:[.,]\d+)?)\s*(?:m|met|meter)\s+tok[\s-]?band",
     re.IGNORECASE,
@@ -224,10 +236,7 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
             continue
         if re.search(r"^(bagger|radlader|walze|kran|stampfer|dumper)\b", low_desc):
             continue
-        if re.search(
-            r"\b(oberputz|unterputz|innenputz|außenputz|aussenputz|grundputz|sockelputz|reibputz|kratzputz)\b",
-            low_desc,
-        ) and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert)\b", low_desc):
+        if _WORK_SURFACE_MAT_SKIP.search(low_desc):
             continue
         unit = _norm_unit(m.group("unit") or "")
         _add(
