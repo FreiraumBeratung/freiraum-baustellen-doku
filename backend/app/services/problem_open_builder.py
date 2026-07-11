@@ -336,6 +336,17 @@ def _polish_open_clause(text: str) -> str:
     )
     if m_fugen:
         return "Morgen Fugen mit Fugensand füllen noch offen."
+    m_abort_pfl = re.search(
+        r"\b(?:wollten|wollen|wollte)\b[^.!?]{0,140}?\b(?:mit\s+dem\s+)?pflaster\w*\b[^.!?]{0,80}?\banfangen\b"
+        r"[^.!?]{0,50}?(?:fuer|für)\s+(?P<qty>\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)?)",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_abort_pfl:
+        qty = (m_abort_pfl.group("qty") or "").strip()
+        if qty:
+            return f"{qty} Pflaster verlegen noch offen."
+        return "Pflasterarbeiten noch offen."
     m_shift = re.search(
         r"(?:dementsprechend\s+)?verschiebt\s+sich\s+(?:das\s+)?([^.,;!?]+?)\s+auf\s+morgen",
         t,
@@ -499,7 +510,30 @@ def _extract_implicit_open_items(raw_text: str) -> list[str]:
             chunk = m.group(0).strip(" .,;") if m else chunk[:100].strip(" .,;")
         if chunk and _has_open_substance(chunk):
             fragments.append(_polish_open_clause(chunk))
+    if not fragments and _raw_paving_aborted_for_open(text):
+        m = re.search(
+            r"\b(?:wollten|wollen|wollte)\b[^.!?]{0,140}?\b(?:mit\s+dem\s+)?pflaster\w*\b[^.!?]{0,80}?\banfangen\b"
+            r"[^.!?]{0,50}?(?:fuer|für)\s+(?P<qty>\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)?)",
+            text,
+            flags=re.IGNORECASE,
+        )
+        if m:
+            fragments.append(_polish_open_clause(m.group(0)))
     return _dedupe(fragments)
+
+
+def _raw_paving_aborted_for_open(text: str) -> bool:
+    raw = str(text or "").casefold()
+    return bool(
+        re.search(
+            r"\b(wollten|wollen|wollte)\b.{0,140}\bpflaster\w*\b.{0,80}\banfangen\b",
+            raw,
+        )
+        and re.search(
+            r"\b(abbrechen|unterbrochen|angefangen\s+(?:hat\s+)?zu\s+regnen|strich\s+durch\s+die\s+rechnung)\b",
+            raw,
+        )
+    )
 
 
 def extract_problems_from_text(raw_text: str) -> list[str]:

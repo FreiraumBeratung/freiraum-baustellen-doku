@@ -1896,6 +1896,48 @@ def _raw_future_segment(raw_text: str) -> str:
     return str(raw_text or "")[m.start() :]
 
 
+def _raw_paving_aborted(raw_text: str) -> bool:
+    raw = str(raw_text or "").casefold()
+    planned = bool(
+        re.search(
+            r"\b(wollten|wollen|wollte)\b.{0,140}\b(?:mit\s+dem\s+)?pflaster\w*\b.{0,80}\banfangen\b"
+            r"|\bpflaster\w*\b.{0,80}\banfangen\b",
+            raw,
+        )
+    )
+    aborted = bool(
+        re.search(
+            r"\b(abbrechen|unterbrochen|angefangen\s+(?:hat\s+)?zu\s+regnen|"
+            r"strich\s+durch\s+die\s+rechnung)\b",
+            raw,
+        )
+    )
+    return planned and aborted
+
+
+def _drop_aborted_paving_activities(activities: list[str], raw_text: str) -> list[str]:
+    if not _raw_paving_aborted(raw_text):
+        return activities
+    out: list[str] = []
+    for act in activities:
+        low = str(act or "").casefold()
+        if re.search(r"\bpflaster\b", low) and re.search(r"\b(verlegt|eingebaut|gelegt)\b", low):
+            continue
+        if re.search(r"\bwollten\b", low):
+            continue
+        out.append(str(act))
+    return out
+
+
+def _drop_graben_unterbau_false_positive(activities: list[str], raw_text: str) -> list[str]:
+    raw = str(raw_text or "").casefold()
+    if not re.search(r"\bunterbau\b", raw):
+        return activities
+    if re.search(r"\bgraben\s+(?:ausgehoben|ausgeschachtet|gezogen)\b", raw):
+        return activities
+    return [a for a in activities if "graben ausgehoben" not in str(a or "").casefold()]
+
+
 def _is_future_only_pflaster_activity(activity: str, raw_text: str) -> bool:
     low_act = str(activity or "").casefold()
     raw = str(raw_text or "").casefold()
@@ -1954,7 +1996,9 @@ def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
             continue
         if re.search(r"\b(?:legen|verlegen)\b", low):
             continue
-        if re.search(r"\b(morgen|muessen|müssen|fertig\s+gestellt|fertiggestellt)\b", low):
+        if re.search(r"\b(morgen|muessen|müssen|fertig\s+gestellt|fertiggestellt|wollten|wollen)\b", low):
+            continue
+        if re.search(r"\bm³\b", mat, flags=re.IGNORECASE) and re.search(r"\bpflaster\b", low):
             continue
         if re.search(r"\b(reingepackt|reingemacht)\b", low):
             continue
@@ -2043,6 +2087,8 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     activities = _evidence_gate_activities(activities, raw_text)
     activities = _drop_runon_noise_activities(activities)
     activities = _drop_future_work_activities(activities, raw_text)
+    activities = _drop_aborted_paving_activities(activities, raw_text)
+    activities = _drop_graben_unterbau_false_positive(activities, raw_text)
     activities = _drop_customer_sentiment_activities(activities)
     activities, machine_suggestions, machine_hours_auto = _apply_machine_assistance(activities, raw_text)
     confidence = _material_confidence_buckets(

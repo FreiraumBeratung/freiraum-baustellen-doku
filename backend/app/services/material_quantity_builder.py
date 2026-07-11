@@ -100,7 +100,8 @@ _WORD_KUBIK_MAT = re.compile(
 
 _DESC_STOP = re.compile(
     r"\b(?:eingebaut|eingebracht|verarbeitet|verlegt|gelegt|aufgetragen|danach|und dann|sowie|dann|"
-    r"reingepackt|reingemacht|rein|morgen|fertig\s+gestellt|fertiggestellt|muessen|müssen)\b",
+    r"reingepackt|reingemacht|rein|morgen|fertig\s+gestellt|fertiggestellt|muessen|müssen|"
+    r"wollten|wollen|wir\s+wollten)\b",
     re.IGNORECASE,
 )
 
@@ -332,7 +333,9 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
         low_desc = desc.casefold()
         if re.search(r"\bentsorg", low_desc):
             continue
-        if re.search(r"\b(fertig\s+gestellt|fertiggestellt|morgen|muessen|müssen|füllen|fuellen)\b", low_desc):
+        if re.search(r"\b(fertig\s+gestellt|fertiggestellt|morgen|muessen|müssen|füllen|fuellen|wollten|wollen)\b", low_desc):
+            continue
+        if re.search(r"\bm³\b", desc, flags=re.IGNORECASE) and re.search(r"\bpflaster\b", low_desc):
             continue
         if re.search(r"\b(lkw|stunden|std|uhr|bis)\b", low_desc):
             continue

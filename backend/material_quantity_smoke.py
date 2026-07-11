@@ -114,6 +114,33 @@ def _unit_tests() -> None:
         f"offener punkt grammatik: {pflaster_open}",
     )
 
+    weather_raw = (
+        "Heute haben wir erst mal den Unterbau mit dem Bagger vorgearbeitet und fertig gestellt "
+        "dann haben wir 5 m³ Schotter eingebaut und 3 m³ Pflaster wir wollten dann gerade mit dem Pflastern "
+        "anfangen fuer 40 m² leider hat uns das Wetter Strich durch die Rechnung gemacht und es hat "
+        "angefangen zu regnen und wir mussten die Arbeiten abbrechen"
+    )
+    from app.services.quality_filter import apply_quality_filter  # noqa: WPS433
+
+    weather_r = apply_quality_filter(
+        {"rawText": weather_raw, "date": "2026-07-11"},
+        {
+            "activities": canonicalize_activities([], raw_text=weather_raw),
+            "materials": [],
+            "problems": [],
+            "openItems": [],
+            "machineHours": [],
+        },
+    )
+    w_acts = [str(x) for x in (weather_r.get("activities") or [])]
+    w_mats = [str(x) for x in (weather_r.get("materials") or [])]
+    w_open = refine_open_items_list(weather_r.get("openItems") or [], weather_raw)
+    _expect(any("unterbau" in x.casefold() for x in w_acts), f"unterbau fehlt: {w_acts}")
+    _expect(not any("pflaster verlegt" in x.casefold() for x in w_acts), f"pflaster faelschlich: {w_acts}")
+    _expect(not any("graben ausgehoben" in x.casefold() for x in w_acts), f"graben faelschlich: {w_acts}")
+    _expect(not any("wollten" in x.casefold() for x in w_acts + w_mats), f"wollten echo: {w_acts} {w_mats}")
+    _expect(w_open and "40" in w_open[0], f"offen 40m2 fehlt: {w_open}")
+
 
 def _integration_tests() -> None:
     os.environ["OPENAI_API_KEY"] = ""

@@ -2779,13 +2779,23 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             else "Terrassenplatten verlegt"
         )
         return CanonicalActivity("terrassenplatten_verlegt", text, 101.0, bool(qty))
-    if "pflaster" in t and re.search(
-        r"\b(verlegt|gelegt|gemacht|legen|fertig\s+gestellt|fertiggestellt)\b",
-        t,
-    ):
-        qty = _extract_qty_m2(t)
-        text = f"{_qty_prefix(raw_text)}{qty} m² Pflaster verlegt" if qty else "Pflaster verlegt"
-        return CanonicalActivity("pflaster_verlegt", text, 102.0, bool(qty))
+    if "pflaster" in t:
+        _pflaster_planned = re.search(
+            r"\b(anfangen|beginnen|wollten|wollen|wollte|möchten|moechten)\b",
+            t,
+        )
+        _pflaster_done = bool(
+            re.search(r"\b(verlegt|gelegt|fertig\s+gestellt|fertiggestellt)\b", t)
+            or (
+                re.search(r"\b(gemacht|legen)\b", t)
+                and not re.search(r"\bstrich\s+durch\s+die\s+rechnung\b", t)
+                and not _pflaster_planned
+            )
+        )
+        if _pflaster_done and not _pflaster_planned:
+            qty = _extract_qty_m2(t)
+            text = f"{_qty_prefix(raw_text)}{qty} m² Pflaster verlegt" if qty else "Pflaster verlegt"
+            return CanonicalActivity("pflaster_verlegt", text, 102.0, bool(qty))
     if ("gartenmauer" in t or ("mauer" in t and re.search(r"\b(garten|beet|aussenanlage|außenanlage|hof|terrasse)\b", t))) and re.search(
         r"\b(gebaut|erstellt|hochgezogen|gemauert|gemacht)\b",
         t,
@@ -3428,10 +3438,17 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("graben_ausgehoben", "Graben ausgehoben", 79.0, False)
-    if ("graben" in t or "baugrube" in t or "grube" in t or "gebaggert" in t or "bagger" in t) and re.search(
-        r"\b(ausgehoben|ausgeschachtet|erstellt|gezogen|gegraben|gebaggert|gemacht)\b",
+    if re.search(r"\bunterbau\b", t) and re.search(
+        r"\b(vorgearbeitet|vorbereitet|fertig\s+gestellt|fertiggestellt|gemacht)\b",
         t,
     ):
+        return CanonicalActivity("unterbau_vorbereitet", "Unterbau vorbereitet", 86.0, False)
+    if ("graben" in t or "baugrube" in t or "grube" in t or "gebaggert" in t) and re.search(
+        r"\b(ausgehoben|ausgeschachtet|erstellt|gezogen|gegraben|gebaggert)\b",
+        t,
+    ):
+        return CanonicalActivity("graben_ausgehoben", "Graben ausgehoben", 79.0, False)
+    if "bagger" in t and re.search(r"\b(ausgehoben|ausgeschachtet|gebaggert|gegraben)\b", t):
         return CanonicalActivity("graben_ausgehoben", "Graben ausgehoben", 79.0, False)
     if "boden" in t and re.search(r"\b(ausgeschachtet|ausgehoben)\b", t) and "putz" not in t:
         return CanonicalActivity("boden_ausgeschachtet", "Boden ausgeschachtet", 80.0, False)
@@ -3666,6 +3683,10 @@ def _fallback_activity_from_chunk(norm_text: str) -> CanonicalActivity | None:
     if not t:
         return None
     if re.search(r"\b(kundin|kunde)\b.*\b(zufrieden|gesprochen|talk)\b", t):
+        return None
+    if re.search(r"\b(wollten|wollen|wollte)\b", t):
+        return None
+    if re.search(r"\b\d+(?:[.,]\d+)?\s*m³\s+pflaster\b", t):
         return None
 
     patterns: tuple[tuple[str, str], ...] = (
