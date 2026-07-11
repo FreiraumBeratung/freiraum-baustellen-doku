@@ -1872,6 +1872,45 @@ def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
     return out
 
 
+def _drop_putz_layer_material_echo(materials: list[str], activities: list[str]) -> list[str]:
+    """Entfernt generische Putzschicht-Namen aus Materialien, wenn sie schon Tätigkeit sind."""
+    acts_probe = " | ".join(str(a or "") for a in activities).casefold()
+    layer_tokens = (
+        ("oberputz",),
+        ("unterputz",),
+        ("innenputz",),
+        ("außenputz", "aussenputz"),
+        ("grundputz",),
+        ("sockelputz",),
+    )
+    out: list[str] = []
+    for mat in materials:
+        low = str(mat or "").strip().casefold()
+        if not low:
+            continue
+        if re.search(
+            r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert)\b",
+            low,
+        ):
+            continue
+        low_core = re.sub(r"^\d+(?:[.,]\d+)?\s*(?:m²|m2|qm²|qm2|quadratmeter)\s+", "", low)
+        low_core = re.sub(r"\s+auf\s*getragen\s*$", "", low_core)
+        drop = False
+        if re.search(r"\b(außenputz|aussenputz)\b.*\b(aufgetragen|aufgebracht|verarbeitet)\b", acts_probe):
+            if low_core == "kratzputz" or low_core.startswith("kratzputz "):
+                drop = True
+        if not drop:
+            for tokens in layer_tokens:
+                if any(tok in acts_probe for tok in tokens) and any(
+                    low_core == tok or low_core.startswith(tok + " ") for tok in tokens
+                ):
+                    drop = True
+                    break
+        if not drop:
+            out.append(str(mat))
+    return _dedupe(out)
+
+
 def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any]) -> dict[str, Any]:
     result = dict(structured)
     activities_raw = [str(x) for x in (result.get("activities") or [])]
@@ -1903,6 +1942,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     from app.services.material_quantity_builder import enrich_materials_list
 
     materials = enrich_materials_list(materials, raw_text)
+    materials = _drop_putz_layer_material_echo(materials, activities)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     activities = _drop_material_echo_activities(activities, materials)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)

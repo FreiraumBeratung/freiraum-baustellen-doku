@@ -224,6 +224,11 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
             continue
         if re.search(r"^(bagger|radlader|walze|kran|stampfer|dumper)\b", low_desc):
             continue
+        if re.search(
+            r"\b(oberputz|unterputz|innenputz|außenputz|aussenputz|grundputz|sockelputz|reibputz|kratzputz)\b",
+            low_desc,
+        ) and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert)\b", low_desc):
+            continue
         unit = _norm_unit(m.group("unit") or "")
         _add(
             MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc),

@@ -2326,6 +2326,9 @@ def _normalize_masonry_size_notation(text: str) -> str:
 
 
 def _extract_qty_m2(text: str) -> str | None:
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(?:qm)?(?:m²|m2|²)\b", text, flags=re.IGNORECASE)
+    if m:
+        return m.group(1)
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(m²|m2|qm|quadratmeter)", text, flags=re.IGNORECASE)
     if m:
         return m.group(1)
@@ -3114,10 +3117,18 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         or re.search(r"\b(wand|decke|fassade)\b", (raw_text or "").casefold())
     ):
         return CanonicalActivity("wand_geschliffen", "Wand geschliffen", 72.0, False)
-    if "schimmel" in t:
+    if "sanierputz" in t and re.search(
+        r"\b(aufgebracht|aufgetragen|verarbeitet|gemacht|drauf)\b",
+        t,
+    ):
+        text, has_qty = _putz_layer_activity_text("Sanierputz", "aufgebracht", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("sanierputz_aufgebracht", text, 92.0, has_qty)
+    if "schimmel" in t and re.search(r"\b(beseitigt|entfernt|saniert|bekämpft|bekaempft)\b", t):
         return CanonicalActivity("schimmel_beseitigt", "Schimmel beseitigt", 85.0, False)
     if "sanierputz" in t:
         return CanonicalActivity("sanierputz_aufgebracht", "Sanierputz aufgebracht", 92.0, False)
+    if "schimmel" in t and not re.search(r"\bsanierputz\b", t):
+        return CanonicalActivity("schimmel_beseitigt", "Schimmel beseitigt", 85.0, False)
     if re.search(r"\bputz\b", t) and re.search(r"\b(drauf|draufgezogen)\b", t) and re.search(
         r"\b(sanier|schimmel)\b",
         f"{t} {str(raw_text or '').casefold()}",
@@ -3134,13 +3145,18 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         )
     ):
         return CanonicalActivity("grundierung_aufgetragen", "Grundierung aufgetragen", 67.0, False)
-    if "grundputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
-        return CanonicalActivity("grundputz_aufgetragen", "Grundputz aufgetragen", 77.0, False)
-    if "unterputz" in t and re.search(
-        r"\b(aufgetragen|aufgebracht|verarbeitet|nachgearbeitet|gemacht|aufgezogen|gezogen)\b",
-        t,
+    if "grundputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|drauf)\b", t):
+        text, has_qty = _putz_layer_activity_text("Grundputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("grundputz_aufgetragen", text, 77.0, has_qty)
+    if "unterputz" in t and (
+        re.search(
+            r"\b(aufgetragen|aufgebracht|verarbeitet|nachgearbeitet|gemacht|aufgezogen|gezogen|drauf)\b",
+            t,
+        )
+        or _extract_qty_m2(t)
     ):
-        return CanonicalActivity("unterputz_aufgetragen", "Unterputz aufgetragen", 77.0, False)
+        text, has_qty = _putz_layer_activity_text("Unterputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("unterputz_aufgetragen", text, 77.0, has_qty)
     if "fassade" in t and re.search(r"\b(gedämmt|gedaemmt)\b", t):
         return CanonicalActivity("wdvs_ausgefuehrt", "WDVS ausgeführt", 73.0, False)
     if ("armierung" in t or "gewebe" in t) and re.search(
@@ -3179,7 +3195,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t) or "reibputz" in t
     ):
         return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
-    if re.search(r"\b(innenputz|außenputz|aussenputz|putz|feinputz)\b", t) and re.search(
+    if re.search(r"\b(innenputz|außenputz|aussenputz|putz|feinputz|kratzputz)\b", t) and re.search(
         r"\b(filzen|filziert)\b",
         t,
     ):
@@ -3189,11 +3205,21 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.0, False)
-    if "reibputz" in t and re.search(
-        r"\b(aufgetragen|aufgebracht|verarbeitet|abgerieben|gemacht|geschliffen|angeschliffen|nachgearbeitet)\b",
-        t,
+    if re.search(r"\b(silikonharzputz|silikatputz|kalkzementputz)\b", t) and re.search(
+        r"\b(außenputz|aussenputz|fassade|außenwand|aussenwand)\b",
+        f"{t} {str(raw_text or '').casefold()}",
+    ) and _extract_qty_m2(t):
+        text, has_qty = _putz_layer_activity_text("Außenputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("aussenputz_aufgetragen", text, 76.0, has_qty)
+    if "reibputz" in t and (
+        re.search(
+            r"\b(aufgetragen|aufgebracht|verarbeitet|abgerieben|gemacht|geschliffen|angeschliffen|nachgearbeitet|drauf)\b",
+            t,
+        )
+        or _extract_qty_m2(t)
     ):
-        return CanonicalActivity("reibputz_aufgetragen", "Reibputz aufgetragen", 73.0, False)
+        text, has_qty = _putz_layer_activity_text("Reibputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("reibputz_aufgetragen", text, 73.0, has_qty)
     if re.search(r"\bwdvs\b", t) and re.search(r"\b(kleben|geklebt)\b", t):
         return CanonicalActivity("wdvs_daemmung_geklebt", "WDVS Dämmung geklebt", 73.5, False)
     if re.search(r"\bwdvs\b", t) and re.search(r"\b(dübeln|duebeln|gedübelt|geduebelt)\b", t):
@@ -3205,8 +3231,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         if "innenputz" in t:
-            return CanonicalActivity("innenputz_aufgetragen", "Innenputz aufgetragen", 76.0, False)
-        return CanonicalActivity("aussenputz_aufgetragen", "Außenputz aufgetragen", 76.0, False)
+            text, has_qty = _putz_layer_activity_text("Innenputz", "aufgetragen", chunk=t, raw_text=raw_text)
+            return CanonicalActivity("innenputz_aufgetragen", text, 76.0, has_qty)
+        text, has_qty = _putz_layer_activity_text("Außenputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("aussenputz_aufgetragen", text, 76.0, has_qty)
     if "innenputz" in t and not re.search(
         r"\b(sockelputz|leibungs|laibungs|eckschutz|apu|tropfkanten|oberputz|kratzputz|reibputz)\b",
         t,
@@ -3214,18 +3242,26 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         re.search(r"\b(gipsputz|kalkputz|feinputz|silikatputz|silikonharzputz)\b", t)
         or re.search(r"\b\d+(?:[.,]\d+)?\s*(?:quadratmeter|qm|m²|m2)\b", t)
     ):
-        return CanonicalActivity("innenputz_aufgetragen", "Innenputz aufgetragen", 76.0, False)
-    if "sockelputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
-        return CanonicalActivity("sockelputz_aufgetragen", "Sockelputz aufgetragen", 73.0, False)
+        text, has_qty = _putz_layer_activity_text("Innenputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("innenputz_aufgetragen", text, 76.0, has_qty)
+    if "sockelputz" in t and (
+        re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|drauf)\b", t) or _extract_qty_m2(t)
+    ):
+        text, has_qty = _putz_layer_activity_text("Sockelputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("sockelputz_aufgetragen", text, 73.0, has_qty)
     if "kratzputz" in t and re.search(r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht)\b", t):
-        return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
+        text, has_qty = _putz_layer_activity_text("Kratzputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("kratzputz_aufgetragen", text, 73.0, has_qty)
     if re.search(r"^kratzputz\s*$", t.strip(), flags=re.IGNORECASE):
         raw_probe = _normalize_for_match(str(raw_text or ""))
         if re.search(r"\b(außenputz|aussenputz|kratzputz|putz|fassade)\b", raw_probe):
             return CanonicalActivity("kratzputz_aufgetragen", "Kratzputz aufgetragen", 73.0, False)
-    if "oberputz" in t and re.search(
-        r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|gezogen|aufgezogen|glatt)\b",
-        t,
+    if "oberputz" in t and (
+        re.search(
+            r"\b(aufgetragen|aufgebracht|verarbeitet|gemacht|gezogen|aufgezogen|glatt|drauf)\b",
+            t,
+        )
+        or (_extract_qty_m2(t) and not re.search(r"\boffen\b", t))
     ) and not (
         re.search(r"\boffen\b[^.]{0,50}\boberputz\b", t)
         and not re.search(
@@ -3237,7 +3273,8 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             t,
         )
     ):
-        return CanonicalActivity("oberputz_aufgetragen", "Oberputz aufgetragen", 78.0, False)
+        text, has_qty = _putz_layer_activity_text("Oberputz", "aufgetragen", chunk=t, raw_text=raw_text)
+        return CanonicalActivity("oberputz_aufgetragen", text, 78.0, has_qty)
     if re.search(r"\bputz\b", t) and re.search(r"\b(aufgebracht|aufgetragen|verarbeitet)\b", t):
         return CanonicalActivity("putz_aufgebracht", "Putz aufgebracht", 76.0, False)
     if re.search(
@@ -3584,6 +3621,16 @@ def _qty_prefix(raw_text: str) -> str:
     if re.search(r"\b(ca\.?|circa|ungefähr|ungefaehr|etwa|rund)\b", probe, flags=re.IGNORECASE):
         return "ca. "
     return ""
+
+
+def _putz_layer_activity_text(layer: str, verb: str, *, chunk: str, raw_text: str) -> tuple[str, bool]:
+    """Baut z. B. '50 m² Oberputz aufgetragen' wenn Menge im Chunk oder Rohtext steht."""
+    label = str(layer or "").strip()
+    action = str(verb or "aufgetragen").strip()
+    qty = _extract_qty_m2(chunk) or _extract_qty_m2(raw_text)
+    if qty:
+        return f"{_qty_prefix(raw_text)}{qty} m² {label} {action}", True
+    return f"{label} {action}", False
 
 
 def _fallback_activity_from_chunk(norm_text: str) -> CanonicalActivity | None:

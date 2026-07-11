@@ -119,6 +119,7 @@ def _clean_fragment(value: str, *, raw_text: str = "") -> str:
     )
     out = _apply_quantity_certainty(out, raw_text=raw_text)
     out = _humanize_quantity_phrases(out, raw_text=raw_text)
+    out = _inject_putz_qty_from_raw(out, raw_text=raw_text)
     out = re.sub(r"\bherzk(ö|oe)rper\b", "Heizkörper", out, flags=re.IGNORECASE)
     out = re.sub(r"\bmanschete\b", "Manschette", out, flags=re.IGNORECASE)
     # Wiederholte Fragmente aus Whisper-Ketten glätten.
@@ -272,6 +273,49 @@ def _format_date_de(value: str) -> str:
     if not m:
         return s
     return f"{m.group(3)}.{m.group(2)}.{m.group(1)}"
+
+
+def _inject_putz_qty_from_raw(fragment: str, *, raw_text: str) -> str:
+    """Ergänzt fehlende m²-Angaben bei Putzschicht-Tätigkeiten aus dem Rohtext."""
+    out = str(fragment or "").strip()
+    if not out or re.search(r"\b\d+(?:[.,]\d+)?\s*(?:m²|m2|qm)\b", out, flags=re.IGNORECASE):
+        return out
+    layer_re = (
+        r"(oberputz|unterputz|innenputz|außenputz|aussenputz|grundputz|"
+        r"sockelputz|reibputz|kratzputz)"
+    )
+    if not re.search(layer_re, out, flags=re.IGNORECASE):
+        return out
+    if not re.search(
+        r"\b(aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert)\b",
+        out,
+        flags=re.IGNORECASE,
+    ):
+        return out
+    raw = str(raw_text or "")
+    if not raw.strip():
+        return out
+    m = re.search(
+        rf"(\d+(?:[.,]\d+)?)\s*(?:qm)?(?:m²|m2|quadratmeter)\s+{layer_re}\b",
+        raw,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        m = re.search(
+            rf"(\d+(?:[.,]\d+)?)\s+quadratmeter\s+{layer_re}\b",
+            raw,
+            flags=re.IGNORECASE,
+        )
+    if not m:
+        return out
+    qty = m.group(1)
+    prefix = "ca. " if _should_use_approx(raw) else ""
+
+    def _repl(match: re.Match[str]) -> str:
+        layer = match.group(1)
+        return f"{prefix}{qty} m² {layer[:1].upper()}{layer[1:]}"
+
+    return re.sub(rf"\b({layer_re})\b", _repl, out, count=1, flags=re.IGNORECASE)
 
 
 def _humanize_quantity_phrases(text: str, *, raw_text: str = "") -> str:
