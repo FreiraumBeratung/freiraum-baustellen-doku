@@ -317,44 +317,92 @@ function MaterialSuggestionsSection({
   )
 }
 
-function MachineSuggestionsSection({
+function MachineHoursSection({
+  items,
   suggestions,
+  onChange,
+  onApplySuggestion,
+  onDismissSuggestion,
   disabled,
-  onApply,
-  onDismiss,
 }: {
+  items: string[]
   suggestions: string[]
+  onChange: (next: string[]) => void
+  onApplySuggestion: (suggestion: string) => void
+  onDismissSuggestion: (suggestion: string) => void
   disabled: boolean
-  onApply: (suggestion: string) => void
-  onDismiss: (suggestion: string) => void
 }) {
   const visibleSuggestions = suggestions.filter((s) => String(s || '').trim().length > 0)
-  if (!visibleSuggestions.length) return null
+
+  function setIdx(i: number, v: string) {
+    const next = [...items]
+    next[i] = v
+    onChange(next)
+  }
+  function removeIdx(i: number) {
+    onChange(items.filter((_, j) => j !== i))
+  }
+  function addRow() {
+    onChange([...items, ''])
+  }
+
   return (
     <section>
       <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Maschinenstunden</h3>
       <p className="mt-2 text-xs text-zinc-500">Optional für Kalkulation: Stunden je Maschine erfassen.</p>
-      <div className="mt-3 space-y-2">
-        {visibleSuggestions.map((suggestion) => (
-          <div key={suggestion} className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onApply(suggestion)}
-              className="w-full rounded-xl border border-orange-500/50 bg-zinc-950 px-3 py-2 text-left text-sm text-orange-300 transition hover:border-orange-400 hover:text-orange-200 disabled:pointer-events-none disabled:opacity-50"
-            >
-              + {suggestion}
-            </button>
-            <button
-              type="button"
-              disabled={disabled}
-              onClick={() => onDismiss(suggestion)}
-              className="shrink-0 rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:border-zinc-500 disabled:pointer-events-none disabled:opacity-40"
-            >
-              Ausblenden
-            </button>
-          </div>
-        ))}
+      {visibleSuggestions.length > 0 ? (
+        <div className="mt-3 space-y-2">
+          {visibleSuggestions.map((suggestion) => (
+            <div key={suggestion} className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onApplySuggestion(suggestion)}
+                className="w-full rounded-xl border border-orange-500/50 bg-zinc-950 px-3 py-2 text-left text-sm text-orange-300 transition hover:border-orange-400 hover:text-orange-200 disabled:pointer-events-none disabled:opacity-50"
+              >
+                + {suggestion}
+              </button>
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={() => onDismissSuggestion(suggestion)}
+                className="shrink-0 rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:border-zinc-500 disabled:pointer-events-none disabled:opacity-40"
+              >
+                Ausblenden
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="mt-3 space-y-3">
+        {items.length ? (
+          items.map((value, i) => (
+            <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-start">
+              <textarea
+                rows={2}
+                className={`${textareaClass} sm:flex-1 !mt-0 !min-h-[3rem]`}
+                value={value}
+                disabled={disabled}
+                onChange={(e) => setIdx(i, e.target.value)}
+                placeholder="Eintrag"
+                aria-label={`Maschinenstunden ${i + 1}`}
+              />
+              <button
+                type="button"
+                disabled={disabled}
+                className="shrink-0 rounded-lg border border-zinc-600 px-3 py-2 text-sm text-zinc-300 hover:border-red-500/70 hover:text-red-300 disabled:pointer-events-none disabled:opacity-40"
+                onClick={() => removeIdx(i)}
+              >
+                Entfernen
+              </button>
+            </div>
+          ))
+        ) : (
+          <p className="text-sm text-zinc-500">Noch keine Einträge — unten einen Punkt hinzufügen.</p>
+        )}
+        <BigButton variant="secondary" type="button" disabled={disabled} className="!py-2 text-sm" onClick={addRow}>
+          + Maschinenstunde hinzufügen
+        </BigButton>
       </div>
     </section>
   )
@@ -609,20 +657,15 @@ function ReportPreviewInner({
           onApply={applyMaterialSuggestion}
           onDismiss={dismissMaterialSuggestion}
         />
-        <MachineSuggestionsSection
+        <MachineHoursSection
+          items={s.machineHours}
           suggestions={s.machineSuggestions}
           disabled={Boolean(savedReportId)}
-          onApply={applyMachineSuggestion}
-          onDismiss={dismissMachineSuggestion}
-        />
-        <EditableArraySection
-          title="Maschinenstunden"
-          items={s.machineHours}
           onChange={(next) =>
             setDraftStructured((prev) => ({ ...prev, machineHours: next }))
           }
-          addLabel="+ Maschinenstunde hinzufügen"
-          disabled={Boolean(savedReportId)}
+          onApplySuggestion={applyMachineSuggestion}
+          onDismissSuggestion={dismissMachineSuggestion}
         />
         <EditableArraySection
           title="Probleme"

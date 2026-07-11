@@ -60,15 +60,17 @@ _OPEN_SUBSTANCE = re.compile(
 
 _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"(?:"
-    r"(?:leider\s+)?(?:wir\s+)?mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
-    r"|(?:leider\s+)?wir\s+mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
-    r"|(?:mussten\s+wir|hamma)\s+(?:[^.!?]{0,70}?)?(?:die\s+)?arbeiten?\s+(?:abbrechen|stoppen|beenden)"
+    r"(?:leider\s+)?mussten\s+wir\s+die\s+arbeiten\s+(?:abbrechen|abrechnen)\s+weil\s+es\s+(?:stark\s+)?angefangen(?:\s+hat)?\s+zu\s+regnen"
+    r"|(?:leider\s+)?(?:wir\s+)?mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|abrechnen|stoppen|beenden)"
+    r"|(?:leider\s+)?wir\s+mussten\s+(?:die\s+)?arbeiten?\s+(?:abbrechen|abrechnen|stoppen|beenden)"
+    r"|(?:mussten\s+wir|hamma)\s+(?:[^.!?]{0,70}?)?(?:die\s+)?arbeiten?\s+(?:abbrechen|abrechnen|stoppen|beenden)"
     r"|(?:leider\s+)?mussten\s+wir\s+abbrechen(?:\s+(?:morgen|weil|da|denn))?"
     r"|mussten\s+leider\s+abbrechen(?:\s+(?:weil|da|morgen))?"
     r"|mussten\s+abbrechen\s+(?:weil|da|morgen)\s+[^.!?]{0,80}"
     r"|mussten\s+abbrechen\s+(?:weil|da)\s+[^.!?]{4,80}"
     r"|(?:leider\s+)?(?:mussten|müssen)\s+(?:wir\s+)?stoppen\s+(?:weil|da)\s+[^.!?]{4,80}"
-    r"|(?:weil|da)\s+es\s+(?:angefangen\s+hat\s+zu\s+)?(?:regnen|geregnet\s+hat)"
+    r"|(?:weil|da)\s+es\s+(?:stark\s+)?angefangen(?:\s+hat)?\s+zu\s+regnen"
+    r"|angefangen(?:\s+hat)?\s+zu\s+regnen"
     r"|(?:das\s+war\s+)?(?:ein\s+)?(?:sehr\s+)?großes\s+problem"
     r"|untergrund\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
     r"|(?:die\s+)?wand\s+(?:war\s+)?(?:sehr\s+)?uneben(?:\s+was\s+zu\s+problemen\s+geführt\s+hat)?"
@@ -102,6 +104,8 @@ _IMPLICIT_OPEN_FUTURE = re.compile(
     r"|(?:am\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag)\s+"
     r"(?:müssen\s+wir|muessen\s+wir|noch\s+)?[^.!?]{4,120}"
     r"|dementsprechend\s+(?:werden\s+wir|machen\s+wir|schliessen\s+wir|schließen\s+wir|betonieren\s+wir)\s+morgen[^.!?]{0,80}"
+    r"|(?:dementsprechend\s+)?verschiebt\s+sich\s+[^.!?]{4,80}?\b(?:auf\s+)?morgen\b"
+    r"|(?:verlegt|verschoben|verlagert|verlägert)\s+(?:auf\s+)?morgen[^.!?]{0,60}"
     r")",
     re.IGNORECASE,
 )
@@ -116,6 +120,12 @@ def _normalize_probe(text: str) -> str:
     t = re.sub(r"\bgefaelle\b", "gefälle", t, flags=re.IGNORECASE)
     t = re.sub(r"\bgefuehrt\b", "geführt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmontag\b", "Montag", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(die\s+)?arbeiten?\s+abrechnen\b",
+        lambda m: f"{m.group(1) or ''}Arbeiten abbrechen".strip(),
+        t,
+        flags=re.IGNORECASE,
+    )
     return t
 
 
@@ -302,6 +312,16 @@ def _polish_open_clause(text: str) -> str:
         lead = f"Morgen müssen wir noch {qty} Pflaster legen".strip()
         lead = re.sub(r"\s+", " ", lead)
         return f"{lead} noch offen."
+    m_shift = re.search(
+        r"(?:dementsprechend\s+)?verschiebt\s+sich\s+(?:das\s+)?([^.,;!?]+?)\s+auf\s+morgen",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_shift:
+        work = str(m_shift.group(1) or "").strip()
+        if work:
+            work = work[0].upper() + work[1:]
+        return f"{work} auf morgen verschoben noch offen."
     t = re.sub(r"\b(dann|auch|halt|eben|mal)\b", " ", t, flags=re.IGNORECASE)
     t = re.sub(r"\s+", " ", t).strip(" .,;")
     t = re.sub(r"\s+noch\s+offen\.?$", "", t, flags=re.IGNORECASE).strip(" .,;")
@@ -338,6 +358,8 @@ def _implicit_problem_clause(match_text: str) -> str:
     t = _normalize_probe(match_text).strip(" .,;")
     low = t.casefold()
     if re.search(r"weil\s+es|angefangen\s+hat\s+zu\s+regnen|geregnet\s+hat", low):
+        return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
+    if re.search(r"abbrechen|abrechnen|stoppen", low) and re.search(r"regen|angefangen\s+hat\s+zu", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
     if re.search(r"abbrechen|stoppen", low) and re.search(r"staub", low):
         return _polish_problem_clause("Arbeiten wegen Staub unterbrochen")

@@ -121,6 +121,18 @@ def _pipeline_offline(failures: list[str]) -> None:
             ("pflaster", "30", "quadrat"),
         ),
         (
+            "regen_abbruch",
+            (
+                "Heute haben wir den Untergrund frei gebaggert damit 3,5 m³ Schotter null 32 verdichtet "
+                "dann haben wir drei Kubik Split zwei Fünfer eingebaut leider mussten wir die Arbeiten "
+                "abrechnen weil es stark angefangen zu regnen dementsprechend verschiebt sich das "
+                "Pflastern auf morgen"
+            ),
+            ("regen",),
+            ("pflaster", "morgen", "offen"),
+            ("kundin",),
+        ),
+        (
             "drainage",
             "Kundengespräch gehabt Pflastermuster gewählt Problem Drainage Offen Rest nächste Woche.",
             ("drainage",),
