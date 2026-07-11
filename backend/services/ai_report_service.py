@@ -594,3 +594,45 @@ def _normalize_ai_structure(parsed: dict[str, Any]) -> dict[str, Any] | None:
         "customerTalk": _as_str_scalar(cust),
     }
     return result
+
+
+PROTOCOL_POLISH_SYSTEM = """Du bist ein Assistent fuer Baustellenprotokolle auf Deutsch.
+Du korrigierst NUR Rechtschreibung, Grammatik und Interpunktion eines gesprochenen Textes.
+Du setzt sinnvolle Absaetze (Leerzeile) ein, wo der Sprecher thematisch wechselt.
+
+STRIKTE REGELN:
+- Aendere NICHT den Inhalt. Keine neuen Fakten, keine Ergaenzungen, keine Zusammenfassung.
+- Entferne keine Informationen und keine Aussagen des Sprechers.
+- Keine Ueberschriften, keine Aufzaehlungszeichen, kein JSON.
+- Behalte die Wortwahl des Sprechers so nah wie moeglich bei.
+- Antworte NUR mit dem bereinigten Fliesstext, ohne Anfuehrungszeichen, ohne Vorrede."""
+
+
+def polish_protocol_transcript_with_ai(raw_text: str) -> str | None:
+    """Leichtes KI-Glaetten fuer Baustellenprotokolle — nur Orthografie/Interpunktion."""
+    key = (os.environ.get("OPENAI_API_KEY") or "").strip()
+    raw = str(raw_text or "").strip()
+    if not key or len(raw) < 3:
+        return None
+
+    model = (os.environ.get("OPENAI_MODEL") or "gpt-4o-mini").strip() or "gpt-4o-mini"
+    try:
+        from openai import OpenAI
+
+        client = OpenAI(api_key=key)
+        completion = client.chat.completions.create(
+            model=model,
+            temperature=0.1,
+            messages=[
+                {"role": "system", "content": PROTOCOL_POLISH_SYSTEM},
+                {"role": "user", "content": raw},
+            ],
+        )
+        text = (completion.choices[0].message.content or "").strip()
+        text = text.strip().strip('"').strip("`").strip()
+        if len(text) < max(3, int(len(raw) * 0.5)):
+            return None
+        return text
+    except Exception:
+        _logger.warning("AI protocol polish failed, using raw transcript")
+        return None

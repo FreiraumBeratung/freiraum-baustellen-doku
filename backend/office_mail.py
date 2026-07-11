@@ -29,6 +29,8 @@ from report_export import (
     build_collective_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
+    build_protocol_attachment_names,
+    build_protocol_pdf_bytes,
 )
 
 logger = logging.getLogger(__name__)
@@ -286,6 +288,110 @@ def send_report_to_office(
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
     return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT
+
+
+def _build_protocol_mail_body(protocol: dict[str, Any], profile: dict[str, Any]) -> str:
+    site = protocol.get("projectName") or "—"
+    day = _format_date_de(protocol.get("date"))
+    company = _company_signoff_name(profile)
+    mode = str(protocol.get("mode") or "quick")
+    seq = protocol.get("sequenceNumber")
+    if mode == "signed" and isinstance(seq, int) and seq > 0:
+        kind = f"Begehungsprotokoll Nr. {seq}"
+    else:
+        kind = "Schnellnotiz"
+    participants = str(protocol.get("participants") or "").strip()
+    part_line = f"Teilnehmer: {participants}\n" if participants else ""
+    return (
+        "Hallo,\n\n"
+        f"anbei die {kind} zur Baustelle {site} vom {day}.\n\n"
+        f"{part_line}\n"
+        "Mit freundlichen Grüßen\n"
+        f"{company}\n\n\n"
+        "Powered by Freiraum Beratung"
+    )
+
+
+def send_protocol_to_office(
+    protocol: dict[str, Any],
+    profile: dict[str, Any],
+    to_email: str,
+    *,
+    mail_config: dict[str, Any] | None = None,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_signature: SignaturePathResolver | None = None,
+) -> tuple[bool, bool, str]:
+    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+        return False, False, MSG_NOT_CONFIGURED
+
+    from_addr = str(mail_config.get("email") or "").strip()
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+
+    if not from_addr or not user or not password or not host or not port:
+        return False, False, MSG_NOT_CONFIGURED
+
+    subject_day = _format_date_de(protocol.get("date"))
+    mode = str(protocol.get("mode") or "quick")
+    seq = protocol.get("sequenceNumber")
+    site = protocol.get("projectName") or "—"
+    if mode == "signed" and isinstance(seq, int) and seq > 0:
+        subject = f"Protokoll Nr. {seq}: {site} vom {subject_day}"
+    else:
+        subject = f"Schnellnotiz: {site} vom {subject_day}"
+
+    try:
+        blob = build_protocol_pdf_bytes(
+            protocol,
+            profile,
+            resolve_logo=resolve_logo,
+            resolve_signature=resolve_signature,
+        )
+        ascii_fn, _desc = build_protocol_attachment_names(protocol, "pdf")
+    except Exception:
+        logger.exception("Protokoll-Anhang für Mail konnte nicht erzeugt werden")
+        return False, False, "Der Protokoll-Anhang konnte nicht erzeugt werden."
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    msg.set_content(_build_protocol_mail_body(protocol, profile))
+    msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Protokoll-Versand")
+        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Protokoll-Versand fehlgeschlagen")
+        return (
+            False,
+            False,
+            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
+        )
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Protokoll-Versand")
+        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+
+    return True, False, "Protokoll wurde ans Büro gesendet."
 
 
 def send_collective_to_office(

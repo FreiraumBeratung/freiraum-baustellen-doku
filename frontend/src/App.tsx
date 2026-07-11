@@ -15,6 +15,9 @@ import { ReportPreviewPage } from './pages/ReportPreview'
 import { ReportsListPage } from './pages/ReportsList'
 import { ReportDetailPage } from './pages/ReportDetail'
 import { TimeAccountsPage } from './pages/TimeAccounts'
+import { ProtocolModePage } from './pages/ProtocolMode'
+import { ProtocolNewPage } from './pages/ProtocolNew'
+import { ProtocolPreviewPage } from './pages/ProtocolPreview'
 import { AdminRoute } from './components/AdminRoute'
 import { FeedbackPage } from './pages/Feedback'
 
@@ -59,6 +62,9 @@ export default function App() {
             <Route path="/baustellen" element={<ProjectsPage />} />
             <Route path="/bericht" element={<ReportNewPage />} />
             <Route path="/bericht/vorschau" element={<ReportPreviewPage />} />
+            <Route path="/protokoll" element={<ProtocolModePage />} />
+            <Route path="/protokoll/neu" element={<ProtocolNewPage />} />
+            <Route path="/protokoll/vorschau" element={<ProtocolPreviewPage />} />
             <Route path="/berichte" element={<ReportsListPage />} />
             <Route path="/berichte/:id" element={<ReportDetailPage />} />
             <Route path="/feedback" element={<FeedbackPage />} />

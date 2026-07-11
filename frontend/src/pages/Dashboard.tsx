@@ -11,6 +11,7 @@ type Tile = { to: string; title: string; emoji: string; primary?: boolean }
 
 const tiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
+  { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
   { to: '/stunden', title: 'Stundenkonto', emoji: '⏱️' },
   { to: '/baustellen', title: 'Baustellen', emoji: '🏗️' },
@@ -61,13 +62,15 @@ export function DashboardPage() {
         </div>
       </header>
 
-      {/* 3 + 3 Kacheln — ans untere Ende geschoben: alles bequem mit dem Daumen erreichbar */}
+      {/* 3 + 3 + 1 Kacheln — ans untere Ende geschoben */}
       <nav aria-label="Schnellzugriff" className="mt-auto grid grid-cols-3 gap-2.5 pb-1 pt-8">
-        {tiles.map((t) => (
+        {tiles.map((t, i) => (
           <Link
             key={t.to}
             to={t.to}
             className={`group relative flex aspect-square flex-col items-center justify-center gap-2.5 rounded-[1.25rem] px-1.5 text-center outline-none ring-offset-2 ring-offset-zinc-950 transition focus-visible:ring-2 focus-visible:ring-orange-400/40 active:scale-[0.98] ${
+              tiles.length % 3 === 1 && i === tiles.length - 1 ? 'col-start-2' : ''
+            } ${
               t.primary
                 ? 'border border-orange-400/35 bg-[linear-gradient(155deg,rgba(249,115,22,0.16),rgba(249,115,22,0.04)_60%)] ring-1 ring-orange-400/20'
                 : 'border border-white/[0.07] bg-zinc-900/[0.5] ring-1 ring-white/[0.04] hover:bg-white/[0.05]'

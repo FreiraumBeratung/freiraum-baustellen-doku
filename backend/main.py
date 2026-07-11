@@ -19,7 +19,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from logo_image_utils import normalize_logo_bytes
-from office_mail import send_collective_to_office, send_feedback_mail, send_report_to_office
+from office_mail import send_collective_to_office, send_feedback_mail, send_protocol_to_office, send_report_to_office
 from report_export import (
     build_attachment_names,
     build_collective_attachment_names,
@@ -27,9 +27,18 @@ from report_export import (
     build_collective_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
+    build_protocol_attachment_names,
+    build_protocol_pdf_bytes,
 )
 from report_structure import structure_report_fields
 from app.services import time_account
+from app.services.site_protocol import (
+    create_protocol_doc,
+    find_protocol,
+    protocol_signatures_doc,
+    read_protocols,
+    save_protocol_signatures,
+)
 from app.services.quality_filter import apply_quality_filter
 from app.services.mail_autodiscover import (
     provider_hint_for,
@@ -64,6 +73,7 @@ from services.ai_report_service import (
     polish_collective_summary_with_ai,
     polish_customer_talk_with_ai,
     polish_problem_open_with_ai,
+    polish_protocol_transcript_with_ai,
     polish_summary_with_ai,
     structure_report_with_ai,
 )
@@ -504,6 +514,22 @@ class ReportCreateBody(BaseModel):
     # Bericht dem laufenden Durchlauf der Baustelle zu. notes = freie Besonderheiten.
     seriesMode: bool = False
     notes: str = Field(default="", max_length=5000)
+
+
+class ProtocolPolishBody(BaseModel):
+    rawText: str = Field(..., min_length=3, max_length=50000)
+
+
+class ProtocolCreateBody(BaseModel):
+    projectId: str
+    projectName: str
+    customerName: str = ""
+    date: str
+    mode: str = Field(default="quick", pattern="^(quick|signed)$")
+    rawText: str = Field(..., min_length=3, max_length=50000)
+    polishedText: str = Field(default="", max_length=50000)
+    participants: str = Field(default="", max_length=500)
+    exportFormat: str = "PDF"
 
 
 class FeedbackCreateBody(BaseModel):
@@ -2243,6 +2269,211 @@ def export_report_word(report_id: str, store: TenantStore = Depends(get_tenant_s
         headers={
             "Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn),
         },
+    )
+
+
+def _protocol_signatures_api_payload(store: TenantStore, protocol: dict[str, Any]) -> dict[str, Any]:
+    doc = protocol_signatures_doc(protocol)
+    return {
+        "customer": _signature_api_item(store, "customer", doc.get("customer")),
+        "employee": _signature_api_item(store, "employee", doc.get("employee")),
+    }
+
+
+@app.post("/api/protocols/polish-text")
+def polish_protocol_text(body: ProtocolPolishBody) -> dict[str, Any]:
+    polished = polish_protocol_transcript_with_ai(body.rawText)
+    if polished:
+        return {"polishedText": polished, "polishedBy": "openai"}
+    return {"polishedText": body.rawText.strip(), "polishedBy": "local"}
+
+
+@app.get("/api/protocols")
+def list_protocols(
+    projectId: str | None = None,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    protocols = read_protocols(store)
+    protocols.sort(key=lambda p: p.get("createdAt", ""), reverse=True)
+    if projectId:
+        protocols = [p for p in protocols if p.get("projectId") == projectId]
+    return {"protocols": protocols}
+
+
+@app.post("/api/protocols")
+def create_protocol(body: ProtocolCreateBody, store: TenantStore = Depends(get_tenant_store_write)):
+    prof = store.read_json("company_profile.json", {})
+    logo_fn = prof.get("logoFilename")
+    company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None
+    if logo_fn and not company_logo_url:
+        legacy_logo = UPLOADS_DIR / str(logo_fn)
+        if legacy_logo.is_file():
+            company_logo_url = f"/uploads/logos/{logo_fn}"
+
+    doc = create_protocol_doc(
+        store,
+        company_name=str(prof.get("companyName") or ""),
+        company_logo_url=company_logo_url,
+        office_email=str(prof.get("officeEmail") or ""),
+        project_id=body.projectId,
+        project_name=body.projectName,
+        customer_name=body.customerName,
+        date=body.date,
+        mode=body.mode,
+        raw_text=body.rawText,
+        polished_text=body.polishedText or body.rawText,
+        participants=body.participants,
+        export_format=body.exportFormat,
+    )
+    return doc
+
+
+@app.get("/api/protocols/{protocol_id}")
+def get_protocol(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
+    return find_protocol(store, protocol_id)
+
+
+@app.get("/api/protocols/{protocol_id}/signatures")
+def list_protocol_signatures(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
+    protocol = find_protocol(store, protocol_id)
+    signatures = _protocol_signatures_api_payload(store, protocol)
+    count = sum(1 for v in signatures.values() if v is not None)
+    return {"signatures": signatures, "count": count}
+
+
+@app.post("/api/protocols/{protocol_id}/signatures/{role}")
+async def upload_protocol_signature(
+    protocol_id: str,
+    role: str,
+    file: UploadFile = File(...),
+    signedByLabel: str | None = Form(None),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    sig_role = _validate_signature_role(role)
+    protocol = find_protocol(store, protocol_id)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+    content = await file.read()
+    _validate_signature_png(content)
+
+    signatures = protocol_signatures_doc(protocol)
+    previous = signatures.get(sig_role)
+    if isinstance(previous, dict):
+        _delete_signature_file(store, previous.get("filename"))
+
+    sig_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    safe_name = f"sig_{ts}_{sig_role}_{sig_id}.png"
+    dest = store.uploads_dir("signatures") / safe_name
+    dest.write_bytes(content)
+
+    label = str(signedByLabel or "").strip()[:120] or None
+    entry: dict[str, Any] = {
+        "id": sig_id,
+        "role": sig_role,
+        "filename": safe_name,
+        "contentType": "image/png",
+        "sizeBytes": len(content),
+        "signedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if label:
+        entry["signedByLabel"] = label
+
+    signatures[sig_role] = entry
+    save_protocol_signatures(store, protocol_id, signatures)
+    item = _signature_api_item(store, sig_role, entry)
+    count = sum(1 for v in signatures.values() if isinstance(v, dict))
+    return {
+        "ok": True,
+        "signature": item,
+        "signatures": _protocol_signatures_api_payload(store, {"signatures": signatures}),
+        "count": count,
+    }
+
+
+@app.delete("/api/protocols/{protocol_id}/signatures/{role}")
+def delete_protocol_signature(
+    protocol_id: str,
+    role: str,
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    sig_role = _validate_signature_role(role)
+    protocol = find_protocol(store, protocol_id)
+    signatures = protocol_signatures_doc(protocol)
+    previous = signatures.get(sig_role)
+    if not isinstance(previous, dict):
+        raise HTTPException(status_code=404, detail="Signatur nicht gefunden")
+    _delete_signature_file(store, previous.get("filename"))
+    signatures[sig_role] = None
+    save_protocol_signatures(store, protocol_id, signatures)
+    count = sum(1 for v in signatures.values() if isinstance(v, dict))
+    return {
+        "ok": True,
+        "signatures": _protocol_signatures_api_payload(store, {"signatures": signatures}),
+        "count": count,
+    }
+
+
+@app.post("/api/protocols/{protocol_id}/send-office", response_model=SendOfficeResponse)
+def send_protocol_to_office_endpoint(
+    protocol_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+) -> SendOfficeResponse:
+    protocol = find_protocol(store, protocol_id)
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == user_id:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
+        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_protocol_to_office(
+        protocol,
+        prof,
+        office,
+        mail_config=mail_config,
+        resolve_logo=_export_resolve_logo(store),
+        resolve_signature=_export_resolve_signature(store),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Protokoll konnte nicht gesendet werden.")
+    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
+
+
+@app.get("/api/protocols/{protocol_id}/export/pdf")
+def export_protocol_pdf(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
+    protocol = find_protocol(store, protocol_id)
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_protocol_pdf_bytes(
+            protocol,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_signature=_export_resolve_signature(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_protocol_attachment_names(protocol, "pdf")
+    return Response(
+        content=blob,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
     )
 
 

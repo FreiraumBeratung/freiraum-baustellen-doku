@@ -459,6 +459,104 @@ export async function deleteReportSignature(
   )
 }
 
+export type ProtocolMode = 'quick' | 'signed'
+
+export type SiteProtocol = {
+  id: string
+  projectId: string
+  projectName: string
+  customerName: string
+  date: string
+  mode: ProtocolMode
+  sequenceNumber: number | null
+  participants: string
+  rawText: string
+  polishedText: string
+  exportFormat: string
+  signatures: ReportSignaturesResponse['signatures']
+  createdAt: string
+}
+
+export async function polishProtocolText(rawText: string): Promise<{ polishedText: string; polishedBy: string }> {
+  return api<{ polishedText: string; polishedBy: string }>('/api/protocols/polish-text', {
+    method: 'POST',
+    body: JSON.stringify({ rawText }),
+  })
+}
+
+export async function createProtocol(body: {
+  projectId: string
+  projectName: string
+  customerName: string
+  date: string
+  mode: ProtocolMode
+  rawText: string
+  polishedText: string
+  participants: string
+  exportFormat: string
+}): Promise<SiteProtocol> {
+  return api<SiteProtocol>('/api/protocols', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listProtocolSignatures(protocolId: string): Promise<ReportSignaturesResponse> {
+  return api<ReportSignaturesResponse>(`/api/protocols/${encodeURIComponent(protocolId)}/signatures`)
+}
+
+export async function uploadProtocolSignature(
+  protocolId: string,
+  role: SignatureRole,
+  file: File,
+  signedByLabel?: string,
+): Promise<ReportSignaturesResponse & { ok: boolean; signature: ReportSignature }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'signature.png')
+  if (signedByLabel?.trim()) {
+    fd.append('signedByLabel', signedByLabel.trim())
+  }
+
+  const url = resolveApiUrl(
+    `/api/protocols/${encodeURIComponent(protocolId)}/signatures/${encodeURIComponent(role)}`,
+  )
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    const detail = parseApiDetail(err, res.statusText || 'Unterschrift konnte nicht gespeichert werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
+  }
+
+  return res.json() as Promise<ReportSignaturesResponse & { ok: boolean; signature: ReportSignature }>
+}
+
+export async function deleteProtocolSignature(
+  protocolId: string,
+  role: SignatureRole,
+): Promise<ReportSignaturesResponse & { ok: boolean }> {
+  return api<ReportSignaturesResponse & { ok: boolean }>(
+    `/api/protocols/${encodeURIComponent(protocolId)}/signatures/${encodeURIComponent(role)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = resolveApiUrl(path)
   const headers: Record<string, string> = {
@@ -536,7 +634,7 @@ export async function downloadExport(apiPath: string): Promise<void> {
       if (m) filename = m[1]
     }
   } else if (apiPath.includes('/export/pdf')) {
-    filename = 'tagesbericht.pdf'
+    filename = apiPath.includes('/protocols/') ? 'protokoll.pdf' : 'tagesbericht.pdf'
   } else if (apiPath.includes('/export/word')) {
     filename = 'tagesbericht.docx'
   } else if (apiPath.includes('/export/csv')) {

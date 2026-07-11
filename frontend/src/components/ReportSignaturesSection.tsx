@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
+  deleteProtocolSignature,
   deleteReportSignature,
+  listProtocolSignatures,
   listReportSignatures,
   resolveBackendPublicUrl,
+  uploadProtocolSignature,
   uploadReportSignature,
   type ReportSignature,
   type SignatureRole,
@@ -12,6 +15,7 @@ import { SignaturePad } from './SignaturePad'
 
 type ReportSignaturesSectionProps = {
   reportId: string | null
+  protocolId?: string | null
   /** Wenn false: Hinweis statt Unterschrift (Bericht noch nicht gespeichert). */
   enabled: boolean
   /** Optional fuer signedByLabel bei Kunden-Signatur. */
@@ -72,11 +76,14 @@ function SignaturePreview({
 
 export function ReportSignaturesSection({
   reportId,
+  protocolId = null,
   enabled,
   customerName,
   embedded = false,
   initialOpen = false,
 }: ReportSignaturesSectionProps) {
+  const entityId = protocolId || reportId
+  const isProtocol = Boolean(protocolId)
   const { writeBlocked } = useWriteBlocked()
   const signaturesEnabled = enabled && !writeBlocked
   const [customer, setCustomer] = useState<ReportSignature | null>(null)
@@ -91,14 +98,14 @@ export function ReportSignaturesSection({
   const step = stepFromSignatures(customer, employee)
 
   const refresh = useCallback(async () => {
-    if (!reportId || !enabled) return
-    const res = await listReportSignatures(reportId)
+    if (!entityId || !enabled) return
+    const res = isProtocol ? await listProtocolSignatures(entityId) : await listReportSignatures(entityId)
     setCustomer(res.signatures.customer)
     setEmployee(res.signatures.employee)
-  }, [reportId, enabled])
+  }, [entityId, enabled, isProtocol])
 
   useEffect(() => {
-    if (!reportId || !enabled) {
+    if (!entityId || !enabled) {
       setCustomer(null)
       setEmployee(null)
       if (!enabled) setOpen(false)
@@ -108,7 +115,7 @@ export function ReportSignaturesSection({
     void refresh().catch(() => {
       setErr('Unterschriften konnten nicht geladen werden.')
     })
-  }, [reportId, enabled, refresh])
+  }, [entityId, enabled, refresh])
 
   useEffect(() => {
     if (initialOpen && enabled) setOpen(true)
@@ -119,13 +126,15 @@ export function ReportSignaturesSection({
   }, [count, enabled])
 
   async function handleUpload(role: SignatureRole, file: File) {
-    if (!reportId || !signaturesEnabled || busy) return
+    if (!entityId || !signaturesEnabled || busy) return
     setBusy(true)
     setErr('')
     setStatusLine('Unterschrift wird gespeichert…')
     try {
       const label = role === 'customer' ? customerName?.trim() : undefined
-      const res = await uploadReportSignature(reportId, role, file, label || undefined)
+      const res = isProtocol
+        ? await uploadProtocolSignature(entityId, role, file, label || undefined)
+        : await uploadReportSignature(entityId, role, file, label || undefined)
       setCustomer(res.signatures.customer)
       setEmployee(res.signatures.employee)
       setPadKey((k) => k + 1)
@@ -140,12 +149,14 @@ export function ReportSignaturesSection({
   }
 
   async function handleRedo(role: SignatureRole) {
-    if (!reportId || busy || writeBlocked) return
+    if (!entityId || busy || writeBlocked) return
     setBusy(true)
     setErr('')
     setStatusLine('')
     try {
-      const res = await deleteReportSignature(reportId, role)
+      const res = isProtocol
+        ? await deleteProtocolSignature(entityId, role)
+        : await deleteReportSignature(entityId, role)
       setCustomer(res.signatures.customer)
       setEmployee(res.signatures.employee)
       setPadKey((k) => k + 1)
@@ -177,7 +188,9 @@ export function ReportSignaturesSection({
       </button>
 
       {!enabled ? (
-        <p className="mt-2 text-xs text-zinc-500">Bericht zuerst speichern, dann Unterschriften erfassen.</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          {isProtocol ? 'Protokoll zuerst speichern, dann Unterschriften erfassen.' : 'Bericht zuerst speichern, dann Unterschriften erfassen.'}
+        </p>
       ) : null}
 
       {enabled && open ? (
