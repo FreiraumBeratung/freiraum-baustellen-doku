@@ -216,10 +216,21 @@ export async function sendFeedback(payload: {
   message: string
   page?: string
   appVersion?: string
+  reportId?: string
+  files?: File[]
 }): Promise<{ ok: boolean; message: string }> {
+  const fd = new FormData()
+  fd.append('category', payload.category)
+  fd.append('message', payload.message)
+  if (payload.page) fd.append('page', payload.page)
+  if (payload.appVersion) fd.append('appVersion', payload.appVersion)
+  if (payload.reportId) fd.append('reportId', payload.reportId)
+  for (const file of payload.files ?? []) {
+    fd.append('files', file)
+  }
   return api<{ ok: boolean; message: string }>('/api/feedback', {
     method: 'POST',
-    body: JSON.stringify(payload),
+    body: fd,
   })
 }
 

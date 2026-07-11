@@ -122,6 +122,7 @@ SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 MAX_PHOTOS_PER_REPORT = 10
 MAX_PHOTOS_PER_PROTOCOL = 10
 MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024
+MAX_FEEDBACK_ATTACHMENTS = 3
 SIGNATURE_ROLES = frozenset({"customer", "employee"})
 MAX_SIGNATURE_BYTES = 512 * 1024
 MIN_SIGNATURE_BYTES = 80
@@ -552,6 +553,46 @@ class FeedbackCreateBody(BaseModel):
     message: str = Field(..., min_length=3, max_length=5000)
     page: str = ""
     appVersion: str = ""
+    reportId: str = ""
+
+
+def _image_attachment_parts(content_type: str | None, filename: str) -> tuple[str, str]:
+    ct = (content_type or "").split(";")[0].strip().lower()
+    fn = filename.lower()
+    if ct in {"image/jpeg", "image/jpg"} or fn.endswith((".jpg", ".jpeg")):
+        return "image", "jpeg"
+    if ct == "image/png" or fn.endswith(".png"):
+        return "image", "png"
+    if ct == "image/webp" or fn.endswith(".webp"):
+        return "image", "webp"
+    return "application", "octet-stream"
+
+
+async def _read_feedback_attachments(files: list[UploadFile]) -> list[tuple[str, bytes, str, str]]:
+    if len(files) > MAX_FEEDBACK_ATTACHMENTS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {MAX_FEEDBACK_ATTACHMENTS} Anhänge erlaubt.",
+        )
+    out: list[tuple[str, bytes, str, str]] = []
+    for i, file in enumerate(files):
+        if not file.filename:
+            continue
+        ext = Path(file.filename).suffix.lower()
+        if ext == ".jpeg":
+            ext = ".jpg"
+        if ext not in {".jpg", ".png", ".webp"}:
+            raise HTTPException(status_code=400, detail="Nur JPEG-, PNG- oder WebP-Bilder erlaubt")
+        content = await file.read()
+        n = len(content)
+        if n == 0:
+            raise HTTPException(status_code=400, detail="Leere Bilddatei")
+        if n > MAX_PHOTO_UPLOAD_BYTES:
+            raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+        original = Path(file.filename).name or f"anhang-{i + 1}{ext}"
+        main, sub = _image_attachment_parts(file.content_type, original)
+        out.append((original, content, main, sub))
+    return out
 
 
 @app.get("/")
@@ -574,7 +615,15 @@ def debug_ping() -> dict[str, Any]:
 
 
 @app.post("/api/feedback")
-def create_feedback(body: FeedbackCreateBody, user_id: str = Depends(require_bearer)):
+async def create_feedback(
+    category: str = Form(default="Verbesserung"),
+    message: str = Form(...),
+    page: str = Form(default=""),
+    appVersion: str = Form(default=""),
+    reportId: str = Form(default=""),
+    files: list[UploadFile] = File(default=[]),
+    user_id: str = Depends(require_bearer),
+):
     user = find_user_by_id(user_id)
     if not user:
         raise HTTPException(status_code=401, detail="Ungültiges Token")
@@ -582,28 +631,47 @@ def create_feedback(body: FeedbackCreateBody, user_id: str = Depends(require_bea
     store = TenantStore(tenant_id_for_user(user))
     profile = store.read_json("company_profile.json", {})
     company_name = str(profile.get("companyName") or user.get("companyName") or "").strip()
-    category = str(body.category or "Verbesserung").strip().title()
-    if category not in {"Problem", "Verbesserung", "Lob"}:
-        category = "Verbesserung"
+    category_norm = str(category or "Verbesserung").strip().title()
+    if category_norm not in {"Problem", "Verbesserung", "Lob"}:
+        category_norm = "Verbesserung"
 
-    message = str(body.message or "").strip()
-    if len(message) < 3:
+    message_text = str(message or "").strip()
+    if len(message_text) < 3:
         raise HTTPException(status_code=400, detail="Feedback ist zu kurz.")
+    if len(message_text) > 5000:
+        raise HTTPException(status_code=400, detail="Feedback ist zu lang.")
 
-    page = str(body.page or "").strip()[:200]
-    app_version = str(body.appVersion or "").strip()[:80]
+    page_path = str(page or "").strip()[:200]
+    app_version = str(appVersion or "").strip()[:80]
+    report_id = str(reportId or "").strip()[:80]
+    report_meta: dict[str, Any] | None = None
+    if report_id:
+        try:
+            report_doc = _find_report_doc(store, report_id)
+            report_meta = {
+                "id": report_id,
+                "projectName": str(report_doc.get("projectName") or "").strip(),
+                "customerName": str(report_doc.get("customerName") or "").strip(),
+                "date": str(report_doc.get("date") or "").strip(),
+            }
+        except HTTPException:
+            report_meta = {"id": report_id}
+
+    attachments = await _read_feedback_attachments(files)
 
     created_at = datetime.now(timezone.utc).isoformat()
     feedback_entry: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "createdAt": created_at,
-        "category": category,
-        "message": message,
-        "page": page,
+        "category": category_norm,
+        "message": message_text,
+        "page": page_path,
         "appVersion": app_version,
         "userId": user_id,
         "userEmail": str(user.get("email") or "").strip().lower(),
         "companyName": company_name,
+        "reportId": report_id or None,
+        "attachmentCount": len(attachments),
     }
     feedback_rows = store.read_json("feedback.json", {"items": []})
     items = feedback_rows.get("items") if isinstance(feedback_rows, dict) else []
@@ -624,29 +692,49 @@ def create_feedback(body: FeedbackCreateBody, user_id: str = Depends(require_bea
         )
 
     local_time = datetime.now().strftime("%d.%m.%Y %H:%M")
-    subject = f"[App-Feedback] {category} | {company_name or sender_email or 'Unbekannt'}"
+    subject = f"[App-Feedback] {category_norm} | {company_name or sender_email or 'Unbekannt'}"
     lines = [
         "Neues App-Feedback eingegangen.",
         "",
-        f"Kategorie: {category}",
+        f"Kategorie: {category_norm}",
         f"Firma: {company_name or 'Keine Angabe'}",
         f"Absender: {sender_email or 'Keine Angabe'}",
-        f"Seite: {page or 'Unbekannt'}",
+        f"Seite: {page_path or 'Unbekannt'}",
         f"App-Version: {app_version or 'Unbekannt'}",
         f"Zeitpunkt: {local_time}",
-        "",
-        "Feedback-Text:",
-        message,
     ]
+    if report_meta:
+        lines.extend(
+            [
+                "",
+                "Verknüpfter Bericht:",
+                f"Bericht-ID: {report_meta.get('id') or report_id}",
+            ]
+        )
+        if report_meta.get("projectName"):
+            lines.append(f"Baustelle: {report_meta['projectName']}")
+        if report_meta.get("customerName"):
+            lines.append(f"Kunde: {report_meta['customerName']}")
+        if report_meta.get("date"):
+            lines.append(f"Datum: {report_meta['date']}")
+    if attachments:
+        lines.extend(["", f"Anhänge: {len(attachments)} Bild(er)"])
+    lines.extend(["", "Feedback-Text:", message_text])
     ok, send_message = send_feedback_mail(
         to_email=FEEDBACK_RECEIVER_EMAIL,
         subject=subject,
         body="\n".join(lines),
         mail_config=mail_config,
+        attachments=attachments,
     )
     if not ok:
         raise HTTPException(status_code=500, detail=send_message or "Feedback konnte nicht gesendet werden.")
 
+    if attachments:
+        return {
+            "ok": True,
+            "message": f"Danke! Feedback mit {len(attachments)} Anhang/Anhängen wurde gesendet.",
+        }
     return {"ok": True, "message": "Danke! Feedback wurde gesendet."}
 
 

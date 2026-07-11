@@ -11,6 +11,7 @@ import {
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
 import type { ReportPreviewState, StructuredPayload } from './ReportNew'
+import type { FeedbackNavState } from './Feedback'
 
 const inputClass =
   'mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none placeholder:text-zinc-600 focus:border-orange-500'
@@ -386,6 +387,7 @@ function ReportPreviewInner({
   timeBookingWarn: string
   dirty: boolean
 }) {
+  const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
   const [companyName, setCompanyName] = useState('')
   const [officeEmail, setOfficeEmail] = useState('')
@@ -765,6 +767,23 @@ function ReportPreviewInner({
                   <BigButton variant="secondary" type="button" onClick={() => onCopy(companyName, draftStructured)}>
                     Als Text kopieren
                   </BigButton>
+                  {savedReportId ? (
+                    <BigButton
+                      variant="secondary"
+                      type="button"
+                      onClick={() => {
+                        const state: FeedbackNavState = {
+                          category: 'Problem',
+                          reportId: savedReportId,
+                          reportLabel: `${st.projectName} · ${st.date}`,
+                          prefill: `Betreffender Bericht: ${st.projectName}, ${st.date}\n\n`,
+                        }
+                        nav('/feedback', { state })
+                      }}
+                    >
+                      Problem melden
+                    </BigButton>
+                  ) : null}
                 </div>
               ) : null}
             </div>

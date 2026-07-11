@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { Shield } from 'lucide-react'
 import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { BigButton, Card, PageTitle, PoweredBy } from '../components/ui'
@@ -18,7 +19,7 @@ type CompanyProfile = {
 
 export function CompanyProfilePage() {
   const nav = useNavigate()
-  const { logout } = useAuth()
+  const { logout, isAdmin } = useAuth()
   const { writeBlocked } = useWriteBlocked()
   const [prof, setProf] = useState<CompanyProfile | null>(null)
   const [msg, setMsg] = useState('')
@@ -168,6 +169,21 @@ export function CompanyProfilePage() {
           <BigButton type="submit" disabled={writeBlocked}>Speichern</BigButton>
         </form>
       </Card>
+
+      {isAdmin ? (
+        <div className="mt-6">
+          <Link
+            to="/verwaltung"
+            className="flex min-h-12 items-center justify-between gap-3 rounded-[1rem] border border-white/[0.08] bg-black/35 px-4 py-3 text-sm font-medium text-zinc-200 ring-1 ring-white/[0.05] transition hover:bg-white/[0.05]"
+          >
+            <span className="flex items-center gap-3">
+              <Shield strokeWidth={1.85} className="h-5 w-5 text-orange-300" aria-hidden />
+              Verwaltung
+            </span>
+            <span className="text-zinc-500">›</span>
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mt-8">
         <PoweredBy />

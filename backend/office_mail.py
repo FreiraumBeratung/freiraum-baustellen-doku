@@ -524,8 +524,9 @@ def send_feedback_mail(
     subject: str,
     body: str,
     mail_config: dict[str, Any] | None = None,
+    attachments: list[tuple[str, bytes, str, str]] | None = None,
 ) -> tuple[bool, str]:
-    """Sendet eine einfache Text-Feedback-Mail via gespeicherter SMTP-Konfiguration."""
+    """Sendet eine Text-Feedback-Mail via gespeicherter SMTP-Konfiguration (optional mit Anhängen)."""
     if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
         return False, MSG_NOT_CONFIGURED
 
@@ -545,6 +546,9 @@ def send_feedback_mail(
     msg["From"] = from_addr
     msg["To"] = to_email
     msg.set_content(body)
+
+    for attach_name, blob, main, sub in attachments or []:
+        msg.add_attachment(blob, maintype=main, subtype=sub, filename=attach_name)
 
     ctx = ssl.create_default_context()
     try:

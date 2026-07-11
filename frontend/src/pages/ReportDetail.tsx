@@ -5,6 +5,7 @@ import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
   openPhotos?: boolean
@@ -229,6 +230,21 @@ export function ReportDetailPage() {
         {dlErr ? <p className="text-sm text-red-400">{dlErr}</p> : null}
         <BigButton type="button" onClick={copyAll}>
           Text kopieren
+        </BigButton>
+        <BigButton
+          variant="secondary"
+          type="button"
+          onClick={() => {
+            const state: FeedbackNavState = {
+              category: 'Problem',
+              reportId: id,
+              reportLabel: `${report.projectName} · ${report.date}`,
+              prefill: `Betreffender Bericht: ${report.projectName}, ${report.date}\n\n`,
+            }
+            nav('/feedback', { state })
+          }}
+        >
+          Problem melden
         </BigButton>
         <BigButton
           variant="secondary"
