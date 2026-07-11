@@ -168,6 +168,38 @@ def remove_protocol(store: TenantStore, protocol_id: str, *, delete_photo_file, 
     write_protocols(store, [p for p in protocols if str(p.get("id") or "") != protocol_id])
 
 
+def protocol_entrepreneur_display_name(protocol: dict[str, Any], company_profile: dict[str, Any] | None = None) -> str:
+    prof = company_profile if isinstance(company_profile, dict) else {}
+    return (
+        str(prof.get("contactPerson") or "").strip()
+        or str(prof.get("companyName") or "").strip()
+        or str(protocol.get("companyName") or "").strip()
+    )
+
+
+def protocol_partner_display_name(protocol: dict[str, Any]) -> str:
+    return str(protocol.get("participants") or "").strip()
+
+
+def protocol_for_pdf_signatures(protocol: dict[str, Any], company_profile: dict[str, Any]) -> dict[str, Any]:
+    """Kopie mit korrekten Namen unter den Unterschriften für die PDF."""
+    entrepreneur = protocol_entrepreneur_display_name(protocol, company_profile)
+    partner = protocol_partner_display_name(protocol)
+    sigs = protocol_signatures_doc(protocol)
+    out_sigs: dict[str, Any] = {"customer": sigs.get("customer"), "employee": sigs.get("employee")}
+    if isinstance(out_sigs.get("customer"), dict) and entrepreneur:
+        entry = dict(out_sigs["customer"])
+        entry["signedByLabel"] = entrepreneur
+        out_sigs["customer"] = entry
+    if isinstance(out_sigs.get("employee"), dict) and partner:
+        entry = dict(out_sigs["employee"])
+        entry["signedByLabel"] = partner
+        out_sigs["employee"] = entry
+    out = dict(protocol)
+    out["signatures"] = out_sigs
+    return out
+
+
 def update_protocol_polished(store: TenantStore, protocol_id: str, polished_text: str) -> dict[str, Any]:
     protocols = read_protocols(store)
     for item in protocols:

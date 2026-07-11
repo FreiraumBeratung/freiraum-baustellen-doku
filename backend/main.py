@@ -35,6 +35,8 @@ from app.services import time_account
 from app.services.site_protocol import (
     create_protocol_doc,
     find_protocol,
+    protocol_entrepreneur_display_name,
+    protocol_partner_display_name,
     protocol_photos_list,
     protocol_signatures_doc,
     read_protocols,
@@ -2495,7 +2497,13 @@ async def upload_protocol_signature(
     dest = store.uploads_dir("signatures") / safe_name
     dest.write_bytes(content)
 
-    label = str(signedByLabel or "").strip()[:120] or None
+    prof = store.read_json("company_profile.json", {})
+    if sig_role == "customer":
+        label = protocol_entrepreneur_display_name(protocol, prof)[:120] or None
+    elif sig_role == "employee":
+        label = protocol_partner_display_name(protocol)[:120] or None
+    else:
+        label = str(signedByLabel or "").strip()[:120] or None
     entry: dict[str, Any] = {
         "id": sig_id,
         "role": sig_role,

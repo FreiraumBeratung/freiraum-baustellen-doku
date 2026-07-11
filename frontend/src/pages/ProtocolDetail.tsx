@@ -42,6 +42,8 @@ export function ProtocolDetailPage() {
   const openSignaturesFromQuery = searchParams.get('signatures') === '1'
   const uploadedFromQuery = searchParams.get('uploaded') === '1'
   const [p, setP] = useState<SiteProtocol | null>(null)
+  const [contactPerson, setContactPerson] = useState('')
+  const [profileCompanyName, setProfileCompanyName] = useState('')
   const [dlBusy, setDlBusy] = useState(false)
   const [dlErr, setDlErr] = useState('')
   const [officeBusy, setOfficeBusy] = useState(false)
@@ -54,6 +56,12 @@ export function ProtocolDetailPage() {
     api<SiteProtocol>(`/api/protocols/${id}`)
       .then(setP)
       .catch(() => setP(null))
+    api<{ companyName: string; contactPerson?: string }>('/api/company-profile')
+      .then((prof) => {
+        setProfileCompanyName(prof.companyName?.trim() || '')
+        setContactPerson(prof.contactPerson?.trim() || '')
+      })
+      .catch(() => {})
   }, [id])
 
   useEffect(() => {
@@ -126,6 +134,8 @@ export function ProtocolDetailPage() {
   }
 
   const body = (p.polishedText || p.rawText || '').trim()
+  const entrepreneurName = contactPerson || profileCompanyName || ''
+  const partnerName = p.participants?.trim() || ''
 
   return (
     <div className="overflow-x-hidden">
@@ -160,7 +170,8 @@ export function ProtocolDetailPage() {
               protocolId={id}
               enabled
               embedded
-              customerName={p.customerName}
+              entrepreneurName={entrepreneurName}
+              partnerName={partnerName}
               initialOpen={Boolean(openSignaturesFromQuery)}
             />
           </Card>

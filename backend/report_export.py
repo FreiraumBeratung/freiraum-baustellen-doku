@@ -1181,7 +1181,7 @@ def build_protocol_pdf_bytes(
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
-    from app.services.site_protocol import protocol_display_text
+    from app.services.site_protocol import protocol_display_text, protocol_for_pdf_signatures
 
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
@@ -1345,7 +1345,7 @@ def build_protocol_pdf_bytes(
     _append_pdf_signatures(
         story,
         doc_tpl,
-        protocol,
+        protocol_for_pdf_signatures(protocol, company_profile),
         section_head=section_head,
         info_label_style=info_label_style,
         meta_style=meta_style,

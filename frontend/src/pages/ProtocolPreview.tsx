@@ -29,6 +29,7 @@ export function ProtocolPreviewPage() {
   const { writeBlocked } = useWriteBlocked()
 
   const [companyName, setCompanyName] = useState('')
+  const [contactPerson, setContactPerson] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [draftText, setDraftText] = useState('')
   const [polishedBy, setPolishedBy] = useState<string | null>(null)
@@ -48,6 +49,8 @@ export function ProtocolPreviewPage() {
   const savedId = savedProtocol?.id ?? null
   const mode = st?.mode ?? 'quick'
   const modeTitle = mode === 'signed' ? 'Begehungsprotokoll' : 'Schnellnotiz'
+  const entrepreneurName = contactPerson || companyName
+  const partnerName = savedProtocol?.participants?.trim() || st?.participants?.trim() || ''
 
   useEffect(() => {
     if (!st) {
@@ -55,9 +58,10 @@ export function ProtocolPreviewPage() {
       return
     }
     setDraftText(st.rawText)
-    api<{ companyName: string; logoUrl: string | null }>('/api/company-profile')
+    api<{ companyName: string; contactPerson?: string; logoUrl: string | null }>('/api/company-profile')
       .then((p) => {
         setCompanyName(p.companyName?.trim() || 'Ihre Firma')
+        setContactPerson(p.contactPerson?.trim() || '')
         setLogoUrl(p.logoUrl)
       })
       .catch(() => setCompanyName('Ihre Firma'))
@@ -259,7 +263,8 @@ export function ProtocolPreviewPage() {
               reportId={null}
               protocolId={savedId}
               enabled
-              customerName={st.customerName}
+              entrepreneurName={entrepreneurName}
+              partnerName={partnerName}
             />
           </>
         ) : null}

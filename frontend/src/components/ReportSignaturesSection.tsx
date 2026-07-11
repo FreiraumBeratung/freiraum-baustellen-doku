@@ -18,8 +18,12 @@ type ReportSignaturesSectionProps = {
   protocolId?: string | null
   /** Wenn false: Hinweis statt Unterschrift (Bericht noch nicht gespeichert). */
   enabled: boolean
-  /** Optional fuer signedByLabel bei Kunden-Signatur. */
+  /** Optional fuer signedByLabel bei Kunden-Signatur (Tagesbericht). */
   customerName?: string
+  /** Protokoll: Name unter Unternehmer-Unterschrift (Ansprechpartner/Firma). */
+  entrepreneurName?: string
+  /** Protokoll: Name unter Gesprächspartner-Unterschrift (Teilnehmer). */
+  partnerName?: string
   /** In Detail-Karte eingebettet — ohne oberen Trennstrich. */
   embedded?: boolean
   /** Toggle initial geoeffnet (z.B. per URL ?signatures=1). */
@@ -79,6 +83,8 @@ export function ReportSignaturesSection({
   protocolId = null,
   enabled,
   customerName,
+  entrepreneurName,
+  partnerName,
   embedded = false,
   initialOpen = false,
 }: ReportSignaturesSectionProps) {
@@ -141,7 +147,13 @@ export function ReportSignaturesSection({
     setErr('')
     setStatusLine('Unterschrift wird gespeichert…')
     try {
-      const label = role === 'customer' ? customerName?.trim() : undefined
+      const label = isProtocol
+        ? role === 'customer'
+          ? entrepreneurName?.trim() || undefined
+          : partnerName?.trim() || undefined
+        : role === 'customer'
+          ? customerName?.trim()
+          : undefined
       const res = isProtocol
         ? await uploadProtocolSignature(entityId, role, file, label || undefined)
         : await uploadReportSignature(entityId, role, file, label || undefined)
