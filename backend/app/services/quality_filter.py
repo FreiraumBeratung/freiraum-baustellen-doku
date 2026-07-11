@@ -110,7 +110,7 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bputz aufgebracht\b", ("Putz",), (), ()),
     (r"\bgrundierung aufgetragen\b", ("Grundierung",), (), ()),
     (r"\babdichtung hergestellt\b", ("Abdichtung",), ("Dichtband",), ()),
-    (r"\bpflaster(?:arbeiten)? (?:durchgeführt|verlegt)\b|\b\d+(?:[.,]\d+)?\s*m²\s*pflaster verlegt\b", ("Pflastersteine",), ("Splitt", "Schotter"), ()),
+    (r"\bpflaster(?:arbeiten)? (?:durchgeführt|verlegt|eingebaut)\b|\b\d+(?:[.,]\d+)?\s*m²\s*pflaster (?:verlegt|eingebaut)\b", ("Pflastersteine",), ("Splitt", "Schotter"), ()),
     (r"\bschotter eingebaut\b|\beinbau von\s+\d+(?:[.,]\d+)?\s*m³\s*schotter\b", ("Schotter",), (), ()),
     (r"\bsplitt\b", ("Splitt",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
@@ -1872,6 +1872,60 @@ def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
     return out
 
 
+def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
+    """Entfernt Satzfragmente und Tätigkeits-Echos aus der Materialliste."""
+    out: list[str] = []
+    for mat in materials:
+        low = str(mat or "").strip().casefold()
+        if not low:
+            continue
+        if len(low) > 55:
+            continue
+        if re.search(r"\b(danach|und dann|eingebaut und|eingebaut danach)\b", low):
+            continue
+        if re.search(r"\beingebaut\b", low) and re.search(r"\b(pflaster|schotter|splitt|split)\b", low):
+            continue
+        out.append(str(mat))
+    return _dedupe(out)
+
+
+def _prefer_quantified_materials(materials: list[str]) -> list[str]:
+    """Bare Materialzeilen und doppelte Mengenzeilen bereinigen."""
+    vals = [str(x).strip() for x in materials if str(x).strip()]
+    has_pflastersteine = any(_material_key(x) == "pflastersteine" for x in vals)
+
+    quant_by_base: dict[str, list[str]] = {}
+    bare_or_other: list[str] = []
+    for mat in vals:
+        if re.match(r"^\d", mat):
+            core = re.sub(r"^\d+(?:[.,]\d+)?\s+\S+\s+", "", mat.casefold()).strip()
+            base = core.split()[0] if core else _material_key(mat)
+            if base == "split":
+                base = "splitt"
+            quant_by_base.setdefault(base, []).append(mat)
+        else:
+            bare_or_other.append(mat)
+
+    quant_keys: set[str] = set()
+    out: list[str] = []
+    for base, lines in quant_by_base.items():
+        best = max(lines, key=lambda x: len(x))
+        if base in {"splitt", "schotter", "pflastersteine"}:
+            quant_keys.add(base)
+        if has_pflastersteine and re.search(r"\bm²\b", best, flags=re.IGNORECASE):
+            if re.search(r"\bpflaster\b", best, flags=re.IGNORECASE):
+                continue
+        out.append(best)
+
+    for mat in bare_or_other:
+        key = _material_key(mat)
+        if key in quant_keys:
+            continue
+        out.append(mat)
+
+    return _dedupe(out)
+
+
 def _drop_putz_layer_material_echo(materials: list[str], activities: list[str]) -> list[str]:
     """Entfernt Tätigkeits-Echos aus Materialien (z. B. „50 m² Pflaster gelegt“), behält Produktnamen."""
     acts_probe = " | ".join(str(a or "") for a in activities).casefold()
@@ -1882,7 +1936,7 @@ def _drop_putz_layer_material_echo(materials: list[str], activities: list[str]) 
             continue
         # Vollständige Tätigkeitszeilen mit Arbeitsverb — kein Material.
         if re.search(
-            r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert|gelegt|verlegt|gesetzt|gemäht|gemaeht|geschnitten)\b",
+            r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert|gelegt|verlegt|gesetzt|gemäht|gemaeht|geschnitten|eingebaut|eingebracht)\b",
             low,
         ):
             continue
@@ -1930,6 +1984,8 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     from app.services.material_quantity_builder import enrich_materials_list
 
     materials = enrich_materials_list(materials, raw_text)
+    materials = _drop_garbage_material_lines(materials)
+    materials = _prefer_quantified_materials(materials)
     materials = _drop_putz_layer_material_echo(materials, activities)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     activities = _drop_material_echo_activities(activities, materials)

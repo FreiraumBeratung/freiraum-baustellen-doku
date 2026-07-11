@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sys
 import tempfile
 import uuid
@@ -122,6 +123,37 @@ def _integration_tests() -> None:
     putz_mats = [str(x) for x in ((putz_out.get("structured") or {}).get("materials") or [])]
     _expect(_contains_any(putz_mats, "Unterputz"), f"unterputz material fehlt: {putz_mats}")
     _expect(_contains_any(putz_mats, "Oberputz"), f"oberputz material fehlt: {putz_mats}")
+
+    galabau_out = api_structure_report(
+        StructureReportBody(
+            projectId="mat-qty-galabau",
+            projectName="Schmitz Aussenanlage",
+            customerName="Kunde",
+            date="2026-07-11",
+            employeeNames=["Max"],
+            startTime="08:00",
+            endTime="17:00",
+            exportFormat="PDF",
+            rawText=(
+                "Heute haben wir den Untergrund frei gebaggert dann 5 m³ Schotter null 32 eingebaut "
+                "danach drei Kubik Split zwei Fünfer eingebaut und dann 40 m² Pflaster eingebaut"
+            ),
+        ),
+        store=_STORE,
+    )
+    galabau_mats = [str(x) for x in ((galabau_out.get("structured") or {}).get("materials") or [])]
+    _expect(_contains_any(galabau_mats, "Schotter"), f"schotter fehlt: {galabau_mats}")
+    _expect(any("0/32" in x for x in galabau_mats), f"schotter kornung fehlt: {galabau_mats}")
+    _expect(any("3" in x and "Splitt" in x for x in galabau_mats), f"splitt menge fehlt: {galabau_mats}")
+    _expect(_contains_any(galabau_mats, "Pflastersteine"), f"pflastersteine fehlt: {galabau_mats}")
+    _expect(
+        not any("danach" in x.casefold() or "eingebaut und" in x.casefold() for x in galabau_mats),
+        f"material satzfragment: {galabau_mats}",
+    )
+    _expect(
+        not any(re.search(r"\bm²\b.*pflaster", x, flags=re.IGNORECASE) for x in galabau_mats),
+        f"pflaster flaeche echo in materials: {galabau_mats}",
+    )
 
     pdf = build_pdf_bytes(
         {

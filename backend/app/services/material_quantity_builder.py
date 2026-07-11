@@ -81,8 +81,25 @@ _LKW_PATTERNS: tuple[re.Pattern[str], ...] = tuple(
 _QTY_UNIT_DESC = re.compile(
     r"(?P<qty>\d+(?:[.,]\d+)?)\s*"
     r"(?P<unit>t|ton|tonnen|to|m³|m3|kubikmeter|kubik|qm|m²|m2|quadratmeter|"
-    r"met|meter|m|lfm|st\.?|stk|stück|stueck|sa\.?|sak|sack|säcke|saeck|rolle?|rollen)\s+"
-    r"(?P<desc>[a-zäöüß0-9/.\-° ]{2,80})",
+    r"met|meter|m(?![²³23])|lfm|st\.?|stk|stück|stueck|sa\.?|sak|sack|säcke|saeck|rolle?|rollen)\s+"
+    r"(?P<desc>[a-zäöüß0-9/.\-° ]{2,48})"
+    r"(?=\s+(?:eingebaut|eingebracht|verarbeitet|verlegt|gelegt|aufgetragen|danach|und dann|sowie|dann)\b|[,.!?]|$)",
+    re.IGNORECASE,
+)
+
+_WORD_NUM = (
+    r"(?:ein|eine|eins|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn|"
+    r"\d+(?:[.,]\d+)?)"
+)
+_WORD_KUBIK_MAT = re.compile(
+    rf"(?P<qty>{_WORD_NUM})\s+kubik(?:meter)?\s+"
+    r"(?P<mat>split|splitt|schotter|beton|sand|kies)\b"
+    r"(?:\s+(?P<frac>zwei\s+fünfer|zwei\s+fuenfer|\d+\s*/\s*\d+|null\s+\d+))?",
+    re.IGNORECASE,
+)
+
+_DESC_STOP = re.compile(
+    r"\b(?:eingebaut|eingebracht|verarbeitet|verlegt|gelegt|aufgetragen|danach|und dann|sowie|dann)\b",
     re.IGNORECASE,
 )
 
@@ -93,7 +110,8 @@ _WORK_SURFACE_MAT_SKIP = re.compile(
     r"oberputz|unterputz|innenputz|außenputz|aussenputz|grundputz|sockelputz|reibputz|kratzputz"
     r")\b.*\b(?:"
     r"gelegt|verlegt|gesetzt|gemäht|gemaeht|getrimmt|geschnitten|entfernt|"
-    r"aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert|eingedeckt"
+    r"aufgetragen|aufgebracht|verarbeitet|geglättet|geglaettet|filziert|eingedeckt|"
+    r"eingebaut|eingebracht"
     r")\b",
     re.IGNORECASE,
 )
@@ -168,6 +186,63 @@ def _normalize_material_probe(text: str) -> str:
     return t
 
 
+def _word_to_qty(word: str) -> str:
+    key = str(word or "").strip().casefold()
+    mapping = {
+        "ein": "1",
+        "eine": "1",
+        "eins": "1",
+        "zwei": "2",
+        "drei": "3",
+        "vier": "4",
+        "fünf": "5",
+        "fuenf": "5",
+        "sechs": "6",
+        "sieben": "7",
+        "acht": "8",
+        "neun": "9",
+        "zehn": "10",
+    }
+    if key in mapping:
+        return mapping[key]
+    val = key.replace(",", ".")
+    return val if re.fullmatch(r"\d+(?:\.\d+)?", val) else word.strip()
+
+
+def _normalize_fraction_token(frac: str | None) -> str:
+    raw = str(frac or "").strip()
+    if not raw:
+        return ""
+    low = raw.casefold()
+    if re.search(r"zwei\s+fünfer|zwei\s+fuenfer", low):
+        return "2/5"
+    m = re.search(r"null\s+(\d+)", low)
+    if m:
+        return f"0/{m.group(1)}"
+    m = re.search(r"(\d+)\s*/\s*(\d+)", raw)
+    if m:
+        return f"{m.group(1)}/{m.group(2)}"
+    return raw
+
+
+def _material_label_from_match(mat: str, frac: str | None = None) -> str:
+    name = "Splitt" if str(mat or "").casefold() in {"split", "splitt"} else str(mat or "").strip().title()
+    frac_norm = _normalize_fraction_token(frac)
+    if frac_norm:
+        return f"{name} {frac_norm}"
+    return name
+
+
+def _trim_material_desc(desc: str) -> str:
+    t = re.sub(r"\s+", " ", str(desc or "").strip(" .,;:-"))
+    m = _DESC_STOP.search(t)
+    if m:
+        t = t[: m.start()].strip(" .,;:-")
+    t = re.sub(r"\bnull\s+(\d+)\b", r"0/\1", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(zwei\s+fünfer|zwei\s+fuenfer)\b", "2/5", t, flags=re.IGNORECASE)
+    return _clean_desc(t)
+
+
 def extract_quantified_materials(raw_text: str) -> list[str]:
     """Extrahiert Materialzeilen mit Menge/Einheit/Bezeichnung aus Rohtext."""
     probe = _normalize_material_probe(raw_text)
@@ -225,9 +300,15 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
             desc = f"Asphalt 0/{mmix.group(1)}"
         _add(MaterialLine(_norm_qty(m.group("qty") or ""), "t", desc), m.start(), m.end())
 
+    for m in _WORD_KUBIK_MAT.finditer(probe):
+        qty = _word_to_qty(m.group("qty") or "")
+        label = _material_label_from_match(m.group("mat") or "", m.group("frac"))
+        if qty and label:
+            _add(MaterialLine(_norm_qty(qty), "m³", label), m.start(), m.end())
+
     for m in _QTY_UNIT_DESC.finditer(probe):
-        desc = _clean_desc(m.group("desc") or "")
-        if not desc:
+        desc = _trim_material_desc(m.group("desc") or "")
+        if not desc or len(desc) > 48:
             continue
         low_desc = desc.casefold()
         if re.search(r"\bentsorg", low_desc):
@@ -239,6 +320,10 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
         if _WORK_SURFACE_MAT_SKIP.search(low_desc):
             continue
         unit = _norm_unit(m.group("unit") or "")
+        if unit in {"m²", "m2", "qm", "quadratmeter"} and re.fullmatch(
+            r"pflaster(?:steine)?", low_desc.strip()
+        ):
+            continue
         _add(
             MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc),
             m.start(),
@@ -280,6 +365,14 @@ def _attach_quantity_if_missing(material: str, raw_text: str) -> str:
         unit = _norm_unit(m.group("unit") or "")
         desc = mat if mat_key in _norm_key(m.group("desc") or "") else _clean_desc(m.group("desc") or mat)
         return MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc).display()
+
+    if mat_key in {"splitt", "split"}:
+        wm = _WORD_KUBIK_MAT.search(probe)
+        if wm:
+            qty = _word_to_qty(wm.group("qty") or "")
+            label = _material_label_from_match(wm.group("mat") or "", wm.group("frac"))
+            if qty and label:
+                return MaterialLine(_norm_qty(qty), "m³", label).display()
 
     return mat
 
