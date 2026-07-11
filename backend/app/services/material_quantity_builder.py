@@ -94,7 +94,7 @@ _WORD_NUM = (
 _WORD_KUBIK_MAT = re.compile(
     rf"(?P<qty>{_WORD_NUM})\s+kubik(?:meter)?\s+"
     r"(?P<mat>split|splitt|schotter|beton|sand|kies)\b"
-    r"(?:\s+(?P<frac>zwei\s+fünfer|zwei\s+fuenfer|\d+\s*/\s*\d+|null\s+\d+))?",
+    r"(?:\s+(?P<frac>zwei\s+fünfer|zwei\s+fuenfer|\d+\s*/\s*\d+|null\s+\d+|\d{2}))?",
     re.IGNORECASE,
 )
 
@@ -189,6 +189,13 @@ def _normalize_material_probe(text: str) -> str:
     t = re.sub(r"\s+", " ", str(text or "").strip())
     t = re.sub(r"\bbau\s+schutt\b", "bauschutt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bboden\s+aushub\b", "bodenaushub", t, flags=re.IGNORECASE)
+    # Kornung ohne fuehrende "0/" (z.B. "Schotter 32" nach Kubik-Menge).
+    t = re.sub(
+        r"\bschotter\s+(?!(?:0\s*/\s*)?0/)(?P<k>\d{2})\b",
+        r"Schotter 0/\g<k>",
+        t,
+        flags=re.IGNORECASE,
+    )
     return t
 
 
@@ -228,6 +235,9 @@ def _normalize_fraction_token(frac: str | None) -> str:
     m = re.search(r"(\d+)\s*/\s*(\d+)", raw)
     if m:
         return f"{m.group(1)}/{m.group(2)}"
+    # Standalone Kornung (z.B. "32" nach Schotter = 0/32).
+    if re.fullmatch(r"\d{2}", raw.strip()) and raw.strip() in {"8", "11", "16", "22", "32", "45", "56"}:
+        return f"0/{raw.strip()}"
     return raw
 
 

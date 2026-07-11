@@ -2077,6 +2077,15 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\brasse gemacht\b", "rasen gemäht", out)
     out = re.sub(r"\bfliesen gemacht\b", "fliesen verlegt", out)
     out = re.sub(r"\bschotter reingemacht\b", "schotter eingebaut", out)
+    # ASR: "Lock" statt "Loch" im Bagger-Kontext (gebrochenes Baustellen-Deutsch).
+    out = re.sub(r"\bbagger\s+mit\s+lock\b", "bagger loch", out)
+    out = re.sub(r"\bmit\s+lock\b(?=\s|$)", "loch", out)
+    # Kornung ohne fuehrende "0/" (z.B. "Schotter 32" = Schotter 0/32).
+    out = re.sub(
+        r"\bschotter\s+(?!(?:0\s*/\s*)?0/)(?P<k>\d{2})\b",
+        r"schotter 0/\g<k>",
+        out,
+    )
     out = re.sub(r"\bunkraut weg gemacht\b", "unkraut entfernt", out)
     out = re.sub(r"\bunkraut weg\b", "unkraut entfernt", out)
     out = re.sub(r"\bgarten freigeschnitten\b", "rasen getrimmt", out)
@@ -2771,9 +2780,15 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Gartenmauer gebaut" if qty else "Gartenmauer gebaut"
         return CanonicalActivity("gartenmauer_gebaut", text, 95.0, bool(qty))
-    if "schotter" in t and "schottertragschicht" not in t and re.search(
-        r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt)\b",
-        t,
+    if "schotter" in t and "schottertragschicht" not in t and (
+        re.search(
+            r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt)\b",
+            t,
+        )
+        or re.search(
+            r"\b(\d+|ein|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn)\s+m³\s+schotter\b",
+            t,
+        )
     ):
         qty = _extract_qty_m3(t)
         text = f"{qty} m³ Schotter eingebaut" if qty else "Schotter eingebaut"

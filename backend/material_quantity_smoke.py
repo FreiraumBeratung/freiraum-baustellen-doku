@@ -50,6 +50,37 @@ def _unit_tests() -> None:
         f"pflaster activity must not be material: {pflaster_extracted}",
     )
 
+    # Gebrochenes Baustellen-Deutsch: "Schotter 32" ohne "0/", Kubik-Wort-Menge.
+    broken_schotter = extract_quantified_materials(
+        "dann drei Kubik Schotter 32 danach ich hab gemacht Split ungefaehr zwei Kubik"
+    )
+    _expect(
+        any("0/32" in x for x in broken_schotter),
+        f"schotter kornung 32 fehlt: {broken_schotter}",
+    )
+    _expect(
+        any("3" in x and "Schotter" in x for x in broken_schotter),
+        f"schotter menge fehlt: {broken_schotter}",
+    )
+
+    from app.services.activity_canonicalizer import canonicalize_activities  # noqa: WPS433
+    from app.services.problem_open_builder import extract_problems_from_text  # noqa: WPS433
+
+    broken_raw = (
+        "Oh hab ich gemacht heute die Bagger mit Lock hab ich gemacht dann drei Kubik Schotter 32 "
+        "danach ich hab gemacht Split ungefaehr zwei Kubik dann hat viel geregnet Arbeit stopp"
+    )
+    broken_acts = canonicalize_activities([], raw_text=broken_raw)
+    _expect(
+        any("schotter" in x.casefold() for x in broken_acts),
+        f"schotter activity fehlt: {broken_acts}",
+    )
+    broken_probs = extract_problems_from_text(broken_raw)
+    _expect(
+        any("regen" in x.casefold() for x in broken_probs),
+        f"regen problem fehlt: {broken_probs}",
+    )
+
 
 def _integration_tests() -> None:
     os.environ["OPENAI_API_KEY"] = ""

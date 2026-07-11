@@ -86,6 +86,9 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|gefälle\s+(?:war\s+)?(?:falsch|zu\s+flach)"
     r"|(?:leider|wegen)\s+[^.!?]{0,40}material\s+knapp"
     r"|keine\s+arbeit\s+wegen\s+regen"
+    r"|viel\s+geregnet"
+    r"|geregnet[^.!?]{0,50}arbeit\s+stopp"
+    r"|arbeit\s+stopp"
     r")",
     re.IGNORECASE,
 )
@@ -132,6 +135,9 @@ def _normalize_probe(text: str) -> str:
         t,
         flags=re.IGNORECASE,
     )
+    # Gebrochenes Deutsch: "Arbeit stopp" / "viel Regen" (ohne korrektes Verb).
+    t = re.sub(r"\barbeit\s+stopp\b", "arbeiten gestoppt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bviel\s+regen\b", "viel geregnet", t, flags=re.IGNORECASE)
     return t
 
 
@@ -399,7 +405,9 @@ def _polish_open_clause(text: str) -> str:
 def _implicit_problem_clause(match_text: str) -> str:
     t = _normalize_probe(match_text).strip(" .,;")
     low = t.casefold()
-    if re.search(r"weil\s+es|angefangen\s+hat\s+zu\s+regnen|geregnet\s+hat", low):
+    if re.search(r"weil\s+es|angefangen\s+hat\s+zu\s+regnen|geregnet\s+hat|viel\s+geregnet", low):
+        return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
+    if re.search(r"geregnet", low) and re.search(r"stopp|gestoppt|abbrechen|beenden", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
     if re.search(r"abbrechen|abrechnen|stoppen", low) and re.search(r"regen|angefangen\s+hat\s+zu", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")

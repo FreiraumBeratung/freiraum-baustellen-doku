@@ -1164,6 +1164,11 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
     if "schotter" in mats_probe and "schotter" not in acts_probe and re.search(r"\bschotter\b", raw_probe):
         if re.search(r"\b(eingebaut|eingebracht|verarbeitet|verwendet|reingemacht|rein gemacht|rein)\b", raw_probe):
             out.append("Schotter eingebaut")
+        elif re.search(
+            r"\b(kubik|kubikmeter|m³|m3)\b.{0,30}?\bschotter\b|\bschotter\b.{0,30}?\b(kubik|kubikmeter|m³|m3)\b",
+            raw_probe,
+        ):
+            out.append("Schotter eingebaut")
     if "splitt" in mats_probe and "splitt" not in acts_probe and re.search(r"\bsplitt|split\b", raw_probe):
         if re.search(r"\b(eingebaut|verarbeitet|eingebracht|verwendet)\b", raw_probe):
             out.append("Splitt eingebaut")
