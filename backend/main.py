@@ -1360,48 +1360,6 @@ def export_collective_protocol_pdf(
     )
 
 
-@app.post("/api/projects/{project_id}/collective-protocol/send-office", response_model=SendOfficeResponse)
-def send_collective_protocol_to_office_endpoint(
-    project_id: str,
-    user_id: str = Depends(require_active_license),
-    store: TenantStore = Depends(get_tenant_store_write),
-) -> SendOfficeResponse:
-    payload = _build_collective_protocol(store, project_id)
-    prof = store.read_json("company_profile.json", {})
-    office = str(prof.get("officeEmail") or "").strip()
-    if not office:
-        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
-
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
-    if not sender_email:
-        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
-
-    ok, simulated, message = send_collective_protocol_to_office(
-        payload,
-        prof,
-        office,
-        mail_config=mail_config,
-        resolve_logo=_export_resolve_logo(store),
-        resolve_signature=_export_resolve_signature(store),
-    )
-    if not ok:
-        raise HTTPException(status_code=500, detail=message or "Gesamtprotokoll konnte nicht gesendet werden.")
-    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
-
-
 @app.get("/api/projects/{project_id}/collective-report")
 def get_collective_report(
     project_id: str,
@@ -2303,6 +2261,48 @@ def send_collective_to_office_endpoint(
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Gesamtbericht konnte nicht gesendet werden.")
+    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
+
+
+@app.post("/api/projects/{project_id}/collective-protocol/send-office", response_model=SendOfficeResponse)
+def send_collective_protocol_to_office_endpoint(
+    project_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+) -> SendOfficeResponse:
+    payload = _build_collective_protocol(store, project_id)
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == user_id:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
+        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_collective_protocol_to_office(
+        payload,
+        prof,
+        office,
+        mail_config=mail_config,
+        resolve_logo=_export_resolve_logo(store),
+        resolve_signature=_export_resolve_signature(store),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Gesamtprotokoll konnte nicht gesendet werden.")
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 
