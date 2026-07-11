@@ -104,8 +104,14 @@ _IMPLICIT_OPEN_FUTURE = re.compile(
     r"|(?:am\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag)\s+"
     r"(?:müssen\s+wir|muessen\s+wir|noch\s+)?[^.!?]{4,120}"
     r"|dementsprechend\s+(?:werden\s+wir|machen\s+wir|schliessen\s+wir|schließen\s+wir|betonieren\s+wir)\s+morgen[^.!?]{0,80}"
-    r"|(?:dementsprechend\s+)?verschiebt\s+sich\s+[^.!?]{4,80}?\b(?:auf\s+)?morgen\b"
+    r"|(?:dementsprechend\s+)?(?:pflaster\w*\s+)?verschiebt\s+sich\s+[^.!?]{4,80}?\b(?:auf\s+)?morgen\b"
     r"|(?:verlegt|verschoben|verlagert|verlägert)\s+(?:auf\s+)?morgen[^.!?]{0,60}"
+    r"|(?:dementsprechend\s+)?(?:pflaster\w*\s+)?verschiebt\s+sich\s+[^.!?]{4,80}?\b(?:auf\s+)?(?:montag|dienstag|mittwoch|donnerstag|freitag|samstag)\b"
+    r"|rest\s+[^.!?]{0,40}?\bpflaster\b[^.!?]{0,40}?\bmorgen\b"
+    r"|pflaster\b[^.!?]{0,40}?\bmorgen\b[^.!?]{0,40}?\b(?:legen|verlegen|fertig)\b"
+    r"|\bund\s+morgen\s+[^.!?]{0,40}?\bpflaster\b"
+    r"|\bpflaster\s+morgen\b"
+    r"|\bpflaster\w*\s+morgen\b"
     r")",
     re.IGNORECASE,
 )
@@ -286,8 +292,12 @@ def _polish_problem_clause(text: str) -> str:
         return ""
     t = re.sub(r"\blieferung\s+kam\s+spät\b", "Lieferung kam verspätet", t, flags=re.IGNORECASE)
     t = re.sub(r"\blieferung\s+kam\s+spaet\b", "Lieferung kam verspätet", t, flags=re.IGNORECASE)
+    if re.search(r"lieferung\s+schotter\s+sp", t, flags=re.IGNORECASE):
+        return "Lieferung Schotter verspätet."
     t = re.sub(r"\bregen\b", "Regen", t, flags=re.IGNORECASE)
     t = re.sub(r"\bdrainage\b", "Drainage", t, flags=re.IGNORECASE)
+    if re.search(r"^regen\s+heute\s+keine\s+arbeit", t, flags=re.IGNORECASE):
+        return "Keine Arbeit wegen Regen."
     if t and t[0].islower():
         t = t[0].upper() + t[1:]
     if not t.endswith("."):
@@ -322,6 +332,38 @@ def _polish_open_clause(text: str) -> str:
         if work:
             work = work[0].upper() + work[1:]
         return f"{work} auf morgen verschoben noch offen."
+    m_shift_day = re.search(
+        r"(?:dementsprechend\s+)?verschiebt\s+sich\s+(?:das\s+)?([^.,;!?]+?)\s+auf\s+"
+        r"(montag|dienstag|mittwoch|donnerstag|freitag|samstag)",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_shift_day:
+        work = str(m_shift_day.group(1) or "").strip()
+        day = str(m_shift_day.group(2) or "").strip().capitalize()
+        if work:
+            work = work[0].upper() + work[1:]
+        return f"{work} auf {day} verschoben noch offen."
+    m_pfl_morgen = re.search(r"\b(pflaster\w*)\s+morgen\b", t, flags=re.IGNORECASE)
+    if m_pfl_morgen:
+        work = str(m_pfl_morgen.group(1) or "").strip()
+        if work:
+            work = work[0].upper() + work[1:]
+        return f"{work} morgen noch offen."
+    m_shift_rev = re.search(
+        r"\b(pflaster\w*)\s+verschiebt\s+sich\s+auf\s+"
+        r"(montag|dienstag|mittwoch|donnerstag|freitag|samstag|morgen)",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_shift_rev:
+        work = str(m_shift_rev.group(1) or "").strip()
+        day = str(m_shift_rev.group(2) or "").strip().capitalize()
+        if work:
+            work = work[0].upper() + work[1:]
+        if day.casefold() == "morgen":
+            return f"{work} auf morgen verschoben noch offen."
+        return f"{work} auf {day} verschoben noch offen."
     t = re.sub(r"\b(dann|auch|halt|eben|mal)\b", " ", t, flags=re.IGNORECASE)
     t = re.sub(r"\s+", " ", t).strip(" .,;")
     t = re.sub(r"\s+noch\s+offen\.?$", "", t, flags=re.IGNORECASE).strip(" .,;")

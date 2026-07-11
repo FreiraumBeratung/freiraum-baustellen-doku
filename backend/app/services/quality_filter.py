@@ -664,7 +664,7 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
 )
 
 _MACHINE_RULES: tuple[tuple[str, str, str, str], ...] = (
-    ("bagger", r"\b(?:mini\s*)?bagger\b|\bgebaggert\b", "Baggerarbeiten durchgeführt", "Baggerstunden erfassen?"),
+    ("bagger", r"\b(?:mini\s*)?bagger(?:arbeiten)?\b|\bgebaggert\b", "Baggerarbeiten durchgeführt", "Baggerstunden erfassen?"),
     ("dumper", r"\bdumper\b", "Dumper eingesetzt", "Dumperstunden erfassen?"),
     (
         "ruettelplatte",
