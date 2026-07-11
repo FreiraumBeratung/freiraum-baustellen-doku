@@ -81,6 +81,39 @@ def _unit_tests() -> None:
         f"regen problem fehlt: {broken_probs}",
     )
 
+    pflaster_raw = (
+        "Als erstes haben wir den Untergrund vorbereitet mit dem Bagger das ging ungefaehr 3 Stunden "
+        "danach haben wir 5 m³ Frostschutzschotter null 32 reingepackt danach ging noch 2 m³ Split zwei Fuenfer rein "
+        "dann haben wir die Pflasterflaeche von 40 m² fertig gestellt morgen muessen wir dann noch mal zur Baustelle "
+        "und die Fugen mit Fugensand fuellen"
+    )
+    pflaster_acts = canonicalize_activities([], raw_text=pflaster_raw)
+    _expect(
+        any("pflaster" in x.casefold() for x in pflaster_acts),
+        f"pflaster activity fehlt: {pflaster_acts}",
+    )
+    _expect(
+        not any("pflasterfugen" in x.casefold() for x in pflaster_acts),
+        f"pflasterfugen halluziniert: {pflaster_acts}",
+    )
+    pflaster_mats = extract_quantified_materials(pflaster_raw)
+    _expect(
+        not any("reingepackt" in x.casefold() or " morgen" in x.casefold() for x in pflaster_mats),
+        f"material fragment: {pflaster_mats}",
+    )
+    _expect(
+        any("splitt" in x.casefold() and "split " not in x.casefold() for x in pflaster_mats),
+        f"splitt schreibweise: {pflaster_mats}",
+    )
+    from app.services.problem_open_builder import refine_open_items_list  # noqa: WPS433
+
+    pflaster_open = refine_open_items_list([], pflaster_raw)
+    _expect(pflaster_open, f"offener punkt fehlt: {pflaster_open}")
+    _expect(
+        "fugensand" in pflaster_open[0].casefold() and "baustelle und die" not in pflaster_open[0].casefold(),
+        f"offener punkt grammatik: {pflaster_open}",
+    )
+
 
 def _integration_tests() -> None:
     os.environ["OPENAI_API_KEY"] = ""

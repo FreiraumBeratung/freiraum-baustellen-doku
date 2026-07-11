@@ -1771,6 +1771,15 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
         )
     if "laub entfernt" in low:
         return bool(re.search(r"\blaub\b", raw, flags=re.IGNORECASE))
+    if "pflasterfugen" in low:
+        before = raw.split("morgen", 1)[0] if re.search(r"\bmorgen\b", raw, flags=re.IGNORECASE) else raw
+        if re.search(r"\bfugensand\b", raw, flags=re.IGNORECASE) and re.search(
+            r"\bf(?:ü|ue|u)llen\b",
+            raw,
+            flags=re.IGNORECASE,
+        ):
+            return bool(re.search(r"\bverfugt\b|\bverfüllt\b|\bverfuellt\b", before, flags=re.IGNORECASE))
+        return bool(re.search(r"\bverfugt\b|\bverfüllt\b|\bverfuellt\b", raw, flags=re.IGNORECASE))
 
     return True
 
@@ -1918,6 +1927,14 @@ def _drop_future_work_activities(activities: list[str], raw_text: str) -> list[s
             continue
         if _is_future_only_pflaster_activity(act, raw_text):
             continue
+        if "pflasterfugen" in low:
+            before = raw.split("morgen", 1)[0] if re.search(r"\bmorgen\b", raw) else raw
+            if re.search(r"\bfugensand\b", raw) and re.search(
+                r"\bf(?:ü|ue|u)llen\b",
+                raw,
+                flags=re.IGNORECASE,
+            ) and not re.search(r"\bverfugt\b|\bverfüllt\b|\bverfuellt\b", before, flags=re.IGNORECASE):
+                continue
         out.append(str(act))
     return out
 
@@ -1936,6 +1953,12 @@ def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
         if re.search(r"\beingebaut\b", low) and re.search(r"\b(pflaster|schotter|splitt|split)\b", low):
             continue
         if re.search(r"\b(?:legen|verlegen)\b", low):
+            continue
+        if re.search(r"\b(morgen|muessen|müssen|fertig\s+gestellt|fertiggestellt)\b", low):
+            continue
+        if re.search(r"\b(reingepackt|reingemacht)\b", low):
+            continue
+        if re.search(r"\brein\b", low) and re.search(r"\b(split|splitt|schotter|frostschutz)\b", low):
             continue
         out.append(str(mat))
     return _dedupe(out)

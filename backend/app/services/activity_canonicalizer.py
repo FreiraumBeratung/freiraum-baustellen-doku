@@ -2483,7 +2483,17 @@ def _has_any_quantity(text: str) -> bool:
     return bool(re.search(r"\b\d+(?:[.,]\d+)?\s*(m²|m2|qm|m³|m3|lfm|stück|stk|kg|t)\b", text, flags=re.IGNORECASE))
 
 
+def _trim_future_tail(chunk: str) -> str:
+    """Zukunftsanteil am Chunk-Ende abtrennen (z. B. '... fertig gestellt morgen müssen wir')."""
+    t = str(chunk or "").strip()
+    m = re.search(r"\bmorgen\b", t, flags=re.IGNORECASE)
+    if m:
+        return t[: m.start()].strip(" .,;")
+    return t
+
+
 def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | None:
+    chunk = _trim_future_tail(chunk)
     base = apply_trade_phrase_memory(humanize_activity(chunk), raw_text=raw_text)
     t = _normalize_for_match(base)
     if not t:
@@ -2769,7 +2779,10 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             else "Terrassenplatten verlegt"
         )
         return CanonicalActivity("terrassenplatten_verlegt", text, 101.0, bool(qty))
-    if "pflaster" in t and re.search(r"\b(verlegt|gelegt|gemacht|legen)\b", t):
+    if "pflaster" in t and re.search(
+        r"\b(verlegt|gelegt|gemacht|legen|fertig\s+gestellt|fertiggestellt)\b",
+        t,
+    ):
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Pflaster verlegt" if qty else "Pflaster verlegt"
         return CanonicalActivity("pflaster_verlegt", text, 102.0, bool(qty))
@@ -3752,12 +3765,28 @@ def _is_trockenbau_fuge_context(t: str, *, raw_text: str = "") -> bool:
 def _is_pflaster_fuge_context(t: str, *, raw_text: str = "") -> bool:
     if not re.search(r"\b(fuge|fugen|verfugt|verfüllt|verfuellt)\b", t):
         return False
+    # Geplante Fugenarbeit (Infinitiv) ist keine erledigte Verfugung.
+    if re.search(r"\bf(?:ü|ue|u)llen\b", t) and not re.search(
+        r"\b(verfugt|verfüllt|verfuellt|gefüllt|gefuellt)\b",
+        t,
+    ):
+        return False
     if re.search(r"\b(graben|gräben|graeben|baugrube)\b", t) and re.search(
         r"\b(verfüllt|verfuellt|verfüllen|verfuellen)\b",
         t,
     ):
         return False
     raw = str(raw_text or "").casefold()
+    if re.search(r"\bmorgen\b", raw):
+        after = raw.split("morgen", 1)[-1]
+        before = raw.split("morgen", 1)[0]
+        t_cf = t.casefold()
+        if re.search(r"\bfugensand\b|\bf(?:ü|ue|u)llen\b", t_cf) or re.search(
+            r"\bfugensand\b|\bf(?:ü|ue|u)llen\b",
+            after,
+        ):
+            if not re.search(r"\bverfugt\b|\bverfüllt\b|\bverfuellt\b", before):
+                return False
     pflaster_cues = ("pflaster", "splitt", "fugensand")
     return any(c in t for c in pflaster_cues) or any(c in raw for c in pflaster_cues)
 

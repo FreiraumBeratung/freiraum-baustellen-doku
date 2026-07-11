@@ -99,7 +99,8 @@ _WORD_KUBIK_MAT = re.compile(
 )
 
 _DESC_STOP = re.compile(
-    r"\b(?:eingebaut|eingebracht|verarbeitet|verlegt|gelegt|aufgetragen|danach|und dann|sowie|dann)\b",
+    r"\b(?:eingebaut|eingebracht|verarbeitet|verlegt|gelegt|aufgetragen|danach|und dann|sowie|dann|"
+    r"reingepackt|reingemacht|rein|morgen|fertig\s+gestellt|fertiggestellt|muessen|müssen)\b",
     re.IGNORECASE,
 )
 
@@ -165,11 +166,13 @@ def _clean_desc(text: str) -> str:
     t = re.sub(r"\s+", " ", str(text or "").strip(" .,;:-"))
     t = re.sub(r"\b(und|sowie|dann|danach|außerdem|ausserdem)\b$", "", t, flags=re.IGNORECASE).strip()
     t = re.sub(
-        r"\s+(?:verdichtet|verarbeitet|eingebaut|eingebracht|verlegt|gelegt)$",
+        r"\s+(?:verdichtet|verarbeitet|eingebaut|eingebracht|verlegt|gelegt|reingepackt|reingemacht|rein)$",
         "",
         t,
         flags=re.IGNORECASE,
     )
+    t = re.sub(r"\bSplit\b(?!\s*schicht)", "Splitt", t)
+    t = re.sub(r"\bsplit\b(?!\s*schicht)", "Splitt", t, flags=re.IGNORECASE)
     if not t:
         return ""
     return t[0].upper() + t[1:] if t[0].islower() else t
@@ -328,6 +331,8 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
             continue
         low_desc = desc.casefold()
         if re.search(r"\bentsorg", low_desc):
+            continue
+        if re.search(r"\b(fertig\s+gestellt|fertiggestellt|morgen|muessen|müssen|füllen|fuellen)\b", low_desc):
             continue
         if re.search(r"\b(lkw|stunden|std|uhr|bis)\b", low_desc):
             continue

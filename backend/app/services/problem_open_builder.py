@@ -328,6 +328,14 @@ def _polish_open_clause(text: str) -> str:
         lead = f"Morgen müssen wir noch {qty} Pflaster legen".strip()
         lead = re.sub(r"\s+", " ", lead)
         return f"{lead} noch offen."
+    m_fugen = re.search(
+        r"(?:morgen\s+)?(?:müssen\s+wir|muessen\s+wir|muss\s+ich)\s+(?:dann\s+)?(?:noch\s+mal\s+)?"
+        r"(?:zur\s+baustelle\s+und\s+)?(?:die\s+)?fugen\s+mit\s+fugensand\s+f(?:ü|ue|u)llen",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if m_fugen:
+        return "Morgen Fugen mit Fugensand füllen noch offen."
     m_shift = re.search(
         r"(?:dementsprechend\s+)?verschiebt\s+sich\s+(?:das\s+)?([^.,;!?]+?)\s+auf\s+morgen",
         t,
