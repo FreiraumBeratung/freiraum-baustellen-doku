@@ -1,7 +1,7 @@
 import { Check, Mic } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { api, type ProtocolMode } from '../api/client'
+import { api, polishProtocolText, type ProtocolMode } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
@@ -18,6 +18,7 @@ export type ProtocolPreviewState = {
   participants: string
   exportFormat: string
   rawText: string
+  polishedText?: string
 }
 
 export function ProtocolNewPage() {
@@ -33,6 +34,7 @@ export function ProtocolNewPage() {
   const [participants, setParticipants] = useState('')
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
+  const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [voiceActive, setVoiceActive] = useState(false)
   const [voiceSavedFlash, setVoiceSavedFlash] = useState(false)
@@ -136,7 +138,7 @@ export function ProtocolNewPage() {
   const proj = projects.find((p) => p.id === projectId)
   const modeLabel = mode === 'signed' ? 'Protokoll mit Unterschrift' : 'Schnellnotiz'
 
-  function continueToPreview() {
+  async function continueToPreview() {
     setErr('')
     stopVoice()
     if (!proj) {
@@ -148,6 +150,16 @@ export function ProtocolNewPage() {
       setErr('Bitte mindestens ein paar Worte eingeben oder sprechen.')
       return
     }
+    setBusy(true)
+    let polishedText = text
+    try {
+      const res = await polishProtocolText(text)
+      polishedText = res.polishedText.trim() || text
+    } catch {
+      polishedText = text
+    } finally {
+      setBusy(false)
+    }
     const state: ProtocolPreviewState = {
       mode,
       projectId: proj.id,
@@ -157,6 +169,7 @@ export function ProtocolNewPage() {
       participants: participants.trim(),
       exportFormat,
       rawText: text,
+      polishedText,
     }
     nav('/protokoll/vorschau', { state })
   }
@@ -229,7 +242,7 @@ export function ProtocolNewPage() {
                 <div className="rounded-[1.8rem] bg-black/35 p-[0.3rem] ring-1 ring-white/[0.07]">
                   <button
                     type="button"
-                    disabled={writeBlocked}
+                    disabled={writeBlocked || busy}
                     onClick={() => toggleVoice()}
                     className={`flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/45 ring-offset-2 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
                     aria-pressed={voiceActive}
@@ -273,10 +286,10 @@ export function ProtocolNewPage() {
         {err ? <p className="text-sm text-red-400">{err}</p> : null}
         <BigButton
           type="button"
-          disabled={writeBlocked || !projectId || rawText.trim().length < 3}
-          onClick={() => continueToPreview()}
+          disabled={writeBlocked || busy || !projectId || rawText.trim().length < 3}
+          onClick={() => void continueToPreview()}
         >
-          Weiter zur Vorschau
+          {busy ? 'Wird geglättet…' : 'Weiter zur Vorschau'}
         </BigButton>
       </div>
     </div>

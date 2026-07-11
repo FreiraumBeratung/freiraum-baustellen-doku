@@ -4,7 +4,6 @@ import {
   api,
   createProtocol,
   downloadExport,
-  polishProtocolText,
   resolveBackendPublicUrl,
   type SiteProtocol,
 } from '../api/client'
@@ -32,8 +31,6 @@ export function ProtocolPreviewPage() {
   const [contactPerson, setContactPerson] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
   const [draftText, setDraftText] = useState('')
-  const [polishedBy, setPolishedBy] = useState<string | null>(null)
-  const [polishBusy, setPolishBusy] = useState(false)
   const [savedProtocol, setSavedProtocol] = useState<SiteProtocol | null>(null)
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveErr, setSaveErr] = useState('')
@@ -57,7 +54,7 @@ export function ProtocolPreviewPage() {
       nav('/protokoll', { replace: true })
       return
     }
-    setDraftText(st.rawText)
+    setDraftText((st.polishedText || st.rawText).trim())
     api<{ companyName: string; contactPerson?: string; logoUrl: string | null }>('/api/company-profile')
       .then((p) => {
         setCompanyName(p.companyName?.trim() || 'Ihre Firma')
@@ -67,26 +64,17 @@ export function ProtocolPreviewPage() {
       .catch(() => setCompanyName('Ihre Firma'))
   }, [st, nav])
 
+  const initialText = useMemo(() => {
+    if (!st) return ''
+    return (st.polishedText || st.rawText).trim()
+  }, [st])
+
   const dirty = useMemo(() => {
     if (!st) return false
-    return draftText.trim() !== st.rawText.trim()
-  }, [draftText, st])
+    return draftText.trim() !== initialText
+  }, [draftText, initialText, st])
 
   if (!st) return null
-
-  async function polishText() {
-    setPolishBusy(true)
-    setSaveErr('')
-    try {
-      const res = await polishProtocolText(draftText)
-      setDraftText(res.polishedText)
-      setPolishedBy(res.polishedBy === 'openai' ? 'KI' : 'lokal')
-    } catch (ex) {
-      setSaveErr(ex instanceof Error ? ex.message : 'Text konnte nicht geglättet werden.')
-    } finally {
-      setPolishBusy(false)
-    }
-  }
 
   async function saveProtocol() {
     if (!st) return
@@ -164,15 +152,10 @@ export function ProtocolPreviewPage() {
       />
 
       {!savedId ? (
-        <p className="mb-2 text-center text-sm text-zinc-500">
-          Text prüfen, optional glätten — danach speichern.
-        </p>
+        <p className="mb-2 text-center text-sm text-zinc-500">Text prüfen und bei Bedarf anpassen — danach speichern.</p>
       ) : null}
       {dirty && !savedId ? (
         <p className="mb-3 text-center text-sm text-amber-400">Text geändert — vor dem Speichern prüfen</p>
-      ) : null}
-      {polishedBy && !savedId ? (
-        <p className="mb-3 text-center text-sm text-emerald-400/90">Text geglättet ({polishedBy})</p>
       ) : null}
 
       {logoUrl ? (
@@ -220,29 +203,12 @@ export function ProtocolPreviewPage() {
         <section>
           <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">Inhalt</h3>
           {!savedId ? (
-            <>
-              <textarea
-                className={textareaClass}
-                value={draftText}
-                disabled={writeBlocked || polishBusy}
-                onChange={(e) => {
-                  setDraftText(e.target.value)
-                  setPolishedBy(null)
-                }}
-              />
-              <BigButton
-                variant="secondary"
-                type="button"
-                className="mt-3 !py-2.5 text-sm"
-                disabled={writeBlocked || polishBusy || draftText.trim().length < 3}
-                onClick={() => void polishText()}
-              >
-                {polishBusy ? '…' : 'Text glätten (Rechtschreibung)'}
-              </BigButton>
-              <p className="mt-2 text-xs text-zinc-500">
-                Die KI korrigiert nur Orthografie und Interpunktion — kein Inhalt wird ergänzt oder umformuliert.
-              </p>
-            </>
+            <textarea
+              className={textareaClass}
+              value={draftText}
+              disabled={writeBlocked}
+              onChange={(e) => setDraftText(e.target.value)}
+            />
           ) : (
             <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-zinc-200">
               {savedProtocol?.polishedText?.trim() || savedProtocol?.rawText || draftText}
@@ -272,12 +238,6 @@ export function ProtocolPreviewPage() {
         {savedId && mode === 'quick' ? (
           <p className="border-t border-zinc-800 pt-4 text-xs text-zinc-500">
             Schnellnotiz — ohne Unterschrift. Direkt ans Büro senden oder PDF laden.
-          </p>
-        ) : null}
-
-        {!savedId && mode === 'signed' ? (
-          <p className="text-xs text-zinc-500">
-            Nach dem Speichern können optional Fotos, Unterschriften von Unternehmer und Gesprächspartner erfasst werden.
           </p>
         ) : null}
       </Card>
