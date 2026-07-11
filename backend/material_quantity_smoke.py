@@ -102,6 +102,27 @@ def _integration_tests() -> None:
         f"pflaster activity echo in materials: {pflaster_mats}",
     )
 
+    putz_out = api_structure_report(
+        StructureReportBody(
+            projectId="mat-qty-putz",
+            projectName="Putz Test",
+            customerName="Kunde",
+            date="2026-07-11",
+            employeeNames=["Max"],
+            startTime="08:00",
+            endTime="17:00",
+            exportFormat="PDF",
+            rawText=(
+                "Heute haben wir 50 Quadratmeter unter Putz aufgetragen "
+                "und dann 50 Quadratmeter Oberputz aufgetragen"
+            ),
+        ),
+        store=_STORE,
+    )
+    putz_mats = [str(x) for x in ((putz_out.get("structured") or {}).get("materials") or [])]
+    _expect(_contains_any(putz_mats, "Unterputz"), f"unterputz material fehlt: {putz_mats}")
+    _expect(_contains_any(putz_mats, "Oberputz"), f"oberputz material fehlt: {putz_mats}")
+
     pdf = build_pdf_bytes(
         {
             "companyName": "Panek Test",

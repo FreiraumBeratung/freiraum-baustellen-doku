@@ -1873,39 +1873,27 @@ def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
 
 
 def _drop_putz_layer_material_echo(materials: list[str], activities: list[str]) -> list[str]:
-    """Entfernt generische Putzschicht-Namen aus Materialien, wenn sie schon Tätigkeit sind."""
+    """Entfernt Tätigkeits-Echos aus Materialien (z. B. „50 m² Pflaster gelegt“), behält Produktnamen."""
     acts_probe = " | ".join(str(a or "") for a in activities).casefold()
-    layer_tokens = (
-        ("oberputz",),
-        ("unterputz",),
-        ("innenputz",),
-        ("außenputz", "aussenputz"),
-        ("grundputz",),
-        ("sockelputz",),
-    )
     out: list[str] = []
     for mat in materials:
         low = str(mat or "").strip().casefold()
         if not low:
             continue
+        # Vollständige Tätigkeitszeilen mit Arbeitsverb — kein Material.
         if re.search(
             r"\b(aufgetragen|auf\s*getragen|aufgebracht|auf\s*gebracht|verarbeitet|geglättet|geglaettet|filziert|gelegt|verlegt|gesetzt|gemäht|gemaeht|geschnitten)\b",
             low,
         ):
             continue
         low_core = re.sub(r"^\d+(?:[.,]\d+)?\s*(?:m²|m2|qm²|qm2|quadratmeter)\s+", "", low)
-        low_core = re.sub(r"\s+auf\s*getragen\s*$", "", low_core)
+        low_core = re.sub(r"\s+auf\s*getragen\s*$", "", low_core).strip()
         drop = False
+        # Kratzputz nur als Material, wenn Außenputz-Tätigkeit den Kontext schon trägt.
         if re.search(r"\b(außenputz|aussenputz)\b.*\b(aufgetragen|aufgebracht|verarbeitet)\b", acts_probe):
             if low_core == "kratzputz" or low_core.startswith("kratzputz "):
                 drop = True
-        if not drop:
-            for tokens in layer_tokens:
-                if any(tok in acts_probe for tok in tokens) and any(
-                    low_core == tok or low_core.startswith(tok + " ") for tok in tokens
-                ):
-                    drop = True
-                    break
+        # Oberputz/Unterputz etc. als kurze Produktnamen bleiben erhalten (gewünscht im Bericht).
         if not drop:
             out.append(str(mat))
     return _dedupe(out)

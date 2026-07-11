@@ -137,6 +137,19 @@ def _is_generic_layer_material(mat: str) -> bool:
     return False
 
 
+def _is_layer_material_activity_duplicate(mat: str) -> bool:
+    """Putzschicht-Dublette nur bei Mengen-/Tätigkeits-Echo, nicht bei kurzem Produktnamen."""
+    if not _is_generic_layer_material(mat):
+        return False
+    low = str(mat or "").casefold().strip()
+    if re.search(
+        r"\b(aufgetragen|aufgebracht|verarbeitet|gelegt|verlegt|geglättet|geglaettet|filziert)\b",
+        low,
+    ):
+        return True
+    return bool(re.match(r"^\d+(?:[.,]\d+)?\s*(?:m²|m2|qm²|qm2|quadratmeter)\s+", low))
+
+
 def _whisper_light(text: str) -> str:
     out = text
     pairs = (
@@ -399,7 +412,7 @@ def main() -> int:
                     failures.append(f"{case.name}: summary Menge fehlt {token!r} (got={summary!r})")
 
         if case.forbid_layer_mats and case.variant in {"N", "B"}:
-            bad = [m for m in mats if _is_generic_layer_material(m)]
+            bad = [m for m in mats if _is_layer_material_activity_duplicate(m)]
             if bad:
                 failures.append(f"{case.name}: Putzschicht-Dublette in Materialien {bad!r} (got={mats!r})")
 
