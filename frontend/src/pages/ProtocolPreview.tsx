@@ -9,6 +9,7 @@ import {
   type SiteProtocol,
 } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { ProtocolPreviewState } from './ProtocolNew'
@@ -42,6 +43,7 @@ export function ProtocolPreviewPage() {
   const [dlBusy, setDlBusy] = useState(false)
   const [dlErr, setDlErr] = useState('')
   const [moreOpen, setMoreOpen] = useState(false)
+  const [pageWakeKey, setPageWakeKey] = useState(0)
 
   const savedId = savedProtocol?.id ?? null
   const mode = st?.mode ?? 'quick'
@@ -151,7 +153,7 @@ export function ProtocolPreviewPage() {
   }
 
   return (
-    <div className="overflow-x-hidden">
+    <div key={`protocol-preview-${pageWakeKey}`} className="overflow-x-hidden">
       <PageTitle
         title="Protokoll"
         subtitle={savedId ? 'Unterschrift & Versand' : `${modeTitle} — prüfen`}
@@ -245,12 +247,21 @@ export function ProtocolPreviewPage() {
         </section>
 
         {savedId && mode === 'signed' ? (
-          <ReportSignaturesSection
-            reportId={null}
-            protocolId={savedId}
-            enabled
-            customerName={st.customerName}
-          />
+          <>
+            <ReportPhotosSection
+              reportId={null}
+              protocolId={savedId}
+              enabled
+              iosGalleryRedirect
+              onUploadComplete={() => setPageWakeKey((k) => k + 1)}
+            />
+            <ReportSignaturesSection
+              reportId={null}
+              protocolId={savedId}
+              enabled
+              customerName={st.customerName}
+            />
+          </>
         ) : null}
 
         {savedId && mode === 'quick' ? (
@@ -261,7 +272,7 @@ export function ProtocolPreviewPage() {
 
         {!savedId && mode === 'signed' ? (
           <p className="text-xs text-zinc-500">
-            Nach dem Speichern können optional Kunde und Mitarbeiter unterschreiben.
+            Nach dem Speichern können optional Fotos, Unterschriften von Unternehmer und Gesprächspartner erfasst werden.
           </p>
         ) : null}
       </Card>
@@ -317,8 +328,8 @@ export function ProtocolPreviewPage() {
 
         {savedId ? (
           <div className="pt-2 text-center">
-            <Link className="text-sm font-medium text-orange-400 hover:underline" to="/">
-              Zurück zur Startseite
+            <Link className="text-sm font-medium text-orange-400 hover:underline" to="/protokolle">
+              Zu den gespeicherten Protokollen
             </Link>
           </div>
         ) : (

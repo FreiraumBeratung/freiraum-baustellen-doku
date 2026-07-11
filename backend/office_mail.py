@@ -41,6 +41,8 @@ MSG_NOT_CONFIGURED = (
 )
 MSG_SENT = "Bericht wurde ans Büro gesendet."
 MSG_SENT_WITH_PHOTOS = "Bericht mit {count} Foto(s) wurde ans Büro gesendet."
+MSG_SENT_PROTOCOL = "Protokoll wurde ans Büro gesendet."
+MSG_SENT_PROTOCOL_WITH_PHOTOS = "Protokoll mit {count} Foto(s) wurde ans Büro gesendet."
 MSG_FEEDBACK_SENT = "Feedback wurde gesendet."
 
 
@@ -290,7 +292,7 @@ def send_report_to_office(
     return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT
 
 
-def _build_protocol_mail_body(protocol: dict[str, Any], profile: dict[str, Any]) -> str:
+def _build_protocol_mail_body(protocol: dict[str, Any], profile: dict[str, Any], *, photo_count: int = 0) -> str:
     site = protocol.get("projectName") or "—"
     day = _format_date_de(protocol.get("date"))
     company = _company_signoff_name(profile)
@@ -302,10 +304,15 @@ def _build_protocol_mail_body(protocol: dict[str, Any], profile: dict[str, Any])
         kind = "Schnellnotiz"
     participants = str(protocol.get("participants") or "").strip()
     part_line = f"Teilnehmer: {participants}\n" if participants else ""
+    photo_line = ""
+    if photo_count > 0:
+        label = "Baustellenfoto" if photo_count == 1 else "Baustellenfotos"
+        photo_line = f"{label}: {photo_count} Bild(er) im Anhang.\n\n"
     return (
         "Hallo,\n\n"
         f"anbei die {kind} zur Baustelle {site} vom {day}.\n\n"
-        f"{part_line}\n"
+        f"{photo_line}"
+        f"{part_line}"
         "Mit freundlichen Grüßen\n"
         f"{company}\n\n\n"
         "Powered by Freiraum Beratung"
@@ -320,6 +327,7 @@ def send_protocol_to_office(
     mail_config: dict[str, Any] | None = None,
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
+    photos_upload_dir: Path | str | None = None,
 ) -> tuple[bool, bool, str]:
     if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
         return False, False, MSG_NOT_CONFIGURED
@@ -360,8 +368,13 @@ def send_protocol_to_office(
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_email
-    msg.set_content(_build_protocol_mail_body(protocol, profile))
+    photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
+    photo_count = _count_attachable_photos(protocol, photos_dir)
+    msg.set_content(_build_protocol_mail_body(protocol, profile, photo_count=photo_count))
     msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
+    attached_photos = _attach_report_photos(msg, protocol, photos_dir)
+    if attached_photos != photo_count:
+        photo_count = attached_photos
 
     ctx = ssl.create_default_context()
     try:
@@ -391,7 +404,7 @@ def send_protocol_to_office(
         logger.exception("SMTP-Fehler beim Protokoll-Versand")
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
-    return True, False, "Protokoll wurde ans Büro gesendet."
+    return True, False, MSG_SENT_PROTOCOL_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT_PROTOCOL
 
 
 def send_collective_to_office(

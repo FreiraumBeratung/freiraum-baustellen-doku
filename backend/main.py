@@ -35,8 +35,11 @@ from app.services import time_account
 from app.services.site_protocol import (
     create_protocol_doc,
     find_protocol,
+    protocol_photos_list,
     protocol_signatures_doc,
     read_protocols,
+    remove_protocol,
+    save_protocol_photos,
     save_protocol_signatures,
 )
 from app.services.quality_filter import apply_quality_filter
@@ -106,6 +109,7 @@ PHOTOS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_PHOTOS_PER_REPORT = 10
+MAX_PHOTOS_PER_PROTOCOL = 10
 MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024
 SIGNATURE_ROLES = frozenset({"customer", "employee"})
 MAX_SIGNATURE_BYTES = 512 * 1024
@@ -2291,12 +2295,16 @@ def polish_protocol_text(body: ProtocolPolishBody) -> dict[str, Any]:
 @app.get("/api/protocols")
 def list_protocols(
     projectId: str | None = None,
+    month: str | None = None,
     store: TenantStore = Depends(get_tenant_store),
 ):
     protocols = read_protocols(store)
     protocols.sort(key=lambda p: p.get("createdAt", ""), reverse=True)
     if projectId:
         protocols = [p for p in protocols if p.get("projectId") == projectId]
+    if month and len(month) >= 7:
+        prefix = month[:7]
+        protocols = [p for p in protocols if str(p.get("date", "")).startswith(prefix)]
     return {"protocols": protocols}
 
 
@@ -2331,6 +2339,126 @@ def create_protocol(body: ProtocolCreateBody, store: TenantStore = Depends(get_t
 @app.get("/api/protocols/{protocol_id}")
 def get_protocol(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
     return find_protocol(store, protocol_id)
+
+
+@app.delete("/api/protocols/{protocol_id}")
+def delete_protocol(protocol_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+    def _del_photo(_store: TenantStore, filename: str) -> None:
+        try:
+            path = _resolve_photo_path(_store, filename)
+            path.unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+
+    remove_protocol(
+        store,
+        protocol_id,
+        delete_photo_file=lambda _s, fn: _del_photo(store, fn),
+        delete_signature_file=_delete_signature_file,
+    )
+    return {"ok": True}
+
+
+@app.get("/api/protocols/{protocol_id}/photos")
+def list_protocol_photos(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
+    protocol = find_protocol(store, protocol_id)
+    photos = [_photo_api_item(store, p) for p in protocol_photos_list(protocol)]
+    return {
+        "photos": photos,
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_PROTOCOL,
+    }
+
+
+@app.post("/api/protocols/{protocol_id}/photos")
+async def upload_protocol_photo(
+    protocol_id: str,
+    file: UploadFile = File(...),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    protocol = find_protocol(store, protocol_id)
+    if str(protocol.get("mode") or "") != "signed":
+        raise HTTPException(status_code=400, detail="Fotos sind nur bei Protokollen mit Unterschrift möglich.")
+    photos = protocol_photos_list(protocol)
+    if len(photos) >= MAX_PHOTOS_PER_PROTOCOL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {MAX_PHOTOS_PER_PROTOCOL} Fotos pro Protokoll erlaubt.",
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
+    if ext not in {".jpg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Nur JPEG-, PNG- oder WebP-Bilder erlaubt")
+
+    content = await file.read()
+    n = len(content)
+    if n == 0:
+        raise HTTPException(status_code=400, detail="Leere Bilddatei")
+    if n > MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+
+    photo_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    file_ext = _guess_photo_extension(file.content_type, file.filename or "")
+    safe_name = f"photo_{ts}_{photo_id}.{file_ext}"
+    dest = store.uploads_dir("photos") / safe_name
+    dest.write_bytes(content)
+
+    entry: dict[str, Any] = {
+        "id": photo_id,
+        "filename": safe_name,
+        "originalFilename": file.filename if file.filename else "",
+        "contentType": file.content_type if file.content_type else "application/octet-stream",
+        "sizeBytes": n,
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    photos.append(entry)
+    save_protocol_photos(store, protocol_id, photos)
+    item = _photo_api_item(store, entry)
+    return {
+        "ok": True,
+        "photo": item,
+        "photos": [_photo_api_item(store, p) for p in photos],
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_PROTOCOL,
+    }
+
+
+@app.delete("/api/protocols/{protocol_id}/photos/{photo_id}")
+def delete_protocol_photo(
+    protocol_id: str,
+    photo_id: str,
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    protocol = find_protocol(store, protocol_id)
+    photos = protocol_photos_list(protocol)
+    kept: list[dict[str, Any]] = []
+    removed: dict[str, Any] | None = None
+    for p in photos:
+        if str(p.get("id") or "") == photo_id:
+            removed = p
+        else:
+            kept.append(p)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    fn = removed.get("filename")
+    if isinstance(fn, str) and fn:
+        try:
+            path = _resolve_photo_path(store, fn)
+            path.unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+    save_protocol_photos(store, protocol_id, kept)
+    return {"ok": True, "count": len(kept), "maxPhotos": MAX_PHOTOS_PER_PROTOCOL}
 
 
 @app.get("/api/protocols/{protocol_id}/signatures")
@@ -2450,6 +2578,7 @@ def send_protocol_to_office_endpoint(
         mail_config=mail_config,
         resolve_logo=_export_resolve_logo(store),
         resolve_signature=_export_resolve_signature(store),
+        photos_upload_dir=store.uploads_dir("photos"),
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Protokoll konnte nicht gesendet werden.")

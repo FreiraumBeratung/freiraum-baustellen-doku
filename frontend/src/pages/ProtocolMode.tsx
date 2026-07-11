@@ -1,5 +1,5 @@
 import { FileText, PenLine } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { PageTitle } from '../components/ui'
 import type { ProtocolMode } from '../api/client'
 
@@ -14,38 +14,39 @@ export function ProtocolModePage() {
     <div className="overflow-x-hidden pb-2">
       <PageTitle title="Protokoll" subtitle="Art wählen" />
 
-      <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-2.5">
         <button
           type="button"
           onClick={() => choose('quick')}
-          className="flex w-full items-center gap-4 rounded-[1.35rem] border border-white/[0.1] bg-black/55 px-5 py-5 text-left ring-1 ring-white/[0.06] transition hover:border-orange-500/55 hover:ring-orange-500/25 active:scale-[0.99]"
+          className="group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-[1.25rem] border border-white/[0.07] bg-zinc-900/[0.5] px-2 text-center ring-1 ring-white/[0.04] transition hover:bg-white/[0.05] hover:ring-white/[0.1] active:scale-[0.98]"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-400 ring-1 ring-orange-400/25">
-            <FileText strokeWidth={2} className="h-6 w-6" aria-hidden />
+          <span className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-black/45 text-[1.45rem] ring-1 ring-white/[0.08]">
+            <FileText strokeWidth={2} className="h-6 w-6 text-orange-400" aria-hidden />
           </span>
-          <span className="min-w-0">
-            <span className="block text-base font-semibold text-white">Schnellnotiz</span>
-            <span className="mt-1 block text-sm leading-snug text-zinc-500">
-              Kurz festhalten, glätten, als PDF ans Büro — ohne Nummer und ohne Unterschrift.
-            </span>
-          </span>
+          <span className="text-[0.8rem] font-medium leading-tight tracking-tight text-zinc-300">Schnellnotiz</span>
         </button>
 
         <button
           type="button"
           onClick={() => choose('signed')}
-          className="flex w-full items-center gap-4 rounded-[1.35rem] border border-white/[0.1] bg-black/55 px-5 py-5 text-left ring-1 ring-white/[0.06] transition hover:border-orange-500/55 hover:ring-orange-500/25 active:scale-[0.99]"
+          className="group flex aspect-square flex-col items-center justify-center gap-2.5 rounded-[1.25rem] border border-white/[0.07] bg-zinc-900/[0.5] px-2 text-center ring-1 ring-white/[0.04] transition hover:bg-white/[0.05] hover:ring-white/[0.1] active:scale-[0.98]"
         >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-orange-500/15 text-orange-400 ring-1 ring-orange-400/25">
-            <PenLine strokeWidth={2} className="h-6 w-6" aria-hidden />
+          <span className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-black/45 text-[1.45rem] ring-1 ring-white/[0.08]">
+            <PenLine strokeWidth={2} className="h-6 w-6 text-orange-400" aria-hidden />
           </span>
-          <span className="min-w-0">
-            <span className="block text-base font-semibold text-white">Protokoll mit Unterschrift</span>
-            <span className="mt-1 block text-sm leading-snug text-zinc-500">
-              Begehungsprotokoll mit fortlaufender Nr. pro Baustelle — optional Kunde &amp; Mitarbeiter unterschreiben.
-            </span>
+          <span className="text-[0.72rem] font-medium leading-tight tracking-tight text-zinc-300">
+            Protokoll mit Unterschrift
           </span>
         </button>
+      </div>
+
+      <div className="mt-8">
+        <Link
+          to="/protokolle"
+          className="flex w-full items-center justify-center rounded-2xl border border-white/[0.1] bg-black/40 px-4 py-3.5 text-sm font-semibold text-orange-300 ring-1 ring-white/[0.06] transition hover:bg-black/55 hover:ring-orange-500/25"
+        >
+          Gespeicherte Protokolle
+        </Link>
       </div>
     </div>
   )

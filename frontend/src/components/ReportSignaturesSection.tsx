@@ -96,6 +96,16 @@ export function ReportSignaturesSection({
 
   const count = Number(Boolean(customer)) + Number(Boolean(employee))
   const step = stepFromSignatures(customer, employee)
+  const labelCustomer = isProtocol ? 'Unternehmer' : 'Kunde'
+  const labelEmployee = isProtocol ? 'Gesprächspartner' : 'Baustellenleitung / Mitarbeiter'
+  const padTitleCustomer = isProtocol ? 'Unterschrift Unternehmer' : 'Kundenunterschrift'
+  const padTitleEmployee = isProtocol ? 'Unterschrift Gesprächspartner' : 'Baustellenleitung / Mitarbeiter'
+  const hintCustomer = isProtocol
+    ? 'Bitte als Unternehmer hier unterschreiben.'
+    : 'Bitte das Gerät an den Kunden übergeben — hier unterschreiben.'
+  const hintEmployee = isProtocol
+    ? 'Bitte als Gesprächspartner unterschreiben oder das Gerät übergeben.'
+    : 'Jetzt selbst unterschreiben oder an die Baustellenleitung übergeben.'
 
   const refresh = useCallback(async () => {
     if (!entityId || !enabled) return
@@ -138,7 +148,15 @@ export function ReportSignaturesSection({
       setCustomer(res.signatures.customer)
       setEmployee(res.signatures.employee)
       setPadKey((k) => k + 1)
-      setStatusLine(role === 'customer' ? 'Kundenunterschrift übernommen.' : 'Mitarbeiter-Unterschrift übernommen.')
+      setStatusLine(
+        role === 'customer'
+          ? isProtocol
+            ? 'Unterschrift Unternehmer übernommen.'
+            : 'Kundenunterschrift übernommen.'
+          : isProtocol
+            ? 'Unterschrift Gesprächspartner übernommen.'
+            : 'Mitarbeiter-Unterschrift übernommen.',
+      )
     } catch (ex) {
       const m = ex instanceof Error ? ex.message : ''
       setErr(m || 'Unterschrift konnte nicht gespeichert werden.')
@@ -196,7 +214,9 @@ export function ReportSignaturesSection({
       {enabled && open ? (
         <div className="mt-3 space-y-4">
           <p className="text-xs text-zinc-500">
-            Optional — zuerst Kunde, dann Baustellenleitung oder Mitarbeiter. Beide Schritte sind freiwillig.
+            {isProtocol
+              ? 'Optional — zuerst Unternehmer, dann Gesprächspartner. Beide Schritte sind freiwillig.'
+              : 'Optional — zuerst Kunde, dann Baustellenleitung oder Mitarbeiter. Beide Schritte sind freiwillig.'}
           </p>
 
           {writeBlocked ? (
@@ -205,7 +225,7 @@ export function ReportSignaturesSection({
 
           {customer ? (
             <SignaturePreview
-              label="Kunde"
+              label={labelCustomer}
               signature={customer}
               busy={busy || writeBlocked}
               onRedo={() => void handleRedo('customer')}
@@ -213,8 +233,8 @@ export function ReportSignaturesSection({
           ) : step === 'customer' && signaturesEnabled ? (
             <SignaturePad
               key={`customer-pad-${padKey}`}
-              title="Kundenunterschrift"
-              hint="Bitte das Gerät an den Kunden übergeben — hier unterschreiben."
+              title={padTitleCustomer}
+              hint={hintCustomer}
               disabled={busy}
               onConfirm={(file) => void handleUpload('customer', file)}
             />
@@ -223,8 +243,8 @@ export function ReportSignaturesSection({
           {customer && !employee && step === 'employee' && signaturesEnabled ? (
             <SignaturePad
               key={`employee-pad-${padKey}`}
-              title="Baustellenleitung / Mitarbeiter"
-              hint="Jetzt selbst unterschreiben oder an die Baustellenleitung übergeben."
+              title={padTitleEmployee}
+              hint={hintEmployee}
               disabled={busy}
               onConfirm={(file) => void handleUpload('employee', file)}
             />
@@ -232,7 +252,7 @@ export function ReportSignaturesSection({
 
           {employee ? (
             <SignaturePreview
-              label="Baustellenleitung / Mitarbeiter"
+              label={labelEmployee}
               signature={employee}
               busy={busy || writeBlocked}
               onRedo={() => void handleRedo('employee')}

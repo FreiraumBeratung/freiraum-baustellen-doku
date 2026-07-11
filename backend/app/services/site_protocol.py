@@ -120,12 +120,52 @@ def create_protocol_doc(
         "polishedText": str(polished_text or "").strip(),
         "exportFormat": export_format if export_format in {"PDF", "Word"} else "PDF",
         "signatures": empty_signatures(),
+        "photos": [],
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     protocols = read_protocols(store)
     protocols.append(doc)
     write_protocols(store, protocols)
     return doc
+
+
+def protocol_photos_list(protocol: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = protocol.get("photos")
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, dict)]
+
+
+def save_protocol_photos(store: TenantStore, protocol_id: str, photos: list[dict[str, Any]]) -> None:
+    protocols = read_protocols(store)
+    for item in protocols:
+        if str(item.get("id") or "") == protocol_id:
+            item["photos"] = photos
+            write_protocols(store, protocols)
+            return
+    raise HTTPException(status_code=404, detail="Protokoll nicht gefunden")
+
+
+def delete_protocol_files(store: TenantStore, protocol: dict[str, Any], *, delete_photo_file, delete_signature_file) -> None:
+    """Löscht zugehörige Upload-Dateien (Fotos, Unterschriften) — Callbacks aus main."""
+    for entry in protocol_photos_list(protocol):
+        fn = entry.get("filename")
+        if isinstance(fn, str) and fn:
+            delete_photo_file(store, fn)
+    sigs = protocol_signatures_doc(protocol)
+    for role in ("customer", "employee"):
+        entry = sigs.get(role)
+        if isinstance(entry, dict):
+            delete_signature_file(store, entry.get("filename"))
+
+
+def remove_protocol(store: TenantStore, protocol_id: str, *, delete_photo_file, delete_signature_file) -> None:
+    protocols = read_protocols(store)
+    target = next((p for p in protocols if str(p.get("id") or "") == protocol_id), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Protokoll nicht gefunden")
+    delete_protocol_files(store, target, delete_photo_file=delete_photo_file, delete_signature_file=delete_signature_file)
+    write_protocols(store, [p for p in protocols if str(p.get("id") or "") != protocol_id])
 
 
 def update_protocol_polished(store: TenantStore, protocol_id: str, polished_text: str) -> dict[str, Any]:

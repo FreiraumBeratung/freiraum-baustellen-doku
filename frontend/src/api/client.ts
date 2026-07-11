@@ -557,6 +557,71 @@ export async function deleteProtocolSignature(
   )
 }
 
+export async function listProtocols(params?: {
+  projectId?: string
+  month?: string
+}): Promise<{ protocols: SiteProtocol[] }> {
+  const p = new URLSearchParams()
+  if (params?.projectId) p.set('projectId', params.projectId)
+  if (params?.month && params.month.length >= 7) p.set('month', `${params.month}-01`)
+  const qs = p.toString()
+  return api<{ protocols: SiteProtocol[] }>(`/api/protocols${qs ? `?${qs}` : ''}`)
+}
+
+export async function deleteProtocol(protocolId: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>(`/api/protocols/${encodeURIComponent(protocolId)}`, { method: 'DELETE' })
+}
+
+export async function listProtocolPhotos(protocolId: string): Promise<ReportPhotosResponse> {
+  return api<ReportPhotosResponse>(`/api/protocols/${encodeURIComponent(protocolId)}/photos`)
+}
+
+export async function uploadProtocolPhoto(
+  protocolId: string,
+  file: File,
+): Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'photo.jpg')
+
+  const url = resolveApiUrl(`/api/protocols/${encodeURIComponent(protocolId)}/photos`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    const detail = parseApiDetail(err, res.statusText || 'Foto konnte nicht hochgeladen werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
+  }
+
+  notifyLicenseReactivated()
+  return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
+}
+
+export async function deleteProtocolPhoto(
+  protocolId: string,
+  photoId: string,
+): Promise<{ ok: boolean; count: number; maxPhotos: number }> {
+  return api<{ ok: boolean; count: number; maxPhotos: number }>(
+    `/api/protocols/${encodeURIComponent(protocolId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = resolveApiUrl(path)
   const headers: Record<string, string> = {

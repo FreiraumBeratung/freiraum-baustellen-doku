@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  deleteProtocolPhoto,
   deleteReportPhoto,
+  listProtocolPhotos,
   listReportPhotos,
   resolveBackendPublicUrl,
+  uploadProtocolPhoto,
   uploadReportPhoto,
   type ReportPhoto,
 } from '../api/client'
@@ -23,6 +26,7 @@ type PhotoSource = 'gallery' | 'inline-camera'
 
 type ReportPhotosSectionProps = {
   reportId: string | null
+  protocolId?: string | null
   /** Wenn false: Hinweis statt Upload (Bericht noch nicht gespeichert). */
   enabled: boolean
   /** Wird nach erfolgreichem Upload aufgerufen (Seite kurz „wecken“). */
@@ -39,6 +43,7 @@ type UploadPhase = 'idle' | 'preparing' | 'uploading'
 
 export function ReportPhotosSection({
   reportId,
+  protocolId = null,
   enabled,
   onUploadComplete,
   iosGalleryRedirect = false,
@@ -48,6 +53,8 @@ export function ReportPhotosSection({
   useMobilePwaRepaint()
   const { writeBlocked } = useWriteBlocked()
   const uploadsEnabled = enabled && !writeBlocked
+  const entityId = protocolId || reportId
+  const isProtocol = Boolean(protocolId)
 
   const [photos, setPhotos] = useState<ReportPhoto[]>([])
   const [maxPhotos, setMaxPhotos] = useState(10)
@@ -87,7 +94,7 @@ export function ReportPhotosSection({
         Boolean(opts.success) &&
         iosGalleryRedirect &&
         needsMobilePhotoHardRedirect() &&
-        reportId &&
+        entityId &&
         (opts.source === 'gallery' || opts.source === 'inline-camera')
 
       if (shouldMobileHardRedirect) {
@@ -96,7 +103,7 @@ export function ReportPhotosSection({
         setOverlayMode('success')
         await yieldForPaint(600)
         setPhotoUploadBusy(false)
-        mobileHardRedirectAfterPhotoUpload(reportId)
+        mobileHardRedirectAfterPhotoUpload(entityId, isProtocol ? 'protocol' : 'report')
         return
       }
 
@@ -118,7 +125,7 @@ export function ReportPhotosSection({
       }
       forcePwaRepaint()
     },
-    [iosGalleryRedirect, onUploadComplete, reportId],
+    [iosGalleryRedirect, onUploadComplete, entityId],
   )
 
   const abortOverlay = useCallback(async () => {
@@ -132,18 +139,18 @@ export function ReportPhotosSection({
   }, [])
 
   const refresh = useCallback(async () => {
-    if (!reportId || !enabled) return
-    const res = await listReportPhotos(reportId)
+    if (!entityId || !enabled) return
+    const res = isProtocol ? await listProtocolPhotos(entityId) : await listReportPhotos(entityId)
     setPhotos(res.photos)
     setMaxPhotos(res.maxPhotos)
-  }, [reportId, enabled])
+  }, [entityId, enabled, isProtocol])
 
   useEffect(() => {
     if (initialOpen && enabled) setOpen(true)
   }, [initialOpen, enabled])
 
   useEffect(() => {
-    if (!reportId || !enabled) {
+    if (!entityId || !enabled) {
       setPhotos([])
       if (!initialOpen) setOpen(false)
       return
@@ -152,7 +159,7 @@ export function ReportPhotosSection({
     void refresh().catch(() => {
       setErr('Fotos konnten nicht geladen werden.')
     })
-  }, [reportId, enabled, refresh, initialOpen])
+  }, [entityId, enabled, refresh, initialOpen])
 
   useEffect(() => {
     if (count > 0 && enabled) setOpen(true)
@@ -197,7 +204,7 @@ export function ReportPhotosSection({
   }
 
   async function processFiles(files: File[], source: PhotoSource) {
-    if (!reportId || !uploadsEnabled || !files.length || processingRef.current) return
+    if (!entityId || !uploadsEnabled || !files.length || processingRef.current) return
 
     processingRef.current = true
     pickerPendingRef.current = false
@@ -230,7 +237,9 @@ export function ReportPhotosSection({
             : 'Foto wird hochgeladen…',
         )
 
-        const res = await uploadReportPhoto(reportId, prepared)
+        const res = isProtocol
+          ? await uploadProtocolPhoto(entityId, prepared)
+          : await uploadReportPhoto(entityId, prepared)
         setPhotos(res.photos)
         setMaxPhotos(res.maxPhotos)
         currentCount = res.count
@@ -250,7 +259,7 @@ export function ReportPhotosSection({
   }
 
   function handleGalleryFiles(fileList: FileList | null) {
-    if (!reportId || !uploadsEnabled || processingRef.current) return
+    if (!entityId || !uploadsEnabled || processingRef.current) return
     if (!fileList?.length) {
       pickerPendingRef.current = false
       clearPickerCancelTimer()
@@ -265,13 +274,15 @@ export function ReportPhotosSection({
   }
 
   async function removePhoto(photoId: string) {
-    if (!reportId || busy || writeBlocked) return
+    if (!entityId || busy || writeBlocked) return
     setErr('')
     setStatusLine('')
     beginOverlay('Foto wird entfernt…')
     setPhase('uploading')
     try {
-      const res = await deleteReportPhoto(reportId, photoId)
+      const res = isProtocol
+        ? await deleteProtocolPhoto(entityId, photoId)
+        : await deleteReportPhoto(entityId, photoId)
       setPhotos((prev) => prev.filter((p) => p.id !== photoId))
       if (res.count === 0) setOpen(false)
       await closeOverlaySoft({ success: true, message: 'Foto entfernt.', source: 'inline-camera' })
@@ -315,7 +326,9 @@ export function ReportPhotosSection({
         </button>
 
         {!enabled ? (
-          <p className="mt-2 text-xs text-zinc-500">Bericht zuerst speichern, dann Fotos hinzufügen.</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            {isProtocol ? 'Protokoll zuerst speichern, dann Fotos hinzufügen.' : 'Bericht zuerst speichern, dann Fotos hinzufügen.'}
+          </p>
         ) : null}
 
         {enabled && open ? (

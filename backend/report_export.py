@@ -307,6 +307,8 @@ def _append_pdf_signatures(
     info_label_style: ParagraphStyle,
     meta_style: ParagraphStyle,
     resolve_signature: SignaturePathResolver | None = None,
+    signature_customer_label: str = "Kunde",
+    signature_employee_label: str = "Baustellenleitung / Mitarbeiter",
 ) -> None:
     sigs = _report_signatures_doc(report)
     customer = sigs.get("customer")
@@ -342,7 +344,7 @@ def _append_pdf_signatures(
             [
                 _pdf_signature_cell(
                     customer if has_customer else None,
-                    default_label="Kunde",
+                    default_label=signature_customer_label,
                     report_date=report_date,
                     col_width=col_w,
                     info_label_style=info_label_style,
@@ -352,7 +354,7 @@ def _append_pdf_signatures(
                 ),
                 _pdf_signature_cell(
                     employee if has_employee else None,
-                    default_label="Baustellenleitung / Mitarbeiter",
+                    default_label=signature_employee_label,
                     report_date=report_date,
                     col_width=col_w,
                     info_label_style=info_label_style,
@@ -1348,6 +1350,8 @@ def build_protocol_pdf_bytes(
         info_label_style=info_label_style,
         meta_style=meta_style,
         resolve_signature=resolve_signature,
+        signature_customer_label="Unternehmer",
+        signature_employee_label="Gesprächspartner",
     )
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
