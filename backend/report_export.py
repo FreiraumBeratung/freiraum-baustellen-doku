@@ -1150,8 +1150,11 @@ def build_collective_docx_bytes(
 
 
 def build_protocol_base_name(protocol: dict[str, Any]) -> str:
-    site = sanitize_export_slug(str(protocol.get("projectName") or "Baustelle"))
     mode = str(protocol.get("mode") or "quick")
+    if mode == "thoughts":
+        day = sanitize_export_slug(str(protocol.get("date") or "notiz"))
+        return f"gedankensammlung_{day}"
+    site = sanitize_export_slug(str(protocol.get("projectName") or "Baustelle"))
     if mode == "signed" and protocol.get("sequenceNumber"):
         return f"protokoll_{site}_nr{protocol.get('sequenceNumber')}"
     return f"schnellnotiz_{site}"
@@ -1260,10 +1263,15 @@ def build_protocol_pdf_bytes(
     participants = str(protocol.get("participants") or "").strip()
     mode = str(protocol.get("mode") or "quick")
     seq = protocol.get("sequenceNumber")
-    if mode == "signed" and isinstance(seq, int) and seq > 0:
+    if mode == "thoughts":
+        doc_title = "GEDANKENSAMMLUNG"
+        pdf_doc_title = "Gedankensammlung"
+    elif mode == "signed" and isinstance(seq, int) and seq > 0:
         doc_title = f"BEGEHUNGSPROTOKOLL Nr. {seq}"
+        pdf_doc_title = "Baustellenprotokoll"
     else:
         doc_title = "SCHNELLNOTIZ"
+        pdf_doc_title = "Baustellenprotokoll"
 
     body_text = protocol_display_text(protocol)
 
@@ -1311,15 +1319,23 @@ def build_protocol_pdf_bytes(
     story.append(line_tbl)
     story.append(Spacer(1, 8))
 
-    meta_rows = [
-        [Paragraph("Baustelle", info_label_style), Paragraph(_xml_para_text(proj), info_value_style)],
-        [Paragraph("Kunde", info_label_style), Paragraph(_xml_para_text(customer), info_value_style)],
-        [Paragraph("Datum", info_label_style), Paragraph(_xml_para_text(datum), info_value_style)],
-    ]
-    if participants:
-        meta_rows.append(
-            [Paragraph("Teilnehmer", info_label_style), Paragraph(_xml_para_text(participants), info_value_style)]
-        )
+    if mode == "thoughts":
+        meta_rows = [
+            [Paragraph("Bezug", info_label_style), Paragraph(_xml_para_text("Ohne Baustelle"), info_value_style)],
+            [Paragraph("Datum", info_label_style), Paragraph(_xml_para_text(datum), info_value_style)],
+        ]
+        section_label = "Gedanken"
+    else:
+        meta_rows = [
+            [Paragraph("Baustelle", info_label_style), Paragraph(_xml_para_text(proj), info_value_style)],
+            [Paragraph("Kunde", info_label_style), Paragraph(_xml_para_text(customer), info_value_style)],
+            [Paragraph("Datum", info_label_style), Paragraph(_xml_para_text(datum), info_value_style)],
+        ]
+        if participants:
+            meta_rows.append(
+                [Paragraph("Teilnehmer", info_label_style), Paragraph(_xml_para_text(participants), info_value_style)]
+            )
+        section_label = "Protokoll"
     tbl = Table(meta_rows, colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
     tbl.setStyle(
         TableStyle(
@@ -1338,7 +1354,7 @@ def build_protocol_pdf_bytes(
     )
     story.append(tbl)
     story.append(Spacer(1, 10))
-    story.append(Paragraph(_xml_para_text("Protokoll"), section_head))
+    story.append(Paragraph(_xml_para_text(section_label), section_head))
     for para in _protocol_body_paragraphs(body_text):
         story.append(Paragraph(_xml_para_text(para), body_style))
 
@@ -1354,6 +1370,7 @@ def build_protocol_pdf_bytes(
         signature_employee_label="Gesprächspartner",
     )
 
+    doc_tpl.title = pdf_doc_title
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()
 

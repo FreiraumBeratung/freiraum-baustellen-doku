@@ -1,4 +1,4 @@
-"""Baustellen-Protokoll (Schnellnotiz / Protokoll mit Unterschrift) — rein additiv."""
+"""Baustellen-Protokoll (Schnellnotiz / Protokoll mit Unterschrift / Gedankensammlung) — rein additiv."""
 
 from __future__ import annotations
 
@@ -10,7 +10,26 @@ from fastapi import HTTPException
 
 from app.services.tenant_storage import TenantStore
 
-PROTOCOL_MODES = frozenset({"quick", "signed"})
+PROTOCOL_MODES = frozenset({"quick", "signed", "thoughts"})
+# Fester Baustellen-Platzhalter: Gedankensammlung ist bewusst nicht baustellengebunden.
+THOUGHTS_PROJECT_ID = "__gedankensammlung__"
+THOUGHTS_PROJECT_NAME = "Gedankensammlung"
+
+
+def is_thoughts_mode(mode: str | None) -> bool:
+    return str(mode or "").strip().lower() == "thoughts"
+
+
+def protocol_kind_label(protocol: dict[str, Any]) -> str:
+    mode = str(protocol.get("mode") or "quick")
+    seq = protocol.get("sequenceNumber")
+    if mode == "signed" and isinstance(seq, int) and seq > 0:
+        return f"Begehungsprotokoll Nr. {seq}"
+    if mode == "signed":
+        return "Begehungsprotokoll"
+    if mode == "thoughts":
+        return "Gedankensammlung"
+    return "Schnellnotiz"
 
 
 def read_protocols(store: TenantStore) -> list[dict[str, Any]]:
@@ -99,9 +118,23 @@ def create_protocol_doc(
     if len(raw) < 3:
         raise HTTPException(status_code=400, detail="Protokolltext ist zu kurz.")
 
+    pid = str(project_id or "").strip()
+    pname = str(project_name or "").strip()
+    cname = str(customer_name or "").strip()
+    parts = str(participants or "").strip()
+
+    # Gedankensammlung: immer ohne echte Baustelle (additiv, signed/quick unverändert).
+    if mode_norm == "thoughts":
+        pid = THOUGHTS_PROJECT_ID
+        pname = THOUGHTS_PROJECT_NAME
+        cname = ""
+        parts = ""
+    elif not pid:
+        raise HTTPException(status_code=400, detail="Baustelle fehlt.")
+
     seq: int | None = None
     if mode_norm == "signed":
-        seq = next_signed_sequence_number(store, project_id)
+        seq = next_signed_sequence_number(store, pid)
 
     doc = {
         "id": str(uuid.uuid4()),
@@ -109,13 +142,13 @@ def create_protocol_doc(
         "companyName": company_name,
         "companyLogoUrl": company_logo_url,
         "officeEmail": office_email,
-        "projectId": project_id,
-        "projectName": project_name,
-        "customerName": customer_name,
+        "projectId": pid,
+        "projectName": pname,
+        "customerName": cname,
         "date": date,
         "mode": mode_norm,
         "sequenceNumber": seq,
-        "participants": str(participants or "").strip(),
+        "participants": parts,
         "rawText": raw,
         "polishedText": str(polished_text or "").strip(),
         "exportFormat": export_format if export_format in {"PDF", "Word"} else "PDF",

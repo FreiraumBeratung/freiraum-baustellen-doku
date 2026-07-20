@@ -296,24 +296,26 @@ def send_report_to_office(
 
 
 def _build_protocol_mail_body(protocol: dict[str, Any], profile: dict[str, Any], *, photo_count: int = 0) -> str:
+    from app.services.site_protocol import protocol_kind_label
+
     site = protocol.get("projectName") or "—"
     day = _format_date_de(protocol.get("date"))
     company = _company_signoff_name(profile)
     mode = str(protocol.get("mode") or "quick")
-    seq = protocol.get("sequenceNumber")
-    if mode == "signed" and isinstance(seq, int) and seq > 0:
-        kind = f"Begehungsprotokoll Nr. {seq}"
-    else:
-        kind = "Schnellnotiz"
+    kind = protocol_kind_label(protocol)
     participants = str(protocol.get("participants") or "").strip()
     part_line = f"Teilnehmer: {participants}\n" if participants else ""
     photo_line = ""
     if photo_count > 0:
         label = "Baustellenfoto" if photo_count == 1 else "Baustellenfotos"
         photo_line = f"{label}: {photo_count} Bild(er) im Anhang.\n\n"
+    if mode == "thoughts":
+        intro = f"anbei eine Gedankensammlung vom {day} (ohne Baustellenbezug).\n\n"
+    else:
+        intro = f"anbei die {kind} zur Baustelle {site} vom {day}.\n\n"
     return (
         "Hallo,\n\n"
-        f"anbei die {kind} zur Baustelle {site} vom {day}.\n\n"
+        f"{intro}"
         f"{photo_line}"
         f"{part_line}"
         "Mit freundlichen Grüßen\n"
@@ -350,7 +352,9 @@ def send_protocol_to_office(
     mode = str(protocol.get("mode") or "quick")
     seq = protocol.get("sequenceNumber")
     site = protocol.get("projectName") or "—"
-    if mode == "signed" and isinstance(seq, int) and seq > 0:
+    if mode == "thoughts":
+        subject = f"Gedankensammlung vom {subject_day}"
+    elif mode == "signed" and isinstance(seq, int) and seq > 0:
         subject = f"Protokoll Nr. {seq}: {site} vom {subject_day}"
     else:
         subject = f"Schnellnotiz: {site} vom {subject_day}"

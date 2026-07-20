@@ -537,11 +537,11 @@ class ProtocolPolishBody(BaseModel):
 
 
 class ProtocolCreateBody(BaseModel):
-    projectId: str
-    projectName: str
+    projectId: str = ""
+    projectName: str = ""
     customerName: str = ""
     date: str
-    mode: str = Field(default="quick", pattern="^(quick|signed)$")
+    mode: str = Field(default="quick", pattern="^(quick|signed|thoughts)$")
     rawText: str = Field(..., min_length=3, max_length=50000)
     polishedText: str = Field(default="", max_length=50000)
     participants: str = Field(default="", max_length=500)

@@ -470,7 +470,11 @@ export async function deleteReportSignature(
   )
 }
 
-export type ProtocolMode = 'quick' | 'signed'
+export type ProtocolMode = 'quick' | 'signed' | 'thoughts'
+
+/** Fester Platzhalter — Gedankensammlung ist nicht baustellengebunden. */
+export const THOUGHTS_PROJECT_ID = '__gedankensammlung__'
+export const THOUGHTS_PROJECT_NAME = 'Gedankensammlung'
 
 export type SiteProtocol = {
   id: string

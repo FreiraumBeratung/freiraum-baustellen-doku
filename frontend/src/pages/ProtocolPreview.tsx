@@ -45,9 +45,11 @@ export function ProtocolPreviewPage() {
 
   const savedId = savedProtocol?.id ?? null
   const mode = st?.mode ?? 'quick'
-  const modeTitle = mode === 'signed' ? 'Begehungsprotokoll' : 'Schnellnotiz'
+  const modeTitle =
+    mode === 'signed' ? 'Begehungsprotokoll' : mode === 'thoughts' ? 'Gedankensammlung' : 'Schnellnotiz'
   const entrepreneurName = contactPerson || companyName
   const partnerName = savedProtocol?.participants?.trim() || st?.participants?.trim() || ''
+  const isThoughts = mode === 'thoughts'
 
   useEffect(() => {
     if (!st) {
@@ -98,7 +100,11 @@ export function ProtocolPreviewPage() {
         doc.mode === 'signed' && doc.sequenceNumber
           ? ` (Nr. ${doc.sequenceNumber})`
           : ''
-      setSaveMsg(`Protokoll gespeichert${nr}.`)
+      setSaveMsg(
+        doc.mode === 'thoughts'
+          ? 'Gedankensammlung gespeichert.'
+          : `Protokoll gespeichert${nr}.`,
+      )
     } catch (ex) {
       setSaveErr(ex instanceof Error ? ex.message : 'Protokoll konnte nicht gespeichert werden.')
     } finally {
@@ -175,10 +181,12 @@ export function ProtocolPreviewPage() {
             <span className="text-right font-medium text-white">{companyName}</span>
           </div>
           <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
-            <span className="text-zinc-500">Baustelle</span>
-            <span className="text-right text-white">{st.projectName}</span>
+            <span className="text-zinc-500">{isThoughts ? 'Bezug' : 'Baustelle'}</span>
+            <span className="text-right text-white">
+              {isThoughts ? 'Ohne Baustelle' : st.projectName}
+            </span>
           </div>
-          {st.customerName ? (
+          {!isThoughts && st.customerName ? (
             <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
               <span className="text-zinc-500">Kunde</span>
               <span className="text-right text-white">{st.customerName}</span>
@@ -240,12 +248,18 @@ export function ProtocolPreviewPage() {
             Schnellnotiz — ohne Unterschrift. Direkt ans Büro senden oder PDF laden.
           </p>
         ) : null}
+
+        {savedId && mode === 'thoughts' ? (
+          <p className="border-t border-zinc-800 pt-4 text-xs text-zinc-500">
+            Gedankensammlung — ohne Baustelle und ohne Unterschrift. Direkt ans Büro senden oder PDF laden.
+          </p>
+        ) : null}
       </Card>
 
       <div className="mt-6 space-y-3">
         {!savedId ? (
           <BigButton type="button" disabled={writeBlocked || saveBusy} onClick={() => void saveProtocol()}>
-            {saveBusy ? '…' : 'Protokoll speichern'}
+            {saveBusy ? '…' : isThoughts ? 'Gedankensammlung speichern' : 'Protokoll speichern'}
           </BigButton>
         ) : null}
 

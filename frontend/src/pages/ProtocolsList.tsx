@@ -1,7 +1,13 @@
-import { ChevronRight, FileText } from 'lucide-react'
+import { ChevronRight, FileText, Lightbulb } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { listProtocols, api, type SiteProtocol } from '../api/client'
+import {
+  listProtocols,
+  api,
+  THOUGHTS_PROJECT_ID,
+  THOUGHTS_PROJECT_NAME,
+  type SiteProtocol,
+} from '../api/client'
 import { Card, PageTitle } from '../components/ui'
 
 type Project = { id: string; name: string }
@@ -11,7 +17,9 @@ type ProtocolGroup = {
   projectName: string
   signed: SiteProtocol[]
   quick: SiteProtocol[]
+  thoughts: SiteProtocol[]
   latestDate: string
+  isThoughts: boolean
 }
 
 function formatDateDe(iso: string): string {
@@ -30,21 +38,35 @@ function seqRange(signed: SiteProtocol[]): string {
 function groupProtocols(protocols: SiteProtocol[]): ProtocolGroup[] {
   const map = new Map<string, ProtocolGroup>()
   for (const p of protocols) {
-    const pid = p.projectId || 'unknown'
+    const isThoughts = p.mode === 'thoughts' || p.projectId === THOUGHTS_PROJECT_ID
+    const pid = isThoughts ? THOUGHTS_PROJECT_ID : p.projectId || 'unknown'
     let g = map.get(pid)
     if (!g) {
-      g = { projectId: pid, projectName: p.projectName || 'Baustelle', signed: [], quick: [], latestDate: '' }
+      g = {
+        projectId: pid,
+        projectName: isThoughts ? THOUGHTS_PROJECT_NAME : p.projectName || 'Baustelle',
+        signed: [],
+        quick: [],
+        thoughts: [],
+        latestDate: '',
+        isThoughts,
+      }
       map.set(pid, g)
     }
     if (p.mode === 'signed') g.signed.push(p)
+    else if (p.mode === 'thoughts' || isThoughts) g.thoughts.push(p)
     else g.quick.push(p)
     if (p.date && p.date > g.latestDate) g.latestDate = p.date
   }
   for (const g of map.values()) {
     g.signed.sort((a, b) => (a.sequenceNumber || 0) - (b.sequenceNumber || 0))
     g.quick.sort((a, b) => b.date.localeCompare(a.date))
+    g.thoughts.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))
   }
-  return Array.from(map.values()).sort((a, b) => b.latestDate.localeCompare(a.latestDate))
+  return Array.from(map.values()).sort((a, b) => {
+    if (a.isThoughts !== b.isThoughts) return a.isThoughts ? -1 : 1
+    return b.latestDate.localeCompare(a.latestDate)
+  })
 }
 
 export function ProtocolsListPage() {
@@ -75,6 +97,10 @@ export function ProtocolsListPage() {
   }, [load])
 
   const groups = useMemo(() => groupProtocols(protocols), [protocols])
+  const hasThoughts = useMemo(
+    () => protocols.some((p) => p.mode === 'thoughts' || p.projectId === THOUGHTS_PROJECT_ID),
+    [protocols],
+  )
 
   return (
     <div className="overflow-x-hidden">
@@ -89,6 +115,9 @@ export function ProtocolsListPage() {
             onChange={(e) => setProjFilter(e.target.value)}
           >
             <option value="">Alle</option>
+            {hasThoughts || projFilter === THOUGHTS_PROJECT_ID ? (
+              <option value={THOUGHTS_PROJECT_ID}>{THOUGHTS_PROJECT_NAME}</option>
+            ) : null}
             {projects.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
@@ -125,6 +154,8 @@ export function ProtocolsListPage() {
             g.signed.length === 1 ? '1 Begehung' : `${g.signed.length} Begehungen`
           const quickLabel =
             g.quick.length === 1 ? '1 Schnellnotiz' : `${g.quick.length} Schnellnotizen`
+          const thoughtsLabel =
+            g.thoughts.length === 1 ? '1 Eintrag' : `${g.thoughts.length} Einträge`
 
           return (
             <Card
@@ -135,10 +166,18 @@ export function ProtocolsListPage() {
                 <div className="min-w-0">
                   <h3 className="text-[1.1rem] font-semibold tracking-tight text-white">{g.projectName}</h3>
                   <p className="mt-2 text-sm text-zinc-500">
-                    {g.latestDate ? `Zuletzt: ${formatDateDe(g.latestDate)}` : 'Kein Datum'}
+                    {g.isThoughts
+                      ? 'Ohne Baustellenbezug'
+                      : g.latestDate
+                        ? `Zuletzt: ${formatDateDe(g.latestDate)}`
+                        : 'Kein Datum'}
                   </p>
                 </div>
-                <FileText className="h-5 w-5 shrink-0 text-orange-400/80" aria-hidden />
+                {g.isThoughts ? (
+                  <Lightbulb className="h-5 w-5 shrink-0 text-orange-400/80" aria-hidden />
+                ) : (
+                  <FileText className="h-5 w-5 shrink-0 text-orange-400/80" aria-hidden />
+                )}
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -153,13 +192,24 @@ export function ProtocolsListPage() {
                     {quickLabel}
                   </span>
                 ) : null}
+                {g.thoughts.length ? (
+                  <span className="rounded-full bg-orange-500/10 px-3 py-1 text-xs font-medium text-orange-200/90 ring-1 ring-orange-400/20">
+                    {thoughtsLabel}
+                  </span>
+                ) : null}
               </div>
 
               <Link
                 to={`/protokolle/baustelle/${encodeURIComponent(g.projectId)}`}
                 className="mt-5 flex h-11 items-center justify-between rounded-2xl bg-white/[0.08] px-4 text-sm font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.12] active:scale-[0.99]"
               >
-                <span>{g.signed.length ? 'Begehungen & Gesamtprotokoll' : 'Protokolle anzeigen'}</span>
+                <span>
+                  {g.isThoughts
+                    ? 'Gedankensammlung öffnen'
+                    : g.signed.length
+                      ? 'Begehungen & Gesamtprotokoll'
+                      : 'Protokolle anzeigen'}
+                </span>
                 <ChevronRight className="h-4 w-4 text-zinc-500" aria-hidden />
               </Link>
             </Card>

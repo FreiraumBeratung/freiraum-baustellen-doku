@@ -1,4 +1,4 @@
-import { FileText, PenLine } from 'lucide-react'
+import { FileText, Lightbulb, PenLine } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { PageTitle } from '../components/ui'
 import type { ProtocolMode } from '../api/client'
@@ -36,6 +36,20 @@ export function ProtocolModePage() {
           </span>
           <span className="text-[0.72rem] font-medium leading-tight tracking-tight text-zinc-300">
             Protokoll mit Unterschrift
+          </span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => choose('thoughts')}
+          className="group col-span-2 flex min-h-[7.5rem] flex-col items-center justify-center gap-2.5 rounded-[1.25rem] border border-white/[0.07] bg-zinc-900/[0.5] px-3 py-4 text-center ring-1 ring-white/[0.04] transition hover:bg-white/[0.05] hover:ring-white/[0.1] active:scale-[0.98]"
+        >
+          <span className="flex h-12 w-12 items-center justify-center rounded-[1rem] bg-black/45 text-[1.45rem] ring-1 ring-white/[0.08]">
+            <Lightbulb strokeWidth={2} className="h-6 w-6 text-orange-400" aria-hidden />
+          </span>
+          <span className="text-[0.8rem] font-medium leading-tight tracking-tight text-zinc-300">Gedankensammlung</span>
+          <span className="max-w-[16rem] text-[0.68rem] leading-snug text-zinc-500">
+            Frei sprechen — unabhängig von Baustellen, direkt ans Büro
           </span>
         </button>
       </div>

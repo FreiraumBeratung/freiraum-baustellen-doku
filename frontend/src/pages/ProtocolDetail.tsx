@@ -19,6 +19,7 @@ function formatDateDe(iso: string): string {
 function modeTitle(p: SiteProtocol): string {
   if (p.mode === 'signed' && p.sequenceNumber) return `Begehungsprotokoll Nr. ${p.sequenceNumber}`
   if (p.mode === 'signed') return 'Protokoll mit Unterschrift'
+  if (p.mode === 'thoughts') return 'Gedankensammlung'
   return 'Schnellnotiz'
 }
 
@@ -142,8 +143,8 @@ export function ProtocolDetailPage() {
       <PageTitle title="Protokoll" subtitle={modeTitle(p)} />
 
       <Card className="mb-4 space-y-1">
-        <Field k="Baustelle" v={p.projectName} />
-        {p.customerName ? <Field k="Kunde" v={p.customerName} /> : null}
+        <Field k={p.mode === 'thoughts' ? 'Bezug' : 'Baustelle'} v={p.mode === 'thoughts' ? 'Ohne Baustelle' : p.projectName} />
+        {p.mode !== 'thoughts' && p.customerName ? <Field k="Kunde" v={p.customerName} /> : null}
         <Field k="Datum" v={formatDateDe(p.date)} />
         <Field k="Art" v={modeTitle(p)} />
         {p.participants ? <Field k="Teilnehmer" v={p.participants} /> : null}

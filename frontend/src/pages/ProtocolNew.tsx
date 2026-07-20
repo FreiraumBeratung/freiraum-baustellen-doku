@@ -1,7 +1,13 @@
 import { Check, Mic } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { api, polishProtocolText, type ProtocolMode } from '../api/client'
+import {
+  api,
+  polishProtocolText,
+  THOUGHTS_PROJECT_ID,
+  THOUGHTS_PROJECT_NAME,
+  type ProtocolMode,
+} from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
@@ -136,12 +142,14 @@ export function ProtocolNewPage() {
   }
 
   const proj = projects.find((p) => p.id === projectId)
-  const modeLabel = mode === 'signed' ? 'Protokoll mit Unterschrift' : 'Schnellnotiz'
+  const isThoughts = mode === 'thoughts'
+  const modeLabel =
+    mode === 'signed' ? 'Protokoll mit Unterschrift' : isThoughts ? 'Gedankensammlung' : 'Schnellnotiz'
 
   async function continueToPreview() {
     setErr('')
     stopVoice()
-    if (!proj) {
+    if (!isThoughts && !proj) {
       setErr('Bitte Baustelle wählen.')
       return
     }
@@ -162,11 +170,11 @@ export function ProtocolNewPage() {
     }
     const state: ProtocolPreviewState = {
       mode,
-      projectId: proj.id,
-      projectName: proj.name,
-      customerName: proj.customer || '',
+      projectId: isThoughts ? THOUGHTS_PROJECT_ID : proj!.id,
+      projectName: isThoughts ? THOUGHTS_PROJECT_NAME : proj!.name,
+      customerName: isThoughts ? '' : proj!.customer || '',
       date,
-      participants: participants.trim(),
+      participants: isThoughts ? '' : participants.trim(),
       exportFormat,
       rawText: text,
       polishedText,
@@ -180,27 +188,33 @@ export function ProtocolNewPage() {
 
       <div className="space-y-8">
         <Card className="space-y-5 border-transparent bg-black/35 px-[1.35rem] py-8 shadow-none ring-1 ring-white/[0.06] backdrop-blur-sm">
-          <label className="block min-w-0">
-            <span className="text-[0.875rem] text-zinc-500">Baustelle</span>
-            <select
-              className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
-              value={projectId}
-              onChange={(e) => setProjectId(e.target.value)}
-              disabled={!projects.length}
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                  {p.customer ? ` (${p.customer})` : ''}
-                </option>
-              ))}
-            </select>
-            {!projects.length ? (
-              <p className="mt-2 text-sm text-amber-400">
-                Keine aktive Baustelle — unter „Baustellen“ Projekt auf <strong>aktiv</strong> setzen.
-              </p>
-            ) : null}
-          </label>
+          {isThoughts ? (
+            <p className="rounded-2xl bg-orange-500/10 px-4 py-3 text-[0.86rem] leading-relaxed text-orange-100/90 ring-1 ring-orange-400/25">
+              Ohne Baustellenbezug — Ideen, To-dos und Notizen frei einsprechen und ans Büro senden.
+            </p>
+          ) : (
+            <label className="block min-w-0">
+              <span className="text-[0.875rem] text-zinc-500">Baustelle</span>
+              <select
+                className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                value={projectId}
+                onChange={(e) => setProjectId(e.target.value)}
+                disabled={!projects.length}
+              >
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.customer ? ` (${p.customer})` : ''}
+                  </option>
+                ))}
+              </select>
+              {!projects.length ? (
+                <p className="mt-2 text-sm text-amber-400">
+                  Keine aktive Baustelle — unter „Baustellen“ Projekt auf <strong>aktiv</strong> setzen.
+                </p>
+              ) : null}
+            </label>
+          )}
 
           <label className="block">
             <span className="text-[0.875rem] text-zinc-500">Datum</span>
@@ -234,7 +248,9 @@ export function ProtocolNewPage() {
           <div className="relative space-y-5">
             <div>
               <p className="text-[0.68rem] font-medium tracking-[0.14em] text-orange-300/85">Aufnahme</p>
-              <p className="mt-2 text-[0.86rem] leading-[1.5] text-zinc-500">Frei sprechen oder unten schreiben.</p>
+              <p className="mt-2 text-[0.86rem] leading-[1.5] text-zinc-500">
+                {isThoughts ? 'Gedanken frei sprechen oder unten schreiben.' : 'Frei sprechen oder unten schreiben.'}
+              </p>
             </div>
 
             {voiceSupported ? (
@@ -277,7 +293,11 @@ export function ProtocolNewPage() {
                 className="mt-2 min-h-[11.5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
-                placeholder="Was wurde besprochen oder festgestellt?"
+                placeholder={
+                  isThoughts
+                    ? 'Ideen, Nachträge, interne Notizen …'
+                    : 'Was wurde besprochen oder festgestellt?'
+                }
               />
             </label>
           </div>
@@ -286,7 +306,7 @@ export function ProtocolNewPage() {
         {err ? <p className="text-sm text-red-400">{err}</p> : null}
         <BigButton
           type="button"
-          disabled={writeBlocked || busy || !projectId || rawText.trim().length < 3}
+          disabled={writeBlocked || busy || (!isThoughts && !projectId) || rawText.trim().length < 3}
           onClick={() => void continueToPreview()}
         >
           {busy ? 'Wird geglättet…' : 'Weiter zur Vorschau'}
