@@ -40,6 +40,7 @@ export function DeliveryNoteScanPage() {
   const [dlBusy, setDlBusy] = useState(false)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
+  const [sentOk, setSentOk] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
   const galleryRef = useRef<HTMLInputElement>(null)
 
@@ -63,6 +64,7 @@ export function DeliveryNoteScanPage() {
     if (writeBlocked || createBusy || !projectId || !selected) return
     setErr('')
     setMsg('')
+    setSentOk(false)
     setCreateBusy(true)
     try {
       const created = await createDeliveryNote({
@@ -87,6 +89,7 @@ export function DeliveryNoteScanPage() {
     if (!doc || writeBlocked || uploadBusy || !files.length) return
     setErr('')
     setMsg('')
+    setSentOk(false)
     setUploadBusy(true)
     try {
       let count = photos.length
@@ -110,6 +113,7 @@ export function DeliveryNoteScanPage() {
   async function removePhoto(photoId: string) {
     if (!doc || writeBlocked || uploadBusy) return
     setErr('')
+    setSentOk(false)
     try {
       const res = await deleteDeliveryNotePhoto(doc.id, photoId)
       setPhotos((prev) => prev.filter((p) => p.id !== photoId))
@@ -134,8 +138,10 @@ export function DeliveryNoteScanPage() {
         { method: 'POST' },
       )
       setMsg(res.message?.trim() || 'Lieferschein wurde ans Büro gesendet.')
+      setSentOk(true)
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Versand fehlgeschlagen.')
+      setSentOk(false)
     } finally {
       setOfficeBusy(false)
     }
@@ -162,6 +168,7 @@ export function DeliveryNoteScanPage() {
     setDate(today)
     setErr('')
     setMsg('')
+    setSentOk(false)
   }
 
   return (
@@ -322,29 +329,50 @@ export function DeliveryNoteScanPage() {
             {uploadBusy ? <p className="mt-2 text-sm text-zinc-400">Wird hochgeladen…</p> : null}
           </div>
 
-          {msg ? <p className="text-sm text-orange-300">{msg}</p> : null}
+          {sentOk ? (
+            <div className="rounded-xl border border-orange-500/35 bg-orange-500/[0.12] px-3 py-3 text-sm text-orange-100">
+              <p className="font-semibold">Im Büro angekommen</p>
+              <p className="mt-1 text-orange-200/85">{msg || 'Lieferschein wurde ans Büro gesendet.'}</p>
+            </div>
+          ) : msg ? (
+            <p className="text-sm text-orange-300">{msg}</p>
+          ) : null}
           {err ? <p className="text-sm text-red-300">{err}</p> : null}
 
-          <BigButton
-            type="button"
-            disabled={!photos.length || officeBusy || writeBlocked}
-            onClick={() => void sendOffice()}
-          >
-            {officeBusy ? 'Wird gesendet…' : 'Ans Büro senden'}
-          </BigButton>
-
-          <BigButton
-            type="button"
-            variant="secondary"
-            disabled={dlBusy}
-            onClick={() => void downloadPdf()}
-          >
-            {dlBusy ? '…' : 'PDF laden'}
-          </BigButton>
-
-          <BigButton type="button" variant="ghost" onClick={resetFlow}>
-            Neuen Lieferschein starten
-          </BigButton>
+          {sentOk ? (
+            <>
+              <BigButton type="button" onClick={resetFlow}>
+                Noch einen Lieferschein scannen
+              </BigButton>
+              <BigButton type="button" variant="secondary" disabled={dlBusy} onClick={() => void downloadPdf()}>
+                {dlBusy ? '…' : 'PDF laden'}
+              </BigButton>
+              <BigButton
+                type="button"
+                variant="secondary"
+                disabled={!photos.length || officeBusy || writeBlocked}
+                onClick={() => void sendOffice()}
+              >
+                {officeBusy ? 'Wird gesendet…' : 'Erneut ans Büro senden'}
+              </BigButton>
+            </>
+          ) : (
+            <>
+              <BigButton
+                type="button"
+                disabled={!photos.length || officeBusy || writeBlocked}
+                onClick={() => void sendOffice()}
+              >
+                {officeBusy ? 'Wird gesendet…' : 'Ans Büro senden'}
+              </BigButton>
+              <BigButton type="button" variant="secondary" disabled={dlBusy} onClick={() => void downloadPdf()}>
+                {dlBusy ? '…' : 'PDF laden'}
+              </BigButton>
+              <BigButton type="button" variant="secondary" onClick={resetFlow}>
+                Noch einen Lieferschein scannen
+              </BigButton>
+            </>
+          )}
 
           <BigButton type="button" variant="secondary" onClick={() => nav('/')}>
             Zum Dashboard
