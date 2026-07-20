@@ -48,9 +48,6 @@ export function ProtocolModePage() {
             <Lightbulb strokeWidth={2} className="h-6 w-6 text-orange-400" aria-hidden />
           </span>
           <span className="text-[0.8rem] font-medium leading-tight tracking-tight text-zinc-300">Gedankensammlung</span>
-          <span className="max-w-[16rem] text-[0.68rem] leading-snug text-zinc-500">
-            Frei sprechen — unabhängig von Baustellen, direkt ans Büro
-          </span>
         </button>
       </div>
 

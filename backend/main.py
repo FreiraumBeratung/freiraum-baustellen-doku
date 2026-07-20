@@ -22,6 +22,7 @@ from logo_image_utils import normalize_logo_bytes
 from office_mail import (
     send_collective_protocol_to_office,
     send_collective_to_office,
+    send_delivery_note_to_office,
     send_feedback_mail,
     send_protocol_to_office,
     send_report_to_office,
@@ -33,6 +34,8 @@ from report_export import (
     build_collective_pdf_bytes,
     build_collective_protocol_attachment_names,
     build_collective_protocol_pdf_bytes,
+    build_delivery_note_attachment_names,
+    build_delivery_note_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
     build_protocol_attachment_names,
@@ -40,6 +43,15 @@ from report_export import (
 )
 from report_structure import structure_report_fields
 from app.services import time_account
+from app.services.delivery_note import (
+    MAX_PAGES_PER_DELIVERY_NOTE,
+    create_delivery_note_doc,
+    delivery_note_photos_list,
+    find_delivery_note,
+    read_delivery_notes,
+    remove_delivery_note,
+    save_delivery_note_photos,
+)
 from app.services.site_protocol import (
     create_protocol_doc,
     find_protocol,
@@ -121,6 +133,7 @@ SIGNATURES_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 MAX_PHOTOS_PER_REPORT = 10
 MAX_PHOTOS_PER_PROTOCOL = 10
+MAX_PHOTOS_PER_DELIVERY_NOTE = MAX_PAGES_PER_DELIVERY_NOTE
 MAX_PHOTO_UPLOAD_BYTES = 5 * 1024 * 1024
 MAX_FEEDBACK_ATTACHMENTS = 3
 SIGNATURE_ROLES = frozenset({"customer", "employee"})
@@ -546,6 +559,14 @@ class ProtocolCreateBody(BaseModel):
     polishedText: str = Field(default="", max_length=50000)
     participants: str = Field(default="", max_length=500)
     exportFormat: str = "PDF"
+
+
+class DeliveryNoteCreateBody(BaseModel):
+    projectId: str = Field(..., min_length=1, max_length=200)
+    projectName: str = Field(default="", max_length=300)
+    customerName: str = Field(default="", max_length=300)
+    date: str = ""
+    note: str = Field(default="", max_length=500)
 
 
 class FeedbackCreateBody(BaseModel):
@@ -2787,6 +2808,243 @@ def export_protocol_pdf(protocol_id: str, store: TenantStore = Depends(get_tenan
     except Exception:
         raise HTTPException(status_code=500, detail="Export konnte nicht erstellt werden.")
     ascii_fn, desc_fn = build_protocol_attachment_names(protocol, "pdf")
+    return Response(
+        content=blob,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
+    )
+
+
+# --- Lieferschein-Scan V1 (additiv) ----------------------------------------------------
+
+
+@app.get("/api/delivery-notes")
+def list_delivery_notes(
+    projectId: str | None = None,
+    store: TenantStore = Depends(get_tenant_store),
+):
+    notes = read_delivery_notes(store)
+    notes.sort(key=lambda n: n.get("createdAt", ""), reverse=True)
+    if projectId:
+        notes = [n for n in notes if n.get("projectId") == projectId]
+    return {"deliveryNotes": notes}
+
+
+@app.post("/api/delivery-notes")
+def create_delivery_note(body: DeliveryNoteCreateBody, store: TenantStore = Depends(get_tenant_store_write)):
+    prof = store.read_json("company_profile.json", {})
+    logo_fn = prof.get("logoFilename")
+    company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None
+    if logo_fn and not company_logo_url:
+        legacy_logo = UPLOADS_DIR / str(logo_fn)
+        if legacy_logo.is_file():
+            company_logo_url = f"/uploads/logos/{logo_fn}"
+
+    projects = store.read_json("projects.json", {"projects": []}).get("projects") or []
+    project = next((p for p in projects if str(p.get("id") or "") == body.projectId), None)
+    project_name = (body.projectName or "").strip()
+    customer_name = (body.customerName or "").strip()
+    if project:
+        if not project_name:
+            project_name = str(project.get("name") or "").strip()
+        if not customer_name:
+            customer_name = str(project.get("customer") or "").strip()
+
+    return create_delivery_note_doc(
+        store,
+        company_name=str(prof.get("companyName") or ""),
+        company_logo_url=company_logo_url,
+        office_email=str(prof.get("officeEmail") or ""),
+        project_id=body.projectId,
+        project_name=project_name,
+        customer_name=customer_name,
+        date=body.date,
+        note=body.note,
+    )
+
+
+@app.get("/api/delivery-notes/{note_id}")
+def get_delivery_note(note_id: str, store: TenantStore = Depends(get_tenant_store)):
+    return find_delivery_note(store, note_id)
+
+
+@app.delete("/api/delivery-notes/{note_id}")
+def delete_delivery_note(note_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+    def _del_photo(_store: TenantStore, filename: str) -> None:
+        try:
+            path = _resolve_photo_path(_store, filename)
+            path.unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+
+    remove_delivery_note(
+        store,
+        note_id,
+        delete_photo_file=lambda _s, fn: _del_photo(store, fn),
+    )
+    return {"ok": True}
+
+
+@app.get("/api/delivery-notes/{note_id}/photos")
+def list_delivery_note_photos(note_id: str, store: TenantStore = Depends(get_tenant_store)):
+    note = find_delivery_note(store, note_id)
+    photos = [_photo_api_item(store, p) for p in delivery_note_photos_list(note)]
+    return {
+        "photos": photos,
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_DELIVERY_NOTE,
+    }
+
+
+@app.post("/api/delivery-notes/{note_id}/photos")
+async def upload_delivery_note_photo(
+    note_id: str,
+    file: UploadFile = File(...),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    note = find_delivery_note(store, note_id)
+    photos = delivery_note_photos_list(note)
+    if len(photos) >= MAX_PHOTOS_PER_DELIVERY_NOTE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {MAX_PHOTOS_PER_DELIVERY_NOTE} Scan-Seiten pro Lieferschein erlaubt.",
+        )
+
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+
+    ext = Path(file.filename).suffix.lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
+    if ext not in {".jpg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Nur JPEG-, PNG- oder WebP-Bilder erlaubt")
+
+    content = await file.read()
+    n = len(content)
+    if n == 0:
+        raise HTTPException(status_code=400, detail="Leere Bilddatei")
+    if n > MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+
+    photo_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    file_ext = _guess_photo_extension(file.content_type, file.filename or "")
+    safe_name = f"photo_{ts}_{photo_id}.{file_ext}"
+    dest = store.uploads_dir("photos") / safe_name
+    dest.write_bytes(content)
+
+    entry: dict[str, Any] = {
+        "id": photo_id,
+        "filename": safe_name,
+        "originalFilename": file.filename if file.filename else "",
+        "contentType": file.content_type if file.content_type else "application/octet-stream",
+        "sizeBytes": n,
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    photos.append(entry)
+    save_delivery_note_photos(store, note_id, photos)
+    item = _photo_api_item(store, entry)
+    return {
+        "ok": True,
+        "photo": item,
+        "photos": [_photo_api_item(store, p) for p in photos],
+        "count": len(photos),
+        "maxPhotos": MAX_PHOTOS_PER_DELIVERY_NOTE,
+    }
+
+
+@app.delete("/api/delivery-notes/{note_id}/photos/{photo_id}")
+def delete_delivery_note_photo(
+    note_id: str,
+    photo_id: str,
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    note = find_delivery_note(store, note_id)
+    photos = delivery_note_photos_list(note)
+    kept: list[dict[str, Any]] = []
+    removed: dict[str, Any] | None = None
+    for p in photos:
+        if str(p.get("id") or "") == photo_id:
+            removed = p
+        else:
+            kept.append(p)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    fn = removed.get("filename")
+    if isinstance(fn, str) and fn:
+        try:
+            path = _resolve_photo_path(store, fn)
+            path.unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+    save_delivery_note_photos(store, note_id, kept)
+    return {"ok": True, "count": len(kept), "maxPhotos": MAX_PHOTOS_PER_DELIVERY_NOTE}
+
+
+@app.post("/api/delivery-notes/{note_id}/send-office", response_model=SendOfficeResponse)
+def send_delivery_note_to_office_endpoint(
+    note_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+) -> SendOfficeResponse:
+    note = find_delivery_note(store, note_id)
+    if not delivery_note_photos_list(note):
+        raise HTTPException(status_code=400, detail="Mindestens eine Scan-Seite ist erforderlich.")
+
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+
+    sender_email = ""
+    for u in get_users():
+        if u.get("id") == user_id:
+            sender_email = str(u.get("email", "")).strip().lower()
+            break
+    if not sender_email:
+        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+
+    ok, simulated, message = send_delivery_note_to_office(
+        note,
+        prof,
+        office,
+        mail_config=mail_config,
+        resolve_logo=_export_resolve_logo(store),
+        resolve_photo=_export_resolve_photo(store),
+        photos_upload_dir=store.uploads_dir("photos"),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Lieferschein konnte nicht gesendet werden.")
+    return SendOfficeResponse(ok=True, simulated=simulated, message=message)
+
+
+@app.get("/api/delivery-notes/{note_id}/export/pdf")
+def export_delivery_note_pdf(note_id: str, store: TenantStore = Depends(get_tenant_store)):
+    note = find_delivery_note(store, note_id)
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_delivery_note_pdf_bytes(
+            note,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+            resolve_photo=_export_resolve_photo(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_delivery_note_attachment_names(note, "pdf")
     return Response(
         content=blob,
         media_type="application/pdf",

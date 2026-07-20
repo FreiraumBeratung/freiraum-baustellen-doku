@@ -23,6 +23,7 @@ import { ProtocolDetailPage } from './pages/ProtocolDetail'
 import { ProtocolSeriesPage } from './pages/ProtocolSeries'
 import { AdminRoute } from './components/AdminRoute'
 import { FeedbackPage } from './pages/Feedback'
+import { DeliveryNoteScanPage } from './pages/DeliveryNoteScan'
 
 function ProtectedOutlet() {
   const { token, ready } = useRequireAuth()
@@ -71,6 +72,7 @@ export default function App() {
             <Route path="/protokolle" element={<ProtocolsListPage />} />
             <Route path="/protokolle/baustelle/:projectId" element={<ProtocolSeriesPage />} />
             <Route path="/protokolle/:id" element={<ProtocolDetailPage />} />
+            <Route path="/lieferschein" element={<DeliveryNoteScanPage />} />
             <Route path="/berichte" element={<ReportsListPage />} />
             <Route path="/berichte/:id" element={<ReportDetailPage />} />
             <Route path="/feedback" element={<FeedbackPage />} />

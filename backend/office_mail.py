@@ -29,6 +29,8 @@ from report_export import (
     build_collective_pdf_bytes,
     build_collective_protocol_attachment_names,
     build_collective_protocol_pdf_bytes,
+    build_delivery_note_attachment_names,
+    build_delivery_note_pdf_bytes,
     build_docx_bytes,
     build_pdf_bytes,
     build_protocol_attachment_names,
@@ -46,6 +48,8 @@ MSG_SENT_WITH_PHOTOS = "Bericht mit {count} Foto(s) wurde ans Büro gesendet."
 MSG_SENT_PROTOCOL = "Protokoll wurde ans Büro gesendet."
 MSG_SENT_PROTOCOL_WITH_PHOTOS = "Protokoll mit {count} Foto(s) wurde ans Büro gesendet."
 MSG_SENT_COLLECTIVE_PROTOCOL = "Gesamtprotokoll wurde ans Büro gesendet."
+MSG_SENT_DELIVERY = "Lieferschein wurde ans Büro gesendet."
+MSG_SENT_DELIVERY_WITH_PHOTOS = "Lieferschein mit {count} Scan-Seite(n) wurde ans Büro gesendet."
 MSG_FEEDBACK_SENT = "Feedback wurde gesendet."
 
 
@@ -412,6 +416,110 @@ def send_protocol_to_office(
         return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
 
     return True, False, MSG_SENT_PROTOCOL_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT_PROTOCOL
+
+
+def _build_delivery_note_mail_body(note: dict[str, Any], profile: dict[str, Any], *, photo_count: int = 0) -> str:
+    site = note.get("projectName") or "—"
+    day = _format_date_de(note.get("date"))
+    company = _company_signoff_name(profile)
+    extra = str(note.get("note") or "").strip()
+    note_line = f"Notiz: {extra}\n" if extra else ""
+    photo_line = ""
+    if photo_count > 0:
+        label = "Scan-Seite" if photo_count == 1 else "Scan-Seiten"
+        photo_line = f"{label}: {photo_count} Bild(er) zusätzlich im Anhang.\n\n"
+    return (
+        "Hallo,\n\n"
+        f"anbei der gescannte Lieferschein zur Baustelle {site} vom {day}.\n\n"
+        f"{photo_line}"
+        f"{note_line}"
+        "Mit freundlichen Grüßen\n"
+        f"{company}\n\n\n"
+        "Powered by Freiraum Beratung"
+    )
+
+
+def send_delivery_note_to_office(
+    note: dict[str, Any],
+    profile: dict[str, Any],
+    to_email: str,
+    *,
+    mail_config: dict[str, Any] | None = None,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
+    photos_upload_dir: Path | str | None = None,
+) -> tuple[bool, bool, str]:
+    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+        return False, False, MSG_NOT_CONFIGURED
+
+    from_addr = str(mail_config.get("email") or "").strip()
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+
+    if not from_addr or not user or not password or not host or not port:
+        return False, False, MSG_NOT_CONFIGURED
+
+    subject_day = _format_date_de(note.get("date"))
+    site = note.get("projectName") or "—"
+    subject = f"Lieferschein: {site} vom {subject_day}"
+
+    try:
+        blob = build_delivery_note_pdf_bytes(
+            note,
+            profile,
+            resolve_logo=resolve_logo,
+            resolve_photo=resolve_photo,
+        )
+        ascii_fn, _desc = build_delivery_note_attachment_names(note, "pdf")
+    except Exception:
+        logger.exception("Lieferschein-Anhang für Mail konnte nicht erzeugt werden")
+        return False, False, "Der Lieferschein-Anhang konnte nicht erzeugt werden."
+
+    msg = EmailMessage()
+    msg["Subject"] = subject
+    msg["From"] = from_addr
+    msg["To"] = to_email
+    photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
+    photo_count = _count_attachable_photos(note, photos_dir)
+    msg.set_content(_build_delivery_note_mail_body(note, profile, photo_count=photo_count))
+    msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
+    attached_photos = _attach_report_photos(msg, note, photos_dir)
+    if attached_photos != photo_count:
+        photo_count = attached_photos
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Lieferschein-Versand")
+        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Lieferschein-Versand fehlgeschlagen")
+        return (
+            False,
+            False,
+            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
+        )
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Lieferschein-Versand")
+        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+
+    return True, False, MSG_SENT_DELIVERY_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT_DELIVERY
 
 
 def send_collective_to_office(

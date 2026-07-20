@@ -21,7 +21,7 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.lib.utils import ImageReader
-from reportlab.platypus import Image, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 GREY_META_HEX = HexColor("#52525b")
 LINE_HEX = HexColor("#d4d4d8")
@@ -1591,6 +1591,202 @@ def build_collective_protocol_pdf_bytes(
             signature_customer_label="Unternehmer",
             signature_employee_label="Gesprächspartner",
         )
+
+    doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
+    return buf.getvalue()
+
+
+def build_delivery_note_base_name(note: dict[str, Any]) -> str:
+    site = sanitize_export_slug(str(note.get("projectName") or "Baustelle"))
+    day = sanitize_export_slug(str(note.get("date") or "scan"))
+    return f"lieferschein_{site}_{day}"
+
+
+def build_delivery_note_attachment_names(note: dict[str, Any], ext: str) -> tuple[str, str]:
+    base = build_delivery_note_base_name(note).lower()
+    ascii_nm = f"{sanitize_export_slug_ascii(base)}.{ext}"
+    desc = f"{build_delivery_note_base_name(note)}.{ext}"
+    return ascii_nm, desc
+
+
+def build_delivery_note_pdf_bytes(
+    note: dict[str, Any],
+    company_profile: dict[str, Any],
+    *,
+    resolve_logo: LogoPathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
+) -> bytes:
+    """Einfaches Scan-PDF: Deckblatt + eine Seite je Foto (DIN A4)."""
+    from app.services.delivery_note import delivery_note_photos_list
+
+    buf = BytesIO()
+    doc_tpl = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        title="Lieferschein",
+        leftMargin=1.5 * cm,
+        rightMargin=1.5 * cm,
+        topMargin=1.4 * cm,
+        bottomMargin=1.6 * cm,
+    )
+    styles = getSampleStyleSheet()
+    meta_style = ParagraphStyle(
+        name="DnMeta",
+        parent=styles["Normal"],
+        fontSize=9,
+        textColor=GREY_META_HEX,
+        spaceAfter=1,
+        leading=11,
+    )
+    body_style = ParagraphStyle(
+        name="DnBody",
+        parent=styles["Normal"],
+        fontSize=10,
+        leading=14,
+        textColor=TEXT_DARK_HEX,
+        spaceAfter=8,
+    )
+    title_style = ParagraphStyle(
+        name="DnTitle",
+        parent=styles["Heading1"],
+        fontSize=15,
+        textColor=TEXT_DARK_HEX,
+        spaceBefore=4,
+        spaceAfter=6,
+        alignment=1,
+        fontName="Helvetica-Bold",
+    )
+    company_style = ParagraphStyle(
+        name="DnCompany",
+        parent=styles["Heading1"],
+        fontSize=13,
+        textColor=TEXT_DARK_HEX,
+        spaceAfter=2,
+        fontName="Helvetica-Bold",
+    )
+    info_label_style = ParagraphStyle(
+        name="DnInfoLabel",
+        parent=meta_style,
+        fontName="Helvetica-Bold",
+        textColor=SECTION_HEX,
+    )
+    info_value_style = ParagraphStyle(
+        name="DnInfoValue",
+        parent=body_style,
+        fontSize=9.2,
+        spaceAfter=0,
+    )
+    page_label_style = ParagraphStyle(
+        name="DnPageLabel",
+        parent=meta_style,
+        fontSize=8,
+        alignment=1,
+        spaceAfter=6,
+    )
+
+    company_name = str(note.get("companyName") or company_profile.get("companyName") or "Firma")
+    emails = str(note.get("officeEmail") or company_profile.get("officeEmail") or "")
+    phone = str(company_profile.get("phone") or "")
+    proj = str(note.get("projectName") or "—")
+    customer = str(note.get("customerName") or "—")
+    datum = _format_date_de(str(note.get("date") or "—"))
+    note_text = str(note.get("note") or "").strip()
+    photos = delivery_note_photos_list(note)
+
+    def footer(canv: Any, __: Any) -> None:
+        canv.saveState()
+        canv.setFont("Helvetica", 7)
+        canv.setFillColor(GREY_META_HEX)
+        canv.drawCentredString(A4[0] / 2.0, 1.0 * cm, "Erstellt mit Freiraum Baustellen-Doku")
+        canv.restoreState()
+
+    story: list[Any] = []
+    logo_path = _resolve_logo_path(note, company_profile, resolve_logo=resolve_logo)
+    logo_img = _logo_image_for_pdf(logo_path, max_width_cm=5.0, max_height_cm=2.9) if logo_path else None
+    company_lines: list[Any] = [Paragraph(_xml_para_text(company_name), company_style)]
+    if emails:
+        company_lines.append(Paragraph(_xml_para_text(f"Büro-E-Mail: {emails}"), meta_style))
+    if phone:
+        company_lines.append(Paragraph(_xml_para_text(f"Telefon: {phone}"), meta_style))
+
+    if logo_img:
+        head_tbl = Table([[logo_img, company_lines]], colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
+    else:
+        head_tbl = Table([[company_lines]], colWidths=[doc_tpl.width])
+    head_tbl.setStyle(
+        TableStyle(
+            [
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 0),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 0),
+                ("TOPPADDING", (0, 0), (-1, -1), 0),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(head_tbl)
+    story.append(Spacer(1, 3))
+    story.append(Paragraph("LIEFERSCHEIN", title_style))
+    story.append(Spacer(1, 4))
+    line_tbl = Table([[""]], colWidths=[doc_tpl.width], rowHeights=[1.2])
+    line_tbl.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, -1), LINE_HEX)]))
+    story.append(line_tbl)
+    story.append(Spacer(1, 8))
+
+    meta_rows = [
+        [Paragraph("Baustelle", info_label_style), Paragraph(_xml_para_text(proj), info_value_style)],
+        [Paragraph("Kunde", info_label_style), Paragraph(_xml_para_text(customer), info_value_style)],
+        [Paragraph("Datum", info_label_style), Paragraph(_xml_para_text(datum), info_value_style)],
+        [
+            Paragraph("Seiten", info_label_style),
+            Paragraph(_xml_para_text(str(len(photos))), info_value_style),
+        ],
+    ]
+    if note_text:
+        meta_rows.append(
+            [Paragraph("Notiz", info_label_style), Paragraph(_xml_para_text(note_text), info_value_style)]
+        )
+    tbl = Table(meta_rows, colWidths=[doc_tpl.width * 0.28, doc_tpl.width * 0.72])
+    tbl.setStyle(
+        TableStyle(
+            [
+                ("FONTNAME", (0, 0), (-1, -1), "Helvetica"),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("BACKGROUND", (0, 0), (-1, -1), SOFT_BG_HEX),
+                ("BOX", (0, 0), (-1, -1), 0.5, LINE_HEX),
+                ("INNERGRID", (0, 0), (-1, -1), 0.25, LINE_HEX),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+            ]
+        )
+    )
+    story.append(tbl)
+
+    usable_w = float(doc_tpl.width)
+    usable_h = float(A4[1] - doc_tpl.topMargin - doc_tpl.bottomMargin - 2.2 * cm)
+
+    if not photos:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(_xml_para_text("Keine Scan-Seiten vorhanden."), body_style))
+    elif resolve_photo is None:
+        story.append(Spacer(1, 12))
+        story.append(Paragraph(_xml_para_text("Scan-Seiten konnten nicht geladen werden."), body_style))
+    else:
+        for idx, ph in enumerate(photos, start=1):
+            fn = ph.get("filename")
+            if not isinstance(fn, str) or not fn:
+                continue
+            path = resolve_photo(fn)
+            if path is None:
+                continue
+            img = _logo_image_for_pdf(path, max_width_cm=usable_w / cm, max_height_cm=usable_h / cm)
+            if img is None:
+                continue
+            story.append(PageBreak())
+            story.append(Paragraph(_xml_para_text(f"Seite {idx} von {len(photos)}"), page_label_style))
+            story.append(img)
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()

@@ -637,6 +637,80 @@ export async function deleteProtocolPhoto(
   )
 }
 
+export type DeliveryNote = {
+  id: string
+  projectId: string
+  projectName: string
+  customerName: string
+  date: string
+  note: string
+  photos: ReportPhoto[]
+  createdAt: string
+}
+
+export async function createDeliveryNote(body: {
+  projectId: string
+  projectName?: string
+  customerName?: string
+  date?: string
+  note?: string
+}): Promise<DeliveryNote> {
+  return api<DeliveryNote>('/api/delivery-notes', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function listDeliveryNotePhotos(noteId: string): Promise<ReportPhotosResponse> {
+  return api<ReportPhotosResponse>(`/api/delivery-notes/${encodeURIComponent(noteId)}/photos`)
+}
+
+export async function uploadDeliveryNotePhoto(
+  noteId: string,
+  file: File,
+): Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'photo.jpg')
+
+  const url = resolveApiUrl(`/api/delivery-notes/${encodeURIComponent(noteId)}/photos`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    const detail = parseApiDetail(err, res.statusText || 'Scan-Seite konnte nicht hochgeladen werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
+  }
+
+  notifyLicenseReactivated()
+  return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
+}
+
+export async function deleteDeliveryNotePhoto(
+  noteId: string,
+  photoId: string,
+): Promise<{ ok: boolean; count: number; maxPhotos: number }> {
+  return api<{ ok: boolean; count: number; maxPhotos: number }>(
+    `/api/delivery-notes/${encodeURIComponent(noteId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: 'DELETE' },
+  )
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const url = resolveApiUrl(path)
   const headers: Record<string, string> = {

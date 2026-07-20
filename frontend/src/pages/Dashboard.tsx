@@ -12,6 +12,7 @@ type Tile = { to: string; title: string; emoji: string; primary?: boolean }
 const tiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
+  { to: '/lieferschein', title: 'Lieferschein scannen', emoji: '📦' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
   { to: '/stunden', title: 'Stundenkonto', emoji: '⏱️' },
   { to: '/baustellen', title: 'Baustellen', emoji: '🏗️' },
