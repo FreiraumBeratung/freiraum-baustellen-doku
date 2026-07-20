@@ -12,6 +12,7 @@ import {
   type ReportPhoto,
 } from '../api/client'
 import { InlineCameraModal } from '../components/InlineCameraModal'
+import { DocumentScanModal } from '../components/DocumentScanModal'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { compressImageForDeliveryNoteUpload } from '../utils/compressImage'
@@ -42,11 +43,13 @@ export function DeliveryNoteScanPage() {
   const [msg, setMsg] = useState('')
   const [sentOk, setSentOk] = useState(false)
   const [cameraOpen, setCameraOpen] = useState(false)
+  const [scanFile, setScanFile] = useState<File | null>(null)
+  const scanQueueRef = useRef<File[]>([])
   const galleryRef = useRef<HTMLInputElement>(null)
 
   const selected = projects.find((p) => p.id === projectId)
   const atLimit = photos.length >= maxPhotos
-  const canScan = Boolean(doc) && !writeBlocked && !uploadBusy && !atLimit
+  const canScan = Boolean(doc) && !writeBlocked && !uploadBusy && !atLimit && !scanFile
 
   useEffect(() => {
     api<{ projects: Project[] }>('/api/projects')
@@ -85,22 +88,36 @@ export function DeliveryNoteScanPage() {
     }
   }
 
-  async function processFiles(files: File[]) {
-    if (!doc || writeBlocked || uploadBusy || !files.length) return
+  function enqueueForScan(files: File[]) {
+    if (!files.length) return
     setErr('')
     setMsg('')
     setSentOk(false)
+    scanQueueRef.current = files
+    setScanFile(files[0] ?? null)
+  }
+
+  function advanceScanQueue() {
+    const rest = scanQueueRef.current.slice(1)
+    scanQueueRef.current = rest
+    setScanFile(rest[0] ?? null)
+  }
+
+  function cancelScanModal() {
+    setScanFile(null)
+    scanQueueRef.current = []
+    if (galleryRef.current) galleryRef.current.value = ''
+  }
+
+  async function uploadPreparedFile(file: File) {
+    if (!doc || writeBlocked) return
     setUploadBusy(true)
+    setErr('')
     try {
-      let count = photos.length
-      for (let i = 0; i < files.length; i++) {
-        if (count >= maxPhotos) break
-        const prepared = await compressImageForDeliveryNoteUpload(files[i]!)
-        const res = await uploadDeliveryNotePhoto(doc.id, prepared)
-        setPhotos(res.photos)
-        setMaxPhotos(res.maxPhotos)
-        count = res.count
-      }
+      const prepared = await compressImageForDeliveryNoteUpload(file)
+      const res = await uploadDeliveryNotePhoto(doc.id, prepared)
+      setPhotos(res.photos)
+      setMaxPhotos(res.maxPhotos)
       setMsg('Scan-Seite übernommen.')
     } catch (ex) {
       setErr(ex instanceof Error ? ex.message : 'Upload fehlgeschlagen.')
@@ -108,6 +125,11 @@ export function DeliveryNoteScanPage() {
       setUploadBusy(false)
       if (galleryRef.current) galleryRef.current.value = ''
     }
+  }
+
+  async function finishScanAndUpload(file: File) {
+    advanceScanQueue()
+    await uploadPreparedFile(file)
   }
 
   async function removePhoto(photoId: string) {
@@ -169,6 +191,8 @@ export function DeliveryNoteScanPage() {
     setErr('')
     setMsg('')
     setSentOk(false)
+    setScanFile(null)
+    scanQueueRef.current = []
   }
 
   return (
@@ -257,7 +281,7 @@ export function DeliveryNoteScanPage() {
               Scan-Seiten ({photos.length}/{maxPhotos})
             </p>
             <p className="mt-1 text-xs text-zinc-500">
-              Kamera oder Galerie — bis zu {maxPhotos} Seiten. Kein Extra-Scanner nötig.
+              Kamera oder Galerie — Dokument zuschneiden, bis zu {maxPhotos} Seiten.
             </p>
 
             {photos.length > 0 ? (
@@ -320,7 +344,7 @@ export function DeliveryNoteScanPage() {
                   onChange={(e) => {
                     const list = e.target.files
                     if (!list?.length) return
-                    void processFiles(Array.from(list))
+                    enqueueForScan(Array.from(list))
                   }}
                   disabled={uploadBusy || writeBlocked}
                 />
@@ -387,8 +411,16 @@ export function DeliveryNoteScanPage() {
         onClose={() => setCameraOpen(false)}
         onCapture={(file) => {
           setCameraOpen(false)
-          void processFiles([file])
+          enqueueForScan([file])
         }}
+      />
+
+      <DocumentScanModal
+        open={Boolean(scanFile)}
+        file={scanFile}
+        onCancel={cancelScanModal}
+        onAcceptScan={(f) => void finishScanAndUpload(f)}
+        onAcceptOriginal={(f) => void finishScanAndUpload(f)}
       />
     </div>
   )
