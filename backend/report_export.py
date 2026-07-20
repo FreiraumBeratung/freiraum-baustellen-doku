@@ -1609,27 +1609,25 @@ def build_delivery_note_attachment_names(note: dict[str, Any], ext: str) -> tupl
     return ascii_nm, desc
 
 
-def _delivery_scan_image_for_pdf(path: Path, max_width_cm: float, max_height_cm: float) -> Image | None:
-    """Scan-Foto möglichst groß auf die Seite — darf hochskalieren (anders als Logo)."""
-    stream = logo_bytes_for_export(path)
-    if stream is None:
-        return None
+def _draw_delivery_scan_cover(canv: Any, reader: ImageReader, page_w: float, page_h: float) -> None:
+    """Scan füllt die ganze A4-Seite (cover) — kein weißer Rand."""
     try:
-        iw, ih = ImageReader(stream).getSize()
+        iw, ih = reader.getSize()
     except Exception:
-        return None
+        return
     if iw <= 0 or ih <= 0:
-        return None
-
-    max_w = max_width_cm * cm
-    max_h = max_height_cm * cm
-    scale = min(max_w / float(iw), max_h / float(ih))
-    if scale <= 0:
-        return None
-    stream.seek(0)
-    img = Image(stream, width=float(iw) * scale, height=float(ih) * scale)
-    img.hAlign = "CENTER"
-    return img
+        return
+    scale = max(page_w / float(iw), page_h / float(ih))
+    dw = float(iw) * scale
+    dh = float(ih) * scale
+    x = (page_w - dw) / 2.0
+    y = (page_h - dh) / 2.0
+    canv.saveState()
+    path = canv.beginPath()
+    path.rect(0, 0, page_w, page_h)
+    canv.clipPath(path, stroke=0, fill=0)
+    canv.drawImage(reader, x, y, width=dw, height=dh, mask="auto")
+    canv.restoreState()
 
 
 def build_delivery_note_pdf_bytes(
@@ -1639,123 +1637,66 @@ def build_delivery_note_pdf_bytes(
     resolve_logo: LogoPathResolver | None = None,
     resolve_photo: PhotoPathResolver | None = None,
 ) -> bytes:
-    """Scan-PDF ohne Deckblatt: eine A4-Seite je Foto, kompakte Kopfzeile."""
+    """Randloses Scan-PDF: eine A4-Seite je Foto. Meta nur Mail/Dateiname, kein Kopf auf der Seite."""
+    from reportlab.pdfgen import canvas as pdf_canvas
+
     from app.services.delivery_note import delivery_note_photos_list
 
-    # resolve_logo bewusst ungenutzt — Scan braucht kein Firmenlogo-Deckblatt.
+    # resolve_logo bewusst ungenutzt — Scan braucht kein Firmenlogo auf der Seite.
     _ = resolve_logo
 
     buf = BytesIO()
-    # Enge Ränder → Scan füllt die Seite
-    doc_tpl = SimpleDocTemplate(
-        buf,
-        pagesize=A4,
-        title="Lieferschein",
-        leftMargin=0.9 * cm,
-        rightMargin=0.9 * cm,
-        topMargin=0.85 * cm,
-        bottomMargin=1.15 * cm,
-    )
-    styles = getSampleStyleSheet()
-    head_style = ParagraphStyle(
-        name="DnScanHead",
-        parent=styles["Normal"],
-        fontSize=9,
-        leading=11,
-        textColor=TEXT_DARK_HEX,
-        fontName="Helvetica-Bold",
-        spaceAfter=1,
-    )
-    meta_style = ParagraphStyle(
-        name="DnScanMeta",
-        parent=styles["Normal"],
-        fontSize=8,
-        leading=10,
-        textColor=GREY_META_HEX,
-        spaceAfter=0,
-    )
-    body_style = ParagraphStyle(
-        name="DnScanBody",
-        parent=styles["Normal"],
-        fontSize=10,
-        leading=14,
-        textColor=TEXT_DARK_HEX,
-        spaceAfter=8,
-    )
+    page_w, page_h = A4
+    canv = pdf_canvas.Canvas(buf, pagesize=A4)
+    canv.setTitle("Lieferschein")
 
     company_name = str(note.get("companyName") or company_profile.get("companyName") or "Firma")
     proj = str(note.get("projectName") or "—")
-    customer = str(note.get("customerName") or "").strip()
     datum = _format_date_de(str(note.get("date") or "—"))
-    note_text = str(note.get("note") or "").strip()
     photos = delivery_note_photos_list(note)
 
-    def footer(canv: Any, __: Any) -> None:
-        canv.saveState()
-        canv.setFont("Helvetica", 7)
-        canv.setFillColor(GREY_META_HEX)
-        canv.drawCentredString(A4[0] / 2.0, 0.55 * cm, "Erstellt mit Freiraum Baustellen-Doku")
-        canv.restoreState()
-
-    # Kopfzeile ~1.35 cm; Rest fürs Scan-Bild
-    header_reserve_cm = 1.45
-    if note_text:
-        header_reserve_cm = 1.85
-    usable_w_cm = float(doc_tpl.width) / cm
-    usable_h_cm = float(A4[1] - doc_tpl.topMargin - doc_tpl.bottomMargin) / cm - header_reserve_cm
-
-    story: list[Any] = []
+    def _fallback_page(message: str) -> None:
+        canv.setFont("Helvetica-Bold", 12)
+        canv.drawCentredString(page_w / 2.0, page_h / 2.0 + 20, "Lieferschein")
+        canv.setFont("Helvetica", 10)
+        canv.drawCentredString(page_w / 2.0, page_h / 2.0, f"{proj} · {datum}")
+        canv.setFont("Helvetica", 9)
+        canv.drawCentredString(page_w / 2.0, page_h / 2.0 - 24, message)
+        canv.setFont("Helvetica", 8)
+        canv.drawCentredString(page_w / 2.0, page_h / 2.0 - 48, company_name)
+        canv.showPage()
 
     if not photos:
-        story.append(Paragraph(_xml_para_text(f"Lieferschein · {company_name}"), head_style))
-        story.append(
-            Paragraph(
-                _xml_para_text(f"{proj} · {datum}" + (f" · {customer}" if customer else "")),
-                meta_style,
-            )
-        )
-        story.append(Spacer(1, 10))
-        story.append(Paragraph(_xml_para_text("Keine Scan-Seiten vorhanden."), body_style))
-    elif resolve_photo is None:
-        story.append(Paragraph(_xml_para_text(f"Lieferschein · {company_name}"), head_style))
-        story.append(Paragraph(_xml_para_text(f"{proj} · {datum}"), meta_style))
-        story.append(Spacer(1, 10))
-        story.append(Paragraph(_xml_para_text("Scan-Seiten konnten nicht geladen werden."), body_style))
-    else:
-        total = len(photos)
-        first_page = True
-        for idx, ph in enumerate(photos, start=1):
-            fn = ph.get("filename")
-            if not isinstance(fn, str) or not fn:
-                continue
-            path = resolve_photo(fn)
-            if path is None:
-                continue
-            img = _delivery_scan_image_for_pdf(path, usable_w_cm, usable_h_cm)
-            if img is None:
-                continue
+        _fallback_page("Keine Scan-Seiten vorhanden.")
+        canv.save()
+        return buf.getvalue()
 
-            if not first_page:
-                story.append(PageBreak())
-            first_page = False
+    if resolve_photo is None:
+        _fallback_page("Scan-Seiten konnten nicht geladen werden.")
+        canv.save()
+        return buf.getvalue()
 
-            page_bit = f"Seite {idx}/{total}" if total > 1 else "Lieferschein"
-            story.append(Paragraph(_xml_para_text(f"{page_bit} · {company_name}"), head_style))
-            meta_line = f"{proj} · {datum}"
-            if customer:
-                meta_line += f" · {customer}"
-            story.append(Paragraph(_xml_para_text(meta_line), meta_style))
-            if note_text and idx == 1:
-                story.append(Paragraph(_xml_para_text(f"Notiz: {note_text}"), meta_style))
-            story.append(Spacer(1, 4))
-            story.append(img)
+    drawn = 0
+    for ph in photos:
+        fn = ph.get("filename")
+        if not isinstance(fn, str) or not fn:
+            continue
+        path = resolve_photo(fn)
+        if path is None:
+            continue
+        stream = logo_bytes_for_export(path)
+        if stream is None:
+            continue
+        try:
+            reader = ImageReader(stream)
+        except Exception:
+            continue
+        _draw_delivery_scan_cover(canv, reader, page_w, page_h)
+        canv.showPage()
+        drawn += 1
 
-        if first_page:
-            # Kein gültiges Bild geladen
-            story.append(Paragraph(_xml_para_text(f"Lieferschein · {company_name}"), head_style))
-            story.append(Paragraph(_xml_para_text(f"{proj} · {datum}"), meta_style))
-            story.append(Spacer(1, 10))
-            story.append(Paragraph(_xml_para_text("Scan-Seiten konnten nicht geladen werden."), body_style))
+    if drawn == 0:
+        _fallback_page("Scan-Seiten konnten nicht geladen werden.")
 
-    doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
+    canv.save()
     return buf.getvalue()
