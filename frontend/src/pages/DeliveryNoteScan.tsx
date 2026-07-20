@@ -14,7 +14,7 @@ import {
 import { InlineCameraModal } from '../components/InlineCameraModal'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
-import { compressImageForUpload } from '../utils/compressImage'
+import { compressImageForDeliveryNoteUpload } from '../utils/compressImage'
 
 type Project = { id: string; name: string; customer: string; status: string }
 
@@ -95,7 +95,7 @@ export function DeliveryNoteScanPage() {
       let count = photos.length
       for (let i = 0; i < files.length; i++) {
         if (count >= maxPhotos) break
-        const prepared = await compressImageForUpload(files[i]!)
+        const prepared = await compressImageForDeliveryNoteUpload(files[i]!)
         const res = await uploadDeliveryNotePhoto(doc.id, prepared)
         setPhotos(res.photos)
         setMaxPhotos(res.maxPhotos)
@@ -382,6 +382,8 @@ export function DeliveryNoteScanPage() {
 
       <InlineCameraModal
         open={cameraOpen}
+        title="Lieferschein scannen"
+        highRes
         onClose={() => setCameraOpen(false)}
         onCapture={(file) => {
           setCameraOpen(false)

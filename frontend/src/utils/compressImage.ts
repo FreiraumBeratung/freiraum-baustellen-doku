@@ -2,6 +2,9 @@
 
 const DEFAULT_MAX_EDGE = 1920
 const DEFAULT_QUALITY = 0.82
+/** Lieferschein: mehr Pixel + höhere JPEG-Qualität für Lesbarkeit. */
+const DELIVERY_MAX_EDGE = 3200
+const DELIVERY_QUALITY = 0.9
 const TARGET_MAX_BYTES = 4.5 * 1024 * 1024
 
 function loadImageFromFile(file: File): Promise<HTMLImageElement> {
@@ -48,22 +51,35 @@ function outputName(original: string): string {
   return `${base}.jpg`
 }
 
-/**
- * Skaliert auf max. Kantenlaenge und speichert als JPEG.
- * Ziel: deutlich unter 5 MB Backend-Limit bleiben.
- */
-export async function compressImageForUpload(file: File): Promise<File> {
+async function compressImageWithOptions(
+  file: File,
+  opts: {
+    maxEdge: number
+    quality: number
+    /** Kleine JPEGs nur durchreichen, wenn die Kante schon groß genug ist. */
+    passThroughMinEdge: number
+    defaultBaseName: string
+  },
+): Promise<File> {
   if (!file.type.startsWith('image/')) {
     throw new Error('Nur Bilddateien sind erlaubt.')
   }
 
-  // Kleine Dateien unveraendert durchreichen (spart CPU auf schwachen Geraeten).
-  if (file.size <= 900 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/webp')) {
+  const img = await loadImageFromFile(file)
+  const srcW = img.naturalWidth || img.width
+  const srcH = img.naturalHeight || img.height
+  const longest = Math.max(srcW, srcH)
+
+  // Kleine Dateien nur durchreichen, wenn die Auflösung schon passt (kein VGA-„Pass“).
+  if (
+    file.size <= 900 * 1024 &&
+    (file.type === 'image/jpeg' || file.type === 'image/webp') &&
+    longest >= opts.passThroughMinEdge
+  ) {
     return file
   }
 
-  const img = await loadImageFromFile(file)
-  const { w, h } = scaledSize(img.naturalWidth || img.width, img.naturalHeight || img.height, DEFAULT_MAX_EDGE)
+  const { w, h } = scaledSize(srcW, srcH, opts.maxEdge)
 
   const canvas = document.createElement('canvas')
   canvas.width = w
@@ -72,7 +88,7 @@ export async function compressImageForUpload(file: File): Promise<File> {
   if (!ctx) throw new Error('Bildverarbeitung nicht verfügbar.')
   ctx.drawImage(img, 0, 0, w, h)
 
-  let quality = DEFAULT_QUALITY
+  let quality = opts.quality
   let blob = await canvasToBlob(canvas, quality)
   while (blob.size > TARGET_MAX_BYTES && quality > 0.45) {
     quality -= 0.08
@@ -83,5 +99,46 @@ export async function compressImageForUpload(file: File): Promise<File> {
     throw new Error('Foto ist auch nach Verkleinerung zu groß. Bitte ein anderes Bild wählen.')
   }
 
-  return new File([blob], outputName(file.name), { type: 'image/jpeg', lastModified: Date.now() })
+  const name =
+    file.name && file.name.includes('.')
+      ? outputName(file.name)
+      : `${opts.defaultBaseName}.jpg`
+
+  return new File([blob], name, { type: 'image/jpeg', lastModified: Date.now() })
+}
+
+/**
+ * Skaliert auf max. Kantenlaenge und speichert als JPEG.
+ * Ziel: deutlich unter 5 MB Backend-Limit bleiben.
+ */
+export async function compressImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith('image/')) {
+    throw new Error('Nur Bilddateien sind erlaubt.')
+  }
+
+  // Wie bisher: kleine JPEGs unverändert durchreichen (Berichte/Feedback).
+  if (file.size <= 900 * 1024 && (file.type === 'image/jpeg' || file.type === 'image/webp')) {
+    return file
+  }
+
+  return compressImageWithOptions(file, {
+    maxEdge: DEFAULT_MAX_EDGE,
+    quality: DEFAULT_QUALITY,
+    passThroughMinEdge: 0,
+    defaultBaseName: 'baustelle',
+  })
+}
+
+/**
+ * Lieferschein-Scan: höhere Auflösung/Qualität als normale Baustellenfotos.
+ * Bestehende Bericht-/Feedback-Kompression bleibt unverändert.
+ */
+export async function compressImageForDeliveryNoteUpload(file: File): Promise<File> {
+  return compressImageWithOptions(file, {
+    maxEdge: DELIVERY_MAX_EDGE,
+    quality: DELIVERY_QUALITY,
+    // VGA/Preview (z. B. 640) nie als „fertig“ durchreichen
+    passThroughMinEdge: 1600,
+    defaultBaseName: 'lieferschein',
+  })
 }

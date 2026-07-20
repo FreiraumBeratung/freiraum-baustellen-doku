@@ -5,10 +5,56 @@ type InlineCameraModalProps = {
   open: boolean
   onClose: () => void
   onCapture: (file: File) => void
+  /** Optional: Titel oben (Default: Baustellenfoto). */
+  title?: string
+  /**
+   * Höhere Kamera-Auflösung anfordern (z. B. Lieferschein-Scan).
+   * Default false — bestehende Aufrufe (Bericht, Feedback) unverändert.
+   */
+  highRes?: boolean
+}
+
+function videoConstraintAttempts(highRes: boolean): MediaTrackConstraints[] {
+  if (!highRes) {
+    return [{ facingMode: { ideal: 'environment' } }]
+  }
+  // Stufenweise: Gerät nimmt die beste unterstützte Stufe.
+  return [
+    {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 3840 },
+      height: { ideal: 2160 },
+    },
+    {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 1920 },
+      height: { ideal: 1080 },
+    },
+    { facingMode: { ideal: 'environment' } },
+  ]
+}
+
+async function openCameraStream(highRes: boolean): Promise<MediaStream> {
+  const attempts = videoConstraintAttempts(highRes)
+  let lastErr: unknown
+  for (const video of attempts) {
+    try {
+      return await navigator.mediaDevices.getUserMedia({ video, audio: false })
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error('Kamera nicht verfügbar')
 }
 
 /** Inline-Kamera in der PWA — kein Wechsel zur nativen iOS-Kamera-App. */
-export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModalProps) {
+export function InlineCameraModal({
+  open,
+  onClose,
+  onCapture,
+  title = 'Baustellenfoto',
+  highRes = false,
+}: InlineCameraModalProps) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const [err, setErr] = useState('')
@@ -37,10 +83,7 @@ export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModa
         return
       }
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' } },
-          audio: false,
-        })
+        const stream = await openCameraStream(highRes)
         if (cancelled) {
           stream.getTracks().forEach((track) => track.stop())
           return
@@ -62,7 +105,7 @@ export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModa
       cancelled = true
       stopStream()
     }
-  }, [open, stopStream])
+  }, [open, highRes, stopStream])
 
   function handleClose() {
     stopStream()
@@ -83,10 +126,13 @@ export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModa
     if (!ctx) return
     ctx.drawImage(video, 0, 0, w, h)
 
+    const jpegQuality = highRes ? 0.95 : 0.92
+    const filePrefix = highRes ? 'lieferschein' : 'baustelle'
+
     canvas.toBlob(
       (blob) => {
         if (!blob) return
-        const file = new File([blob], `baustelle-${Date.now()}.jpg`, {
+        const file = new File([blob], `${filePrefix}-${Date.now()}.jpg`, {
           type: 'image/jpeg',
           lastModified: Date.now(),
         })
@@ -95,7 +141,7 @@ export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModa
         onClose()
       },
       'image/jpeg',
-      0.92,
+      jpegQuality,
     )
   }
 
@@ -104,7 +150,7 @@ export function InlineCameraModal({ open, onClose, onCapture }: InlineCameraModa
   return (
     <div className="fixed inset-0 z-[110] flex flex-col bg-zinc-950">
       <div className="safe-area-pt-min flex items-center justify-between px-4 py-3">
-        <p className="text-sm font-medium text-white">Baustellenfoto</p>
+        <p className="text-sm font-medium text-white">{title}</p>
         <button
           type="button"
           className="rounded-lg px-3 py-1.5 text-sm text-zinc-300 hover:text-white"
