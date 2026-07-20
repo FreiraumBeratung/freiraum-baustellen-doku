@@ -116,7 +116,6 @@ async function upgradeTrackResolution(track: MediaStreamTrack): Promise<void> {
 async function captureStillBlob(
   video: HTMLVideoElement,
   track: MediaStreamTrack | null,
-  *,
   highRes: boolean,
   jpegQuality: number,
 ): Promise<Blob> {
