@@ -427,10 +427,11 @@ def _build_delivery_note_mail_body(note: dict[str, Any], profile: dict[str, Any]
     photo_line = ""
     if photo_count > 0:
         label = "Scan-Seite" if photo_count == 1 else "Scan-Seiten"
-        photo_line = f"{label}: {photo_count} Bild(er) zusätzlich im Anhang.\n\n"
+        photo_line = f"{label}: {photo_count} (im PDF-Anhang).\n\n"
     return (
         "Hallo,\n\n"
-        f"anbei der gescannte Lieferschein zur Baustelle {site} vom {day}.\n\n"
+        f"anbei der gescannte Lieferschein zur Baustelle {site} vom {day} "
+        f"als PDF.\n\n"
         f"{photo_line}"
         f"{note_line}"
         "Mit freundlichen Grüßen\n"
@@ -449,6 +450,9 @@ def send_delivery_note_to_office(
     resolve_photo: PhotoPathResolver | None = None,
     photos_upload_dir: Path | str | None = None,
 ) -> tuple[bool, bool, str]:
+    # photos_upload_dir absichtlich ungenutzt: Lieferschein-Mail nur PDF, keine Einzelbilder.
+    _ = photos_upload_dir
+
     if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
         return False, False, MSG_NOT_CONFIGURED
 
@@ -479,17 +483,17 @@ def send_delivery_note_to_office(
         logger.exception("Lieferschein-Anhang für Mail konnte nicht erzeugt werden")
         return False, False, "Der Lieferschein-Anhang konnte nicht erzeugt werden."
 
+    from app.services.delivery_note import delivery_note_photos_list
+
+    photo_count = len(delivery_note_photos_list(note))
+
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = from_addr
     msg["To"] = to_email
-    photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
-    photo_count = _count_attachable_photos(note, photos_dir)
     msg.set_content(_build_delivery_note_mail_body(note, profile, photo_count=photo_count))
+    # Nur PDF — keine Einzel-Fotos als Extra-Anhänge (Berichte/Protokolle bleiben unverändert).
     msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
-    attached_photos = _attach_report_photos(msg, note, photos_dir)
-    if attached_photos != photo_count:
-        photo_count = attached_photos
 
     ctx = ssl.create_default_context()
     try:
