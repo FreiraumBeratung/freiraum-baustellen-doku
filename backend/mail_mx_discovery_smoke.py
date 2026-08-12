@@ -27,6 +27,13 @@ def _mock_mx(hosts_by_domain: dict[str, list[str]]):
 _mock_mx({})
 web = mail_autodiscover.discover_smtp_servers("foo@web.de")
 _expect(web[0].source == "preset" and web[0].host == "smtp.web.de", "web.de preset")
+_expect(all(c.source != "guess" for c in web), "web.de darf keine Domain-Guesses haben")
+
+hotmail = mail_autodiscover.discover_smtp_servers("denis@hotmail.de")
+_expect(hotmail[0].host == "smtp.office365.com" and hotmail[0].source == "preset", "hotmail.de preset")
+_expect(all(c.host != "smtp.hotmail.de" for c in hotmail), "smtp.hotmail.de Guess muss weg")
+_expect(all(c.source != "guess" for c in hotmail), "hotmail.de darf keine Domain-Guesses haben")
+_expect(mail_autodiscover.provider_hint_for("denis@hotmail.de") is not None, "hotmail hint fehlt")
 
 # -- 2. IONOS-Firmendomain (Exchange zuerst, dann klassisch, vor Domain-Guess) -
 _mock_mx({"freiraum-unternehmensberatung.de": ["mx00.ionos.de", "mx01.ionos.de"]})

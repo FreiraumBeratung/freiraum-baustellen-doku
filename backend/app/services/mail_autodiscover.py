@@ -131,7 +131,19 @@ _PROVIDER_HINTS: dict[str, str] = {
     ),
     "hotmail.de": (
         "Bei Hotmail/Microsoft ist häufig ein App-Passwort erforderlich, wenn "
-        "die Zwei-Faktor-Authentifizierung aktiv ist."
+        "die Zwei-Faktor-Authentifizierung aktiv ist. Bitte unter "
+        "account.microsoft.com/security ein App-Passwort erstellen und hier "
+        "statt dem normalen Passwort verwenden."
+    ),
+    "live.com": (
+        "Bei Microsoft (Live) ist häufig ein App-Passwort erforderlich, wenn "
+        "die Zwei-Faktor-Authentifizierung aktiv ist. Bitte unter "
+        "account.microsoft.com/security ein App-Passwort erstellen."
+    ),
+    "live.de": (
+        "Bei Microsoft (Live) ist häufig ein App-Passwort erforderlich, wenn "
+        "die Zwei-Faktor-Authentifizierung aktiv ist. Bitte unter "
+        "account.microsoft.com/security ein App-Passwort erstellen."
     ),
     "yahoo.com": (
         "Bei Yahoo wird ein App-Passwort benötigt. Bitte unter login.yahoo.com "
@@ -230,11 +242,12 @@ def discover_smtp_servers(email_address: str) -> list[SmtpCandidate]:
     """Liefert eine geordnete Liste von SMTP-Kandidaten für die E-Mail-Adresse.
 
     Reihenfolge:
-    1. Preset (wenn Domain bekannt, z. B. web.de)
+    1. Preset (wenn Domain bekannt, z. B. web.de / hotmail.de → smtp.office365.com)
     2. MX-Inferenz (Firmendomain gehostet bei IONOS, Strato, Microsoft 365, …)
-    3. Domain-Guess: smtp.<domain>:587 STARTTLS
-    4. Domain-Guess: mail.<domain>:587 STARTTLS
-    5. Domain-Guess: smtp.<domain>:465 SSL
+    3. Domain-Guess nur wenn KEIN Preset existiert (sonst z. B. smtp.hotmail.de → DNS-Fail)
+       - smtp.<domain>:587 STARTTLS
+       - mail.<domain>:587 STARTTLS
+       - smtp.<domain>:465 SSL
     """
     domain = _domain_from_email(email_address)
     out: list[SmtpCandidate] = []
@@ -251,13 +264,16 @@ def discover_smtp_servers(email_address: str) -> list[SmtpCandidate]:
     for candidate in _candidates_from_mx(domain):
         _append_candidate(out, seen_keys, candidate.host, candidate.port, candidate.use_tls, candidate.use_ssl, candidate.source)
 
-    guesses: tuple[tuple[str, int, bool, bool], ...] = (
-        (f"smtp.{domain}", 587, True, False),
-        (f"mail.{domain}", 587, True, False),
-        (f"smtp.{domain}", 465, False, True),
-    )
-    for host, port, use_tls, use_ssl in guesses:
-        _append_candidate(out, seen_keys, host, port, use_tls, use_ssl, "guess")
+    # Bei bekannten Providern keine Domain-Guesses: smtp.hotmail.de existiert nicht
+    # und überschreibt sonst die Fehlermeldung von smtp.office365.com.
+    if preset is None:
+        guesses: tuple[tuple[str, int, bool, bool], ...] = (
+            (f"smtp.{domain}", 587, True, False),
+            (f"mail.{domain}", 587, True, False),
+            (f"smtp.{domain}", 465, False, True),
+        )
+        for host, port, use_tls, use_ssl in guesses:
+            _append_candidate(out, seen_keys, host, port, use_tls, use_ssl, "guess")
 
     return out
 
@@ -289,6 +305,19 @@ def _try_smtp_login(candidate: SmtpCandidate, username: str, password: str, time
         return False, f"Unerwarteter Fehler: {exc}"
 
 
+def _error_priority(candidate: SmtpCandidate, err: str) -> int:
+    """Niedriger = bevorzugter Fehlertext für die UI."""
+    if "Authentifizierung" in err:
+        return 0
+    if candidate.source == "guess":
+        return 40
+    if "nicht erreichbar (DNS)" in err:
+        return 20
+    if "Netzwerkfehler" in err:
+        return 10
+    return 15
+
+
 def verify_smtp_credentials(
     email_address: str,
     password: str,
@@ -297,8 +326,8 @@ def verify_smtp_credentials(
 ) -> SmtpVerifyResult:
     """Verifiziert E-Mail + Passwort gegen die Kandidatenliste.
 
-    Liefert den ersten erfolgreichen Treffer zurück. Bei Misserfolg wird der
-    letzte Fehlertext plus ggf. ein Provider-Hinweis (App-Passwort) gemeldet.
+    Liefert den ersten erfolgreichen Treffer zurück. Bei Misserfolg wird ein
+    sinnvoller Fehlertext (Preset/MX vor Domain-Guess) plus Provider-Hinweis gemeldet.
     """
     email_norm = str(email_address or "").strip()
     if not email_norm or not password:
@@ -315,31 +344,37 @@ def verify_smtp_credentials(
             provider_hint=provider_hint_for(email_norm),
         )
 
-    last_error: str | None = None
-    last_auth_error: str | None = None
+    best_error: str | None = None
+    best_rank = 999
     saw_auth_error = False
     saw_dns_error = False
     for candidate in candidates:
         ok, err = _try_smtp_login(candidate, email_norm, password, timeout=timeout)
         if ok:
             return SmtpVerifyResult(ok=True, candidate=candidate, error=None, provider_hint=None)
-        last_error = err
-        if err and "Authentifizierung" in err:
+        if not err:
+            continue
+        if "Authentifizierung" in err:
             saw_auth_error = True
-            last_auth_error = err
-        if err and ("nicht erreichbar (DNS)" in err or "Name or service not known" in err):
+        if "nicht erreichbar (DNS)" in err or "Name or service not known" in err:
             saw_dns_error = True
+        rank = _error_priority(candidate, err)
+        if rank < best_rank:
+            best_rank = rank
+            best_error = err
 
-    hint = provider_hint_for(email_norm) if saw_auth_error else None
+    domain = _domain_from_email(email_norm)
+    hint = provider_hint_for(email_norm)
     tried_ionos = any(c.host in ("smtp.exchange.ionos.eu", "smtp.ionos.de") for c in candidates)
     if not hint and saw_auth_error and tried_ionos:
         hint = (
             "Bitte das Mail-Passwort prüfen (nicht das IONOS-Kundenlogin). "
             "Volle E-Mail-Adresse als Benutzername verwenden."
         )
-    if not hint and saw_dns_error and not saw_auth_error:
+    # Firmen-Domain-Hinweis nur bei unbekannten Domains — nicht bei Hotmail/Outlook-Presets.
+    if not hint and saw_dns_error and not saw_auth_error and domain not in _PRESETS:
         hint = (
             "Für Ihre Firmen-Domain konnte kein Mail-Server ermittelt werden. "
             "Bitte prüfen Sie, ob SMTP-Versand bei Ihrem Mail-Provider aktiv ist."
         )
-    return SmtpVerifyResult(ok=False, candidate=None, error=last_auth_error or last_error, provider_hint=hint)
+    return SmtpVerifyResult(ok=False, candidate=None, error=best_error, provider_hint=hint)
