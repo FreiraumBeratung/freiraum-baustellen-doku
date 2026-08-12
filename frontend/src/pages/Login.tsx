@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { apiAuthDebugOriginLabel, getDebugPing, LoginRequestError } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { BigButton, Card, PageTitle, PoweredBy } from '../components/ui'
+import { PasswordField } from '../components/PasswordField'
 
 function formatLoginErrorDev(err: unknown): string {
   if (err instanceof LoginRequestError) {
@@ -95,20 +96,17 @@ export function LoginPage() {
               required
             />
           </label>
-          <label className="block">
-            <span className="text-sm text-zinc-400">Passwort</span>
-            <input
-              className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-orange-500"
-              type="password"
-              autoComplete="current-password"
-              autoCapitalize="none"
-              autoCorrect="off"
-              spellCheck={false}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+          <PasswordField
+            id="login-password"
+            label="Passwort"
+            autoComplete="current-password"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck={false}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
           {err ? (
             <p className="whitespace-pre-line text-sm text-red-400" role="alert">
               {err}

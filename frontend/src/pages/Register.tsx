@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { BigButton, Card, PoweredBy, PageTitle } from '../components/ui'
+import { PasswordField } from '../components/PasswordField'
 
 export function RegisterPage() {
   const nav = useNavigate()
@@ -61,17 +62,14 @@ export function RegisterPage() {
               required
             />
           </label>
-          <label className="block">
-            <span className="text-sm text-zinc-400">Passwort</span>
-            <input
-              className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-orange-500"
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </label>
+          <PasswordField
+            id="register-password"
+            label="Passwort"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
           {err ? <p className="text-sm text-red-400">{err}</p> : null}
           <BigButton type="submit" disabled={loading}>
             {loading ? '…' : 'Konto erstellen'}
