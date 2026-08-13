@@ -29,6 +29,8 @@ export type ReportPreviewState = {
   seriesMode?: boolean
   /** freie Besonderheiten/Notiz für diesen Tag (Folge- wie Einzelbericht) */
   notes?: string
+  /** Edit-Modus: vorhandener Bericht wird per PUT aktualisiert (nicht neu angelegt) */
+  existingReportId?: string
 }
 
 export type StructuredPayload = {

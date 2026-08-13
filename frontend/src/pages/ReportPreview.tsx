@@ -437,6 +437,7 @@ function ReportPreviewInner({
 }) {
   const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
+  const isEditMode = Boolean(st.existingReportId)
   const [companyName, setCompanyName] = useState('')
   const [officeEmail, setOfficeEmail] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
@@ -550,11 +551,19 @@ function ReportPreviewInner({
     <div key={`preview-wake-${pageWakeKey}`} className="overflow-x-hidden">
       <PageTitle
         title="Tagesbericht"
-        subtitle={savedReportId ? 'Fotos, Unterschrift & Versand' : 'Prüfen & anpassen'}
+        subtitle={
+          savedReportId
+            ? 'Fotos, Unterschrift & Versand'
+            : isEditMode
+              ? 'Bericht bearbeiten'
+              : 'Prüfen & anpassen'
+        }
       />
       {!savedReportId ? (
         <p className="mb-2 text-center text-sm text-zinc-500">
-          Bitte prüfen und bei Bedarf anpassen — im nächsten Schritt Fotos &amp; Unterschrift.
+          {isEditMode
+            ? 'Änderungen prüfen und speichern — Fotos & Unterschriften bleiben erhalten.'
+            : 'Bitte prüfen und bei Bedarf anpassen — im nächsten Schritt Fotos & Unterschrift.'}
         </p>
       ) : null}
       {dirty && !savedReportId ? (
@@ -754,11 +763,18 @@ function ReportPreviewInner({
               disabled={writeBlocked || saveBusy}
               onClick={() => onSave(logoUrl, companyName, officeEmail)}
             >
-              {saveBusy ? '…' : 'Bericht speichern'}
+              {saveBusy ? '…' : isEditMode ? 'Änderungen speichern' : 'Bericht speichern'}
             </BigButton>
             <p className="text-center text-xs text-zinc-500">
-              Fotos &amp; Unterschrift sind optional und folgen direkt nach dem Speichern.
+              {isEditMode
+                ? 'Nach dem Speichern landest du wieder in der Berichtansicht.'
+                : 'Fotos & Unterschrift sind optional und folgen direkt nach dem Speichern.'}
             </p>
+            {isEditMode ? (
+              <BigButton variant="secondary" type="button" onClick={() => nav(`/berichte/${st.existingReportId}`)}>
+                Abbrechen
+              </BigButton>
+            ) : null}
           </>
         ) : null}
 
@@ -912,6 +928,12 @@ export function ReportPreviewPage() {
     setSaveMsg('')
     setSaveErr('')
 
+    // Edit-Modus: nie aus Create-Persist wiederherstellen — Felder bleiben editierbar.
+    if (st.existingReportId) {
+      setSavedReportId(null)
+      return
+    }
+
     const persisted = loadReportPreviewPersist()
     if (persisted?.reportSyncKey === reportSyncKey && persisted.savedReportId) {
       setSavedReportId(persisted.savedReportId)
@@ -967,6 +989,19 @@ export function ReportPreviewPage() {
           customerTalk: s.customerTalk,
         } satisfies StructuredPayload,
       }
+
+      // Edit: bestehenden Bericht aktualisieren (Create-Pfad darunter unverändert).
+      if (st.existingReportId) {
+        await api<{ id: string }>(`/api/reports/${encodeURIComponent(st.existingReportId)}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        })
+        setSavedBaseline(cloneStructured(draftStructured))
+        setSaveMsg('Änderungen gespeichert')
+        nav(`/berichte/${encodeURIComponent(st.existingReportId)}`, { replace: true })
+        return
+      }
+
       const doc = await api<{
         id: string
         timeBooking?: {
@@ -990,7 +1025,11 @@ export function ReportPreviewPage() {
         saveReportPreviewPersist({ reportSyncKey, savedReportId: doc.id })
       }
     } catch {
-      setSaveErr('Bericht konnte nicht gespeichert werden.')
+      setSaveErr(
+        st.existingReportId
+          ? 'Änderungen konnten nicht gespeichert werden.'
+          : 'Bericht konnte nicht gespeichert werden.',
+      )
     } finally {
       setSaveBusy(false)
     }

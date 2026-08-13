@@ -7,6 +7,7 @@ import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
+import { buildReportPreviewStateFromDoc } from '../utils/reportEditState'
 import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
@@ -17,14 +18,19 @@ type ReportDetailNavState = {
 type ReportDoc = {
   id: string
   companyName: string
+  projectId?: string
   projectName: string
   customerName: string
   date: string
   employees: string[]
+  employeeIds?: string[]
   startTime: string
   endTime: string
+  breakMinutes?: number
   exportFormat: string
   rawText: string
+  notes?: string
+  runId?: string | null
   structured: {
     summary: string
     activities: string[]
@@ -35,6 +41,8 @@ type ReportDoc = {
     problems: string[]
     openItems: string[]
     customerTalk: string
+    workTime?: string
+    participantsLine?: string
   }
 }
 
@@ -237,6 +245,14 @@ export function ReportDetailPage() {
         {officeMsg ? <p className="text-sm text-orange-300">{officeMsg}</p> : null}
         {officeErr ? <p className="text-sm text-red-400">{officeErr}</p> : null}
         {dlErr ? <p className="text-sm text-red-400">{dlErr}</p> : null}
+        <BigButton
+          type="button"
+          variant="secondary"
+          disabled={writeBlocked}
+          onClick={() => nav('/bericht/vorschau', { state: buildReportPreviewStateFromDoc(report) })}
+        >
+          Bearbeiten
+        </BigButton>
         <BigButton type="button" onClick={copyAll}>
           Text kopieren
         </BigButton>

@@ -1833,6 +1833,70 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
     return doc
 
 
+@app.put("/api/reports/{report_id}")
+def update_report(
+    report_id: str,
+    body: ReportCreateBody,
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    """Bestehenden Bericht aktualisieren — Fotos/Unterschriften/runId bleiben erhalten."""
+    data = store.read_json("reports.json", {"reports": []})
+    reports_list = list(data.get("reports", []))
+    idx = next((i for i, r in enumerate(reports_list) if r.get("id") == report_id), None)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+    existing = dict(reports_list[idx])
+
+    prof = store.read_json("company_profile.json", {})
+    logo_fn = prof.get("logoFilename")
+    company_logo_url = existing.get("companyLogoUrl")
+    if logo_fn:
+        resolved = _logo_public_url(store, logo_fn)
+        if resolved:
+            company_logo_url = resolved
+        else:
+            legacy_logo = UPLOADS_DIR / str(logo_fn)
+            if legacy_logo.is_file():
+                company_logo_url = f"/uploads/logos/{logo_fn}"
+    if body.companyLogoUrl:
+        company_logo_url = body.companyLogoUrl
+
+    existing.update(
+        {
+            "companyName": body.companyName,
+            "companyLogoUrl": company_logo_url,
+            "officeEmail": body.officeEmail or prof.get("officeEmail", "") or existing.get("officeEmail", ""),
+            "projectId": body.projectId,
+            "projectName": body.projectName,
+            "customerName": body.customerName,
+            "date": body.date,
+            "employees": body.employees,
+            "employeeIds": [str(x).strip() for x in body.employeeIds if str(x).strip()],
+            "startTime": body.startTime,
+            "endTime": body.endTime,
+            "breakMinutes": int(body.breakMinutes),
+            "exportFormat": body.exportFormat,
+            "rawText": body.rawText,
+            "structured": body.structured.model_dump(),
+            "notes": str(body.notes or "").strip(),
+            "updatedAt": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    # Fotos, Signaturen, createdAt, runId, id, companyId bewusst unangetastet.
+    reports_list[idx] = existing
+    data["reports"] = reports_list
+    store.write_json("reports.json", data)
+
+    employees_data = store.read_json("employees.json", {"employees": []})
+    existing["timeBooking"] = time_account.sync_entries_for_report(
+        existing,
+        list(employees_data.get("employees") or []),
+        read_json=store.time_account_read_json,
+        write_json=store.time_account_write_json,
+    )
+    return existing
+
+
 def _write_json_reports(store: TenantStore, new_report: dict) -> None:
     data = store.read_json("reports.json", {"reports": []})
     data.setdefault("reports", []).append(new_report)
