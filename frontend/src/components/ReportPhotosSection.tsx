@@ -18,6 +18,7 @@ import {
   mobileHardRedirectAfterPhotoUpload,
   needsMobilePhotoHardRedirect,
 } from '../utils/mobilePhotoRedirect'
+import { isTabletDevice } from '../utils/isTabletDevice'
 import { setPhotoUploadBusy } from '../utils/photoUploadBusy'
 import { forcePwaRepaint, wakePageAfterPhotoUpload, yieldForPaint } from '../utils/pwaRepaint'
 import { BigButton } from './ui'
@@ -98,6 +99,21 @@ export function ReportPhotosSection({
         (opts.source === 'gallery' || opts.source === 'inline-camera')
 
       if (shouldMobileHardRedirect) {
+        // Tablet-only: Overlay sofort weg + extra Repaint, dann harter Reload.
+        // Handy-Pfad darunter unverändert (Success-Anzeige → assign).
+        if (isTabletDevice()) {
+          setPhase('idle')
+          setStatusLine(opts.message ?? 'Foto übernommen.')
+          setOverlayMode('off')
+          setPhotoUploadBusy(false)
+          forcePwaRepaint()
+          await yieldForPaint(180)
+          forcePwaRepaint()
+          await yieldForPaint(320)
+          mobileHardRedirectAfterPhotoUpload(entityId, isProtocol ? 'protocol' : 'report')
+          return
+        }
+
         setPhase('idle')
         setStatusLine(opts.message ?? 'Foto übernommen.')
         setOverlayMode('success')
@@ -125,7 +141,7 @@ export function ReportPhotosSection({
       }
       forcePwaRepaint()
     },
-    [iosGalleryRedirect, onUploadComplete, entityId],
+    [iosGalleryRedirect, onUploadComplete, entityId, isProtocol],
   )
 
   const abortOverlay = useCallback(async () => {

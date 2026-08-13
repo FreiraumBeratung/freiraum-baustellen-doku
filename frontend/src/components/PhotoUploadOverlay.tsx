@@ -1,3 +1,6 @@
+import { useMemo } from 'react'
+import { isTabletDevice } from '../utils/isTabletDevice'
+
 export type PhotoUploadOverlayMode = 'off' | 'active' | 'success' | 'closing'
 
 type PhotoUploadOverlayProps = {
@@ -10,6 +13,9 @@ type PhotoUploadOverlayProps = {
  * Halbtransparent, unten als Karte: weniger dominant, iOS composited die Seite darunter mit.
  */
 export function PhotoUploadOverlay({ mode, message }: PhotoUploadOverlayProps) {
+  // Nur Tablet breiter — Handy-Overlay bleibt max-w-[390px].
+  const cardMax = useMemo(() => (isTabletDevice() ? 'max-w-[720px]' : 'max-w-[390px]'), [])
+
   if (mode === 'off') return null
 
   const isSuccess = mode === 'success'
@@ -26,7 +32,7 @@ export function PhotoUploadOverlay({ mode, message }: PhotoUploadOverlayProps) {
       aria-live="polite"
       aria-busy={!isSuccess && !isClosing}
     >
-      <div className="w-full max-w-[390px] rounded-2xl border border-zinc-700/70 bg-zinc-900/95 px-4 py-3.5 shadow-lg shadow-black/40">
+      <div className={`w-full ${cardMax} rounded-2xl border border-zinc-700/70 bg-zinc-900/95 px-4 py-3.5 shadow-lg shadow-black/40`}>
         <div className="flex items-center gap-3">
           {isSuccess ? (
             <span

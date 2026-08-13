@@ -5,6 +5,8 @@ import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { isTabletDevice } from '../utils/isTabletDevice'
+import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
 import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
@@ -68,6 +70,13 @@ export function ReportDetailPage() {
     }, 350)
     return () => window.clearTimeout(t)
   }, [r, openPhotosFromQuery, openSignaturesFromQuery])
+
+  // Tablet-only: nach hartem Foto-Redirect Seite wecken (Blackscreen-Absicherung).
+  // Handys: unverändert — kein Extra-Wake hier.
+  useEffect(() => {
+    if (!uploadedFromQuery || !isTabletDevice()) return
+    void wakePageAfterPhotoUpload()
+  }, [uploadedFromQuery])
 
   async function dlExport(kind: 'pdf' | 'word') {
     if (!id) return
