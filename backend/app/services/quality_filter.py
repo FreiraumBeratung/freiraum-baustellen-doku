@@ -1970,6 +1970,8 @@ def _drop_future_work_activities(activities: list[str], raw_text: str) -> list[s
         if _is_future_only_pflaster_activity(act, raw_text):
             continue
         if "pflasterfugen" in low:
+            # raw_text → lokale Variable (wie in den anderen Filtern); sonst NameError → 500
+            raw = str(raw_text or "").casefold()
             before = raw.split("morgen", 1)[0] if re.search(r"\bmorgen\b", raw) else raw
             if re.search(r"\bfugensand\b", raw) and re.search(
                 r"\bf(?:ü|ue|u)llen\b",
