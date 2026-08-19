@@ -76,6 +76,36 @@ function defaultEmployeeIds(st: ReportPreviewState): string[] {
   return Array.isArray(st.employeeIds) ? st.employeeIds : []
 }
 
+type DraftMeta = {
+  startTime: string
+  endTime: string
+  breakMinutes: number
+  employees: string[]
+  employeeIds: string[]
+}
+
+function metaFromState(st: ReportPreviewState): DraftMeta {
+  return {
+    startTime: st.startTime,
+    endTime: st.endTime,
+    breakMinutes: defaultBreakMinutes(st),
+    employees: [...(st.employees || [])],
+    employeeIds: [...defaultEmployeeIds(st)],
+  }
+}
+
+function metaEqual(a: DraftMeta, b: DraftMeta): boolean {
+  if (a.startTime !== b.startTime || a.endTime !== b.endTime || a.breakMinutes !== b.breakMinutes) {
+    return false
+  }
+  if (a.employees.length !== b.employees.length || a.employeeIds.length !== b.employeeIds.length) {
+    return false
+  }
+  if (!a.employees.every((v, i) => v === b.employees[i])) return false
+  if (!a.employeeIds.every((v, i) => v === b.employeeIds[i])) return false
+  return true
+}
+
 function formatHoursDe(h: number | null | undefined): string {
   if (h == null || Number.isNaN(h)) return '—'
   return `${String(h).replace('.', ',')} h`
@@ -412,6 +442,9 @@ function ReportPreviewInner({
   st,
   draftStructured,
   setDraftStructured,
+  draftMeta,
+  setDraftMeta,
+  setMetaBaseline,
   savedReportId,
   onSave,
   onCopy,
@@ -425,6 +458,9 @@ function ReportPreviewInner({
   st: ReportPreviewState
   draftStructured: StructuredPayload
   setDraftStructured: React.Dispatch<React.SetStateAction<StructuredPayload>>
+  draftMeta: DraftMeta
+  setDraftMeta: React.Dispatch<React.SetStateAction<DraftMeta>>
+  setMetaBaseline: React.Dispatch<React.SetStateAction<DraftMeta>>
   savedReportId: string | null
   onSave: (logoUrl: string | null, companyName: string, officeEmail: string) => void
   onCopy: (companyName: string, structured: StructuredPayload) => void
@@ -438,6 +474,7 @@ function ReportPreviewInner({
   const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
   const isEditMode = Boolean(st.existingReportId)
+  const metaEditable = isEditMode && !savedReportId
   const [companyName, setCompanyName] = useState('')
   const [officeEmail, setOfficeEmail] = useState('')
   const [logoUrl, setLogoUrl] = useState<string | null>(null)
@@ -448,6 +485,7 @@ function ReportPreviewInner({
   const [officeErr, setOfficeErr] = useState('')
   const [pageWakeKey, setPageWakeKey] = useState(0)
   const [moreOpen, setMoreOpen] = useState(false)
+  const [roster, setRoster] = useState<{ id: string; name: string; active?: boolean }[]>([])
 
   useEffect(() => {
     api<{ companyName: string; officeEmail: string; logoUrl: string | null }>('/api/company-profile').then(
@@ -458,6 +496,38 @@ function ReportPreviewInner({
       },
     )
   }, [])
+
+  // Nur Edit-Modus: Mitarbeiterliste laden (Create-Vorschau bleibt unverändert).
+  useEffect(() => {
+    if (!metaEditable) return
+    api<{ employees: { id: string; name: string; active?: boolean }[] }>('/api/employees')
+      .then((r) => {
+        const list = (r.employees || []).filter((e) => e.active !== false)
+        setRoster(list)
+        // Falls nur Namen gespeichert sind: IDs nachziehen, ohne Auswahl zu verlieren.
+        setDraftMeta((prev) => {
+          if (prev.employeeIds.length > 0 || prev.employees.length === 0 || list.length === 0) {
+            return prev
+          }
+          const nameSet = new Set(prev.employees.map((n) => n.trim().toLowerCase()).filter(Boolean))
+          const matched = list.filter((e) => nameSet.has(e.name.trim().toLowerCase()))
+          if (!matched.length) return prev
+          const next: DraftMeta = {
+            ...prev,
+            employeeIds: matched.map((e) => e.id),
+            employees: matched.map((e) => e.name),
+          }
+          // Baseline mitziehen, damit reines ID-Nachziehen nicht als „dirty“ gilt.
+          setMetaBaseline((base) =>
+            base.employeeIds.length > 0
+              ? base
+              : { ...base, employeeIds: next.employeeIds, employees: next.employees },
+          )
+          return next
+        })
+      })
+      .catch(() => setRoster([]))
+  }, [metaEditable, setDraftMeta, setMetaBaseline])
 
   const s = draftStructured
 
@@ -600,16 +670,108 @@ function ReportPreviewInner({
           <div className="flex gap-3 border-b border-zinc-800 pb-2">
             <span className="text-zinc-500 shrink-0 pt-0.5">Mitarbeiter</span>
             <div className="min-w-0 flex-1 text-right font-medium text-white">
-              <p>{st.employees.length ? st.employees.join(', ') : 'Keine Angabe'}</p>
+              {metaEditable ? (
+                <div className="space-y-2 text-left">
+                  {roster.map((e) => {
+                    const checked = draftMeta.employeeIds.includes(e.id)
+                    return (
+                      <label
+                        key={e.id}
+                        className="flex cursor-pointer items-center gap-2 rounded-xl border border-transparent bg-black/40 px-2.5 py-2 ring-1 ring-white/[0.08]"
+                      >
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-orange-500"
+                          checked={checked}
+                          disabled={writeBlocked}
+                          onChange={() => {
+                            setDraftMeta((prev) => {
+                              const nextIds = checked
+                                ? prev.employeeIds.filter((id) => id !== e.id)
+                                : [...prev.employeeIds, e.id]
+                              const idSet = new Set(nextIds)
+                              const nextNames = roster
+                                .filter((row) => idSet.has(row.id))
+                                .map((row) => row.name)
+                              return { ...prev, employeeIds: nextIds, employees: nextNames }
+                            })
+                          }}
+                        />
+                        <span className="text-sm font-normal text-white">{e.name}</span>
+                      </label>
+                    )
+                  })}
+                  {roster.length === 0 ? (
+                    <p className="text-sm font-normal text-zinc-500">
+                      {draftMeta.employees.length
+                        ? draftMeta.employees.join(', ')
+                        : 'Keine aktiven Mitarbeitenden.'}
+                    </p>
+                  ) : null}
+                </div>
+              ) : (
+                <p>{st.employees.length ? st.employees.join(', ') : 'Keine Angabe'}</p>
+              )}
             </div>
           </div>
-          <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
-            <span className="text-zinc-500 shrink-0">Arbeitszeit</span>
-            <span className="min-w-0 whitespace-pre-wrap text-right text-white">
-              {st.startTime} – {st.endTime}
-              {`\nPause: ${defaultBreakMinutes(st)} Min.`}
-              {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
-            </span>
+          <div className="border-b border-zinc-800 pb-2">
+            <span className="text-zinc-500">Arbeitszeit</span>
+            {metaEditable ? (
+              <div className="mt-2 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block text-left">
+                    <span className="text-xs text-zinc-500">Start</span>
+                    <input
+                      type="time"
+                      className={`${inputClass} disabled:opacity-60`}
+                      value={draftMeta.startTime}
+                      disabled={writeBlocked}
+                      onChange={(e) =>
+                        setDraftMeta((prev) => ({ ...prev, startTime: e.target.value }))
+                      }
+                    />
+                  </label>
+                  <label className="block text-left">
+                    <span className="text-xs text-zinc-500">Ende</span>
+                    <input
+                      type="time"
+                      className={`${inputClass} disabled:opacity-60`}
+                      value={draftMeta.endTime}
+                      disabled={writeBlocked}
+                      onChange={(e) =>
+                        setDraftMeta((prev) => ({ ...prev, endTime: e.target.value }))
+                      }
+                    />
+                  </label>
+                </div>
+                <label className="block text-left">
+                  <span className="text-xs text-zinc-500">Pause</span>
+                  <select
+                    className={`${inputClass} disabled:opacity-60`}
+                    value={draftMeta.breakMinutes}
+                    disabled={writeBlocked}
+                    onChange={(e) =>
+                      setDraftMeta((prev) => ({
+                        ...prev,
+                        breakMinutes: Number(e.target.value),
+                      }))
+                    }
+                  >
+                    <option value={0}>Keine Pause</option>
+                    <option value={30}>30 Minuten</option>
+                    <option value={45}>45 Minuten</option>
+                    <option value={60}>60 Minuten</option>
+                    <option value={90}>90 Minuten</option>
+                  </select>
+                </label>
+              </div>
+            ) : (
+              <span className="mt-1 block min-w-0 whitespace-pre-wrap text-right text-white">
+                {st.startTime} – {st.endTime}
+                {`\nPause: ${defaultBreakMinutes(st)} Min.`}
+                {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
+              </span>
+            )}
           </div>
           <div className="flex justify-between gap-2">
             <span className="text-zinc-500">Ausgabeformat</span>
@@ -911,6 +1073,12 @@ export function ReportPreviewPage() {
   const [savedBaseline, setSavedBaseline] = useState<StructuredPayload>(() =>
     st ? cloneStructured(st.structured) : defaultEmptyStructured(),
   )
+  const [draftMeta, setDraftMeta] = useState<DraftMeta>(() =>
+    st ? metaFromState(st) : { startTime: '08:00', endTime: '16:30', breakMinutes: 45, employees: [], employeeIds: [] },
+  )
+  const [metaBaseline, setMetaBaseline] = useState<DraftMeta>(() =>
+    st ? metaFromState(st) : { startTime: '08:00', endTime: '16:30', breakMinutes: 45, employees: [], employeeIds: [] },
+  )
   const [savedReportId, setSavedReportId] = useState<string | null>(null)
   const [saveBusy, setSaveBusy] = useState(false)
   const [saveErr, setSaveErr] = useState('')
@@ -925,6 +1093,9 @@ export function ReportPreviewPage() {
     const c = cloneStructured(st.structured)
     setDraftStructured(c)
     setSavedBaseline(c)
+    const m = metaFromState(st)
+    setDraftMeta(m)
+    setMetaBaseline(m)
     setSaveMsg('')
     setSaveErr('')
 
@@ -946,10 +1117,11 @@ export function ReportPreviewPage() {
     }
   }, [reportSyncKey, st])
 
-  const dirty = useMemo(
-    () => !structuredEqual(draftStructured, savedBaseline),
-    [draftStructured, savedBaseline],
-  )
+  const dirty = useMemo(() => {
+    const structDirty = !structuredEqual(draftStructured, savedBaseline)
+    if (!st?.existingReportId) return structDirty
+    return structDirty || !metaEqual(draftMeta, metaBaseline)
+  }, [draftStructured, savedBaseline, draftMeta, metaBaseline, st?.existingReportId])
 
   async function saveReport(logoUrl: string | null, companyName: string, officeEmail: string) {
     if (!st) return
@@ -960,6 +1132,7 @@ export function ReportPreviewPage() {
     setSaveBusy(true)
     try {
       const s = draftStructured
+      const isEdit = Boolean(st.existingReportId)
       const payload = {
         companyName,
         companyLogoUrl: resolveBackendPublicUrl(logoUrl),
@@ -968,11 +1141,12 @@ export function ReportPreviewPage() {
         projectName: st.projectName,
         customerName: st.customerName,
         date: st.date,
-        employees: st.employees,
-        employeeIds: defaultEmployeeIds(st),
-        startTime: st.startTime,
-        endTime: st.endTime,
-        breakMinutes: defaultBreakMinutes(st),
+        // Edit: Zeiten/Mitarbeiter aus Draft — Create: unverändert aus st.
+        employees: isEdit ? draftMeta.employees : st.employees,
+        employeeIds: isEdit ? draftMeta.employeeIds : defaultEmployeeIds(st),
+        startTime: isEdit ? draftMeta.startTime : st.startTime,
+        endTime: isEdit ? draftMeta.endTime : st.endTime,
+        breakMinutes: isEdit ? draftMeta.breakMinutes : defaultBreakMinutes(st),
         exportFormat: st.exportFormat,
         rawText: st.rawText,
         seriesMode: Boolean(st.seriesMode),
@@ -997,6 +1171,7 @@ export function ReportPreviewPage() {
           body: JSON.stringify(payload),
         })
         setSavedBaseline(cloneStructured(draftStructured))
+        setMetaBaseline({ ...draftMeta })
         setSaveMsg('Änderungen gespeichert')
         nav(`/berichte/${encodeURIComponent(st.existingReportId)}`, { replace: true })
         return
@@ -1059,6 +1234,9 @@ export function ReportPreviewPage() {
       st={st}
       draftStructured={draftStructured}
       setDraftStructured={setDraftStructured}
+      draftMeta={draftMeta}
+      setDraftMeta={setDraftMeta}
+      setMetaBaseline={setMetaBaseline}
       savedReportId={savedReportId}
       onSave={saveReport}
       onCopy={copyText}
