@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { tilePermission } from '../utils/accountPermissions'
@@ -23,7 +23,8 @@ const allTiles: Tile[] = [
 ]
 
 export function DashboardPage() {
-  const { can } = useAuth()
+  const { can, isCompanyOwner, logout } = useAuth()
+  const nav = useNavigate()
   const [company, setCompany] = useState<CompanyProfile | null>(null)
 
   const tiles = useMemo(
@@ -109,6 +110,22 @@ export function DashboardPage() {
           </Link>
         ))}
       </nav>
+
+      {/* Mitarbeiter ohne Profil-Reiter: dezentes Abmelden (Chef bleibt über Profil) */}
+      {!isCompanyOwner ? (
+        <div className="mt-5 flex justify-center pb-1">
+          <button
+            type="button"
+            className="min-h-[2.5rem] px-3 text-[0.8rem] font-medium tracking-wide text-zinc-500 transition hover:text-zinc-300"
+            onClick={() => {
+              logout()
+              nav('/login', { replace: true })
+            }}
+          >
+            Abmelden
+          </button>
+        </div>
+      ) : null}
     </div>
   )
 }
