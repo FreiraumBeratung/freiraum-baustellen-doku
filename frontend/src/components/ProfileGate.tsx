@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
+import { useAuth } from '../context/AuthContext'
 import { type CompanyProfileResponse, isCompanyProfileComplete } from '../utils/companyProfile'
 
 function ProfileGateInner() {
   const location = useLocation()
+  const { isCompanyOwner } = useAuth()
   const [profile, setProfile] = useState<CompanyProfileResponse | null>(null)
   const [ready, setReady] = useState(false)
 
@@ -34,6 +36,14 @@ function ProfileGateInner() {
   }
 
   const complete = isCompanyProfileComplete(profile)
+
+  // Worker: Onboarding überspringen — Firmenprofil pflegt nur der Chef.
+  if (!isCompanyOwner) {
+    if (location.pathname === '/onboarding' || location.pathname === '/profil') {
+      return <Navigate to="/" replace />
+    }
+    return <Outlet />
+  }
 
   if (!complete && location.pathname !== '/onboarding') {
     return <Navigate to="/onboarding" replace />

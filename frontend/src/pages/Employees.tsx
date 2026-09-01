@@ -2,14 +2,28 @@ import { Pencil, Power, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { PasswordField } from '../components/PasswordField'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { EXTRA_PERMISSION_OPTIONS, type AppPermission } from '../utils/accountPermissions'
+
+type EmployeeAccess = {
+  hasAccess?: boolean
+  username?: string
+  loginActive?: boolean
+  permissions?: string[]
+  userId?: string
+}
 
 type Employee = {
   id: string
   name: string
   role: string
   active: boolean
+  access?: EmployeeAccess
 }
+
+const emptyPerms = (): Record<string, boolean> =>
+  Object.fromEntries(EXTRA_PERMISSION_OPTIONS.map((o) => [o.key, false]))
 
 export function EmployeesPage() {
   const { writeBlocked } = useWriteBlocked()
@@ -21,6 +35,13 @@ export function EmployeesPage() {
   const [editName, setEditName] = useState('')
   const [editRole, setEditRole] = useState('')
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
+
+  const [accessId, setAccessId] = useState<string | null>(null)
+  const [accessUsername, setAccessUsername] = useState('')
+  const [accessPassword, setAccessPassword] = useState('')
+  const [accessPerms, setAccessPerms] = useState<Record<string, boolean>>(emptyPerms)
+  const [accessMsg, setAccessMsg] = useState('')
+  const [accessErr, setAccessErr] = useState('')
 
   async function load() {
     const r = await api<{ employees: Employee[] }>('/api/employees')
@@ -59,6 +80,7 @@ export function EmployeesPage() {
 
   function startEdit(emp: Employee) {
     setConfirmDeleteId(null)
+    setAccessId(null)
     setEditId(emp.id)
     setEditName(emp.name)
     setEditRole(emp.role || '')
@@ -97,9 +119,105 @@ export function EmployeesPage() {
     }
   }
 
+  function openAccess(emp: Employee) {
+    setConfirmDeleteId(null)
+    setEditId(null)
+    setAccessId(emp.id)
+    setAccessMsg('')
+    setAccessErr('')
+    const acc = emp.access
+    setAccessUsername(acc?.username || '')
+    setAccessPassword('')
+    const next = emptyPerms()
+    for (const p of acc?.permissions || []) {
+      if (p in next) next[p] = true
+    }
+    setAccessPerms(next)
+  }
+
+  function cancelAccess() {
+    setAccessId(null)
+    setAccessUsername('')
+    setAccessPassword('')
+    setAccessPerms(emptyPerms())
+    setAccessMsg('')
+    setAccessErr('')
+  }
+
+  function selectedPermissions(): AppPermission[] {
+    return EXTRA_PERMISSION_OPTIONS.map((o) => o.key).filter((k) => accessPerms[k])
+  }
+
+  async function saveAccess(emp: Employee) {
+    if (writeBlocked) return
+    setAccessErr('')
+    setAccessMsg('')
+    const has = Boolean(emp.access?.hasAccess)
+    if (!accessUsername.trim()) {
+      setAccessErr('Benutzername fehlt.')
+      return
+    }
+    if (!has && !accessPassword.trim()) {
+      setAccessErr('Passwort fehlt.')
+      return
+    }
+    setBusyId(emp.id)
+    try {
+      if (!has) {
+        await api(`/api/employees/${encodeURIComponent(emp.id)}/access`, {
+          method: 'POST',
+          body: JSON.stringify({
+            username: accessUsername.trim(),
+            password: accessPassword,
+            permissions: selectedPermissions(),
+            loginActive: true,
+          }),
+        })
+        setAccessMsg('Zugang erstellt.')
+      } else {
+        const body: Record<string, unknown> = {
+          username: accessUsername.trim(),
+          permissions: selectedPermissions(),
+        }
+        if (accessPassword.trim()) body.password = accessPassword
+        await api(`/api/employees/${encodeURIComponent(emp.id)}/access`, {
+          method: 'PATCH',
+          body: JSON.stringify(body),
+        })
+        setAccessMsg('Zugang gespeichert.')
+      }
+      setAccessPassword('')
+      await load()
+    } catch (ex) {
+      setAccessErr(ex instanceof Error ? ex.message : 'Zugang konnte nicht gespeichert werden.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function toggleLoginActive(emp: Employee) {
+    if (writeBlocked || !emp.access?.hasAccess) return
+    setBusyId(emp.id)
+    setAccessErr('')
+    try {
+      await api(`/api/employees/${encodeURIComponent(emp.id)}/access`, {
+        method: 'PATCH',
+        body: JSON.stringify({ loginActive: !emp.access.loginActive }),
+      })
+      await load()
+    } catch (ex) {
+      setAccessErr(ex instanceof Error ? ex.message : 'Sperren fehlgeschlagen.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="overflow-x-hidden">
-      <PageTitle title="Mitarbeiter verwalten" subtitle="Anlegen, bearbeiten, deaktivieren oder löschen — für die Auswahl im Tagesbericht" />
+      <PageTitle
+        title="Mitarbeiter verwalten"
+        subtitle="Anlegen, bearbeiten, Zugang erstellen — für Tagesbericht und App-Login"
+      />
 
       <Card className="mb-4">
         <form onSubmit={add} className="space-y-3">
@@ -121,7 +239,9 @@ export function EmployeesPage() {
               placeholder="Vorarbeiter"
             />
           </label>
-          <BigButton type="submit" disabled={writeBlocked}>Mitarbeiter hinzufügen</BigButton>
+          <BigButton type="submit" disabled={writeBlocked}>
+            Mitarbeiter hinzufügen
+          </BigButton>
         </form>
       </Card>
 
@@ -165,12 +285,99 @@ export function EmployeesPage() {
                   </button>
                 </div>
               </div>
+            ) : accessId === emp.id ? (
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-white">
+                  Zugang {emp.access?.hasAccess ? 'bearbeiten' : 'erstellen'} — {emp.name}
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Basis immer: Tagesbericht + Protokoll (+ Ans Büro senden). Extra-Rechte per Haken.
+                </p>
+                <label className="block min-w-0">
+                  <span className="text-xs text-zinc-400">Benutzername</span>
+                  <input
+                    className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2.5 text-white"
+                    value={accessUsername}
+                    onChange={(e) => setAccessUsername(e.target.value)}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    placeholder="z. B. kevin.mueller"
+                  />
+                </label>
+                <PasswordField
+                  id={`access-pw-${emp.id}`}
+                  label={emp.access?.hasAccess ? 'Neues Passwort (optional)' : 'Passwort'}
+                  autoComplete="new-password"
+                  value={accessPassword}
+                  onChange={(e) => setAccessPassword(e.target.value)}
+                />
+                <div className="space-y-2">
+                  <span className="text-xs text-zinc-400">Extra-Rechte</span>
+                  {EXTRA_PERMISSION_OPTIONS.map((opt) => (
+                    <label
+                      key={opt.key}
+                      className="flex cursor-pointer items-center gap-2 rounded-xl bg-black/40 px-3 py-2 ring-1 ring-white/[0.08]"
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 accent-orange-500"
+                        checked={Boolean(accessPerms[opt.key])}
+                        disabled={writeBlocked}
+                        onChange={() =>
+                          setAccessPerms((prev) => ({ ...prev, [opt.key]: !prev[opt.key] }))
+                        }
+                      />
+                      <span className="text-sm text-zinc-200">{opt.label}</span>
+                    </label>
+                  ))}
+                </div>
+                {accessErr ? <p className="text-sm text-red-400">{accessErr}</p> : null}
+                {accessMsg ? <p className="text-sm text-emerald-400/90">{accessMsg}</p> : null}
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={writeBlocked || busyId === emp.id}
+                    onClick={() => void saveAccess(emp)}
+                    className="flex-1 rounded-xl bg-orange-500/90 px-3 py-2.5 text-sm font-semibold text-zinc-950 transition hover:bg-orange-400 disabled:opacity-40"
+                  >
+                    {busyId === emp.id ? '…' : emp.access?.hasAccess ? 'Zugang speichern' : 'Zugang erstellen'}
+                  </button>
+                  {emp.access?.hasAccess ? (
+                    <button
+                      type="button"
+                      disabled={writeBlocked || busyId === emp.id}
+                      onClick={() => void toggleLoginActive(emp)}
+                      className="rounded-xl border border-zinc-600 px-3 py-2.5 text-sm text-zinc-300 transition hover:bg-zinc-800 disabled:opacity-40"
+                    >
+                      {emp.access.loginActive ? 'Zugang sperren' : 'Zugang entsperren'}
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={cancelAccess}
+                    className="rounded-xl border border-zinc-600 px-3 py-2.5 text-sm text-zinc-300 transition hover:bg-zinc-800"
+                  >
+                    Schließen
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="space-y-2.5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-white">{emp.name}</div>
                     {emp.role ? <div className="text-sm text-zinc-500">{emp.role}</div> : null}
+                    {emp.access?.hasAccess ? (
+                      <p className="mt-1 text-[0.72rem] text-zinc-500">
+                        Login: <span className="text-zinc-300">{emp.access.username}</span>
+                        {emp.access.loginActive === false ? (
+                          <span className="ml-2 text-red-300/90">gesperrt</span>
+                        ) : (
+                          <span className="ml-2 text-emerald-300/80">aktiv</span>
+                        )}
+                      </p>
+                    ) : null}
                   </div>
                   <span
                     className={`shrink-0 rounded-full px-2.5 py-[0.18rem] text-[0.68rem] font-semibold uppercase tracking-[0.08em] ${
@@ -203,7 +410,15 @@ export function EmployeesPage() {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={writeBlocked}
+                      onClick={() => openAccess(emp)}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-[0.85rem] border border-orange-500/30 bg-orange-500/[0.12] py-[0.5rem] text-[0.74rem] font-medium text-orange-300 transition hover:bg-orange-500/[0.18] active:scale-[0.99] disabled:opacity-40"
+                    >
+                      {emp.access?.hasAccess ? 'Zugang' : 'Zugang erstellen'}
+                    </button>
                     <button
                       type="button"
                       disabled={writeBlocked}

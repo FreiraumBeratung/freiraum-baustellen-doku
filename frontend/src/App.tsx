@@ -3,6 +3,7 @@ import { useRequireAuth } from './context/AuthContext'
 import { AppShell } from './components/AppShell'
 import { AuthLayout } from './components/AuthLayout'
 import { ProfileGate } from './components/ProfileGate'
+import { RequirePermission } from './components/RequirePermission'
 import { LoginPage } from './pages/Login'
 import { RegisterPage } from './pages/Register'
 import { OnboardingPage } from './pages/Onboarding'
@@ -61,9 +62,30 @@ export default function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route element={<AppShell />}>
             <Route path="/" element={<DashboardPage />} />
-            <Route path="/profil" element={<CompanyProfilePage />} />
-            <Route path="/mitarbeiter" element={<EmployeesPage />} />
-            <Route path="/baustellen" element={<ProjectsPage />} />
+            <Route
+              path="/profil"
+              element={
+                <RequirePermission permission="company_profile">
+                  <CompanyProfilePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/mitarbeiter"
+              element={
+                <RequirePermission permission="employees">
+                  <EmployeesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/baustellen"
+              element={
+                <RequirePermission permission="projects">
+                  <ProjectsPage />
+                </RequirePermission>
+              }
+            />
             <Route path="/bericht" element={<ReportNewPage />} />
             <Route path="/bericht/vorschau" element={<ReportPreviewPage />} />
             <Route path="/protokoll" element={<ProtocolModePage />} />
@@ -72,11 +94,39 @@ export default function App() {
             <Route path="/protokolle" element={<ProtocolsListPage />} />
             <Route path="/protokolle/baustelle/:projectId" element={<ProtocolSeriesPage />} />
             <Route path="/protokolle/:id" element={<ProtocolDetailPage />} />
-            <Route path="/lieferschein" element={<DeliveryNoteScanPage />} />
-            <Route path="/berichte" element={<ReportsListPage />} />
-            <Route path="/berichte/:id" element={<ReportDetailPage />} />
+            <Route
+              path="/lieferschein"
+              element={
+                <RequirePermission permission="delivery_notes">
+                  <DeliveryNoteScanPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/berichte"
+              element={
+                <RequirePermission permission="reports_list">
+                  <ReportsListPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/berichte/:id"
+              element={
+                <RequirePermission permission="report">
+                  <ReportDetailPage />
+                </RequirePermission>
+              }
+            />
             <Route path="/feedback" element={<FeedbackPage />} />
-            <Route path="/stunden" element={<TimeAccountsPage />} />
+            <Route
+              path="/stunden"
+              element={
+                <RequirePermission permission="time_accounts">
+                  <TimeAccountsPage />
+                </RequirePermission>
+              }
+            />
             <Route path="/verwaltung" element={<AdminRoute />} />
           </Route>
         </Route>

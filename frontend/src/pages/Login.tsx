@@ -82,12 +82,12 @@ export function LoginPage() {
       <Card className="border-zinc-700/80 shadow-xl shadow-black/40">
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">
-            <span className="text-sm text-zinc-400">E-Mail</span>
+            <span className="text-sm text-zinc-400">E-Mail oder Benutzername</span>
             <input
               className="mt-1 w-full rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-3 text-white outline-none focus:border-orange-500"
-              type="email"
+              type="text"
               inputMode="email"
-              autoComplete="email"
+              autoComplete="username"
               autoCapitalize="none"
               autoCorrect="off"
               spellCheck={false}

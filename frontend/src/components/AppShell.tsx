@@ -1,19 +1,25 @@
 import { Home, MessageSquareText, Mic, User } from 'lucide-react'
 import { useMemo } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import { LicenseSuspendedBanner } from './LicenseSuspendedBanner'
 import { isTabletDevice } from '../utils/isTabletDevice'
 
 const navItems = [
-  { to: '/', label: 'Home', Icon: Home, end: true },
-  { to: '/bericht', label: 'Bericht', Icon: Mic, end: false },
-  { to: '/feedback', label: 'Feedback', Icon: MessageSquareText, end: false },
-  { to: '/profil', label: 'Profil', Icon: User, end: false },
+  { to: '/', label: 'Home', Icon: Home, end: true, ownerOnly: false },
+  { to: '/bericht', label: 'Bericht', Icon: Mic, end: false, ownerOnly: false },
+  { to: '/feedback', label: 'Feedback', Icon: MessageSquareText, end: false, ownerOnly: false },
+  { to: '/profil', label: 'Profil', Icon: User, end: false, ownerOnly: true },
 ] as const
 
 export function AppShell() {
+  const { isCompanyOwner } = useAuth()
   // Nur echte Tablets breiter — Handys bleiben bei 390px (auch Querformat).
   const shellMax = useMemo(() => (isTabletDevice() ? 'max-w-[720px]' : 'max-w-[390px]'), [])
+  const visibleNav = useMemo(
+    () => navItems.filter((item) => (item.ownerOnly ? isCompanyOwner : true)),
+    [isCompanyOwner],
+  )
 
   return (
     <div className="flex min-h-dvh flex-col overflow-x-hidden pb-[calc(6.5rem+env(safe-area-inset-bottom,0px))]">
@@ -28,7 +34,7 @@ export function AppShell() {
         aria-label="Hauptnavigation"
       >
         <div className={`safe-area-pb mx-auto flex ${shellMax} justify-between gap-1 px-2 py-3`}>
-          {navItems.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.Icon
             return (
               <NavLink

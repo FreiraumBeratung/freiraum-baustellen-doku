@@ -7,6 +7,8 @@ import {
 const TOKEN_KEY = 'freiraum_baustellen_token'
 const LICENSE_ACTIVE_KEY = 'freiraum_baustellen_license_active'
 const IS_ADMIN_KEY = 'freiraum_baustellen_is_admin'
+const ACCOUNT_ROLE_KEY = 'freiraum_baustellen_account_role'
+const PERMISSIONS_KEY = 'freiraum_baustellen_permissions'
 
 function viteApiBaseOverride(): string | undefined {
   const t = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/$/, '')
@@ -76,6 +78,8 @@ export function clearToken() {
   localStorage.removeItem(TOKEN_KEY)
   clearLicenseActive()
   clearIsAdmin()
+  clearAccountRole()
+  clearPermissions()
 }
 
 export function getIsAdmin(): boolean {
@@ -89,6 +93,38 @@ export function setIsAdmin(isAdmin: boolean) {
 
 export function clearIsAdmin() {
   localStorage.removeItem(IS_ADMIN_KEY)
+}
+
+export function getAccountRole(): 'owner' | 'worker' {
+  return localStorage.getItem(ACCOUNT_ROLE_KEY) === 'worker' ? 'worker' : 'owner'
+}
+
+export function setAccountRole(role: string | null | undefined) {
+  if (role === 'worker') localStorage.setItem(ACCOUNT_ROLE_KEY, 'worker')
+  else localStorage.setItem(ACCOUNT_ROLE_KEY, 'owner')
+}
+
+export function clearAccountRole() {
+  localStorage.removeItem(ACCOUNT_ROLE_KEY)
+}
+
+export function getPermissions(): string[] {
+  try {
+    const raw = localStorage.getItem(PERMISSIONS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? parsed.map(String) : []
+  } catch {
+    return []
+  }
+}
+
+export function setPermissions(perms: string[] | null | undefined) {
+  localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(Array.isArray(perms) ? perms : []))
+}
+
+export function clearPermissions() {
+  localStorage.removeItem(PERMISSIONS_KEY)
 }
 
 /** true = aktiv; fehlender Eintrag gilt als aktiv (bestehende Sessions). */
@@ -123,6 +159,8 @@ export type AuthSessionResponse = {
   ok: boolean
   licenseActive: boolean
   isAdmin: boolean
+  accountRole?: 'owner' | 'worker'
+  permissions?: string[]
 }
 
 /** Lizenzstatus vom Server holen (z. B. nach Admin-Reaktivierung). */
@@ -134,6 +172,8 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
     const active = data.licenseActive !== false
     setLicenseActive(active)
     setIsAdmin(data.isAdmin === true)
+    setAccountRole(data.accountRole)
+    setPermissions(data.permissions)
     if (active) notifyLicenseReactivated()
     return data
   } catch {
@@ -181,6 +221,8 @@ export type AuthLoginResponse = {
   access_token: string
   licenseActive?: boolean
   isAdmin?: boolean
+  accountRole?: 'owner' | 'worker'
+  permissions?: string[]
 }
 
 export type AdminUserRow = {
@@ -255,6 +297,8 @@ export async function postAuthLogin(email: string, password: string): Promise<Au
     const data = (await res.json()) as AuthLoginResponse
     setLicenseActive(data.licenseActive !== false)
     setIsAdmin(data.isAdmin === true)
+    setAccountRole(data.accountRole)
+    setPermissions(data.permissions)
     return data
   }
 

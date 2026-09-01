@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api, resolveBackendPublicUrl } from '../api/client'
+import { useAuth } from '../context/AuthContext'
+import { tilePermission } from '../utils/accountPermissions'
 
 type CompanyProfile = {
   companyName: string
@@ -9,7 +11,7 @@ type CompanyProfile = {
 
 type Tile = { to: string; title: string; emoji: string; primary?: boolean }
 
-const tiles: Tile[] = [
+const allTiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
   { to: '/lieferschein', title: 'Lieferschein scannen', emoji: '📦' },
@@ -21,7 +23,18 @@ const tiles: Tile[] = [
 ]
 
 export function DashboardPage() {
+  const { can } = useAuth()
   const [company, setCompany] = useState<CompanyProfile | null>(null)
+
+  const tiles = useMemo(
+    () =>
+      allTiles.filter((t) => {
+        const need = tilePermission(t.to)
+        if (!need) return true
+        return can(need)
+      }),
+    [can],
+  )
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')

@@ -87,6 +87,22 @@ from app.services.admin_users import (
     list_users_public,
     set_user_license,
 )
+from app.services.account_roles import (
+    access_public_view,
+    effective_permissions,
+    find_tenant_owner,
+    find_user_by_username,
+    find_worker_for_employee,
+    find_workers_by_username,
+    has_permission,
+    is_company_owner,
+    is_worker,
+    normalize_permissions,
+    normalize_username,
+    owner_email_for_smtp,
+    username_taken_in_tenant,
+    worker_login_active,
+)
 from app.services.license import LICENSE_SUSPENDED_DETAIL, is_license_active
 from app.services.tenant_storage import (
     TenantStore,
@@ -232,13 +248,28 @@ class RegisterBody(BaseModel):
 
 
 class LoginBody(BaseModel):
-    email: EmailStr
+    # API-Feld bleibt "email" (Frontend-Kompatibilität), Inhalt: E-Mail ODER Benutzername.
+    email: str = Field(..., min_length=1)
     password: str = Field(..., min_length=1)
 
     @field_validator("email", mode="before")
     @classmethod
-    def normalize_email_login(cls, v: Any) -> str:
-        return str(v).strip().lower()
+    def normalize_login_identity(cls, v: Any) -> str:
+        return str(v).strip()
+
+
+class EmployeeAccessBody(BaseModel):
+    username: str = Field(..., min_length=2, max_length=64)
+    password: str = Field(..., min_length=4, max_length=200)
+    permissions: list[str] = Field(default_factory=list)
+    loginActive: bool = True
+
+
+class EmployeeAccessPatchBody(BaseModel):
+    username: str | None = Field(default=None, min_length=2, max_length=64)
+    password: str | None = Field(default=None, min_length=4, max_length=200)
+    permissions: list[str] | None = None
+    loginActive: bool | None = None
 
 
 def _persist_user_password(email_norm: str, plain: str) -> None:
@@ -352,10 +383,84 @@ def require_admin(user_id: str = Depends(require_bearer)) -> str:
 
 
 def _auth_session_fields(user: dict[str, Any]) -> dict[str, Any]:
+    owner = is_company_owner(user)
     return {
-        "licenseActive": is_license_active(user),
+        "licenseActive": _effective_license_active(user),
         "isAdmin": is_user_admin(user),
+        "accountRole": "owner" if owner else "worker",
+        "permissions": sorted(effective_permissions(user)),
+        "displayName": (
+            str(user.get("entrepreneurName") or user.get("companyName") or user.get("email") or "")
+            if owner
+            else str(user.get("displayName") or user.get("username") or "")
+        ),
     }
+
+
+def _effective_license_active(user: dict[str, Any]) -> bool:
+    """Worker erben die Lizenz vom Firmen-Owner — Pilot-Konten unverändert."""
+    if is_company_owner(user):
+        return is_license_active(user)
+    owner = find_tenant_owner(get_users(), tenant_id_for_user(user))
+    if not owner:
+        return False
+    return is_license_active(owner)
+
+
+def get_tenant_store(user_id: str = Depends(require_bearer)) -> TenantStore:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    if is_worker(user) and not worker_login_active(user):
+        raise HTTPException(status_code=403, detail="Zugang gesperrt. Bitte den Geschäftsführer kontaktieren.")
+    return TenantStore(tenant_id_for_user(user))
+
+
+def require_active_license(user_id: str = Depends(require_bearer)) -> str:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    if is_worker(user) and not worker_login_active(user):
+        raise HTTPException(status_code=403, detail="Zugang gesperrt. Bitte den Geschäftsführer kontaktieren.")
+    if not _effective_license_active(user):
+        raise HTTPException(status_code=403, detail=LICENSE_SUSPENDED_DETAIL)
+    return user_id
+
+
+def require_company_owner(user_id: str = Depends(require_active_license)) -> str:
+    user = find_user_by_id(user_id)
+    if not user or not is_company_owner(user):
+        raise HTTPException(
+            status_code=403,
+            detail="Nur der Geschäftsführer kann diese Funktion nutzen.",
+        )
+    return user_id
+
+
+def require_permission(permission: str):
+    def _dep(user_id: str = Depends(require_active_license)) -> str:
+        user = find_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="Ungültiges Token")
+        if is_company_owner(user):
+            return user_id
+        if has_permission(user, permission):
+            return user_id
+        raise HTTPException(status_code=403, detail="Keine Berechtigung für diese Funktion.")
+
+    return _dep
+
+
+def _smtp_sender_email_for_user_id(user_id: str) -> str:
+    user = find_user_by_id(user_id)
+    return owner_email_for_smtp(get_users(), user)
+
+
+def get_tenant_store_write(user_id: str = Depends(require_active_license)) -> TenantStore:
+    user = next((u for u in get_users() if u.get("id") == user_id), None)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    return TenantStore(tenant_id_for_user(user))
 
 
 @app.on_event("startup")
@@ -381,29 +486,6 @@ def _normalize_company_profile(prof: dict[str, Any]) -> dict[str, Any]:
         "defaultRecipientEmail": str(prof.get("defaultRecipientEmail") or ""),
         "logoFilename": prof.get("logoFilename"),
     }
-
-
-def get_tenant_store(user_id: str = Depends(require_bearer)) -> TenantStore:
-    user = next((u for u in get_users() if u.get("id") == user_id), None)
-    if not user:
-        raise HTTPException(status_code=401, detail="Ungültiges Token")
-    return TenantStore(tenant_id_for_user(user))
-
-
-def require_active_license(user_id: str = Depends(require_bearer)) -> str:
-    user = next((u for u in get_users() if u.get("id") == user_id), None)
-    if not user:
-        raise HTTPException(status_code=401, detail="Ungültiges Token")
-    if not is_license_active(user):
-        raise HTTPException(status_code=403, detail=LICENSE_SUSPENDED_DETAIL)
-    return user_id
-
-
-def get_tenant_store_write(user_id: str = Depends(require_active_license)) -> TenantStore:
-    user = next((u for u in get_users() if u.get("id") == user_id), None)
-    if not user:
-        raise HTTPException(status_code=401, detail="Ungültiges Token")
-    return TenantStore(tenant_id_for_user(user))
 
 
 def _logo_public_url(store: TenantStore, logo_fn: str | None) -> str | None:
@@ -701,7 +783,7 @@ async def create_feedback(
     items.append(feedback_entry)
     store.write_json("feedback.json", {"items": items})
 
-    sender_email = str(user.get("email") or "").strip().lower()
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     mail_config = get_mail_config(sender_email) if sender_email else None
     if not mail_config:
         raise HTTPException(
@@ -784,6 +866,7 @@ def register(body: RegisterBody):
     user = {
         "id": user_id,
         "tenantId": user_id,
+        "accountRole": "owner",
         "companyName": body.companyName,
         "entrepreneurName": body.entrepreneurName,
         "email": email_norm,
@@ -821,8 +904,7 @@ def register(body: RegisterBody):
         "access_token": user_id,
         "token_type": "bearer",
         "user_id": user_id,
-        "licenseActive": True,
-        "isAdmin": False,
+        **_auth_session_fields(user),
         "mail": {
             "configured": True,
             "host": smtp_status.get("host"),
@@ -834,15 +916,53 @@ def register(body: RegisterBody):
 
 @app.post("/api/auth/login")
 def login(body: LoginBody):
-    email_norm = str(body.email).strip().lower()
-    user = find_user_by_email(email_norm)
+    identity = str(body.email or "").strip()
+    identity_l = identity.lower()
+    users = get_users()
+
+    # E-Mail (@) → Owner; sonst Benutzername → Worker (firma-eindeutig).
+    if "@" in identity_l:
+        user = find_user_by_email(identity_l)
+    else:
+        matches = find_workers_by_username(users, identity_l)
+        if len(matches) == 0:
+            user = None
+        elif len(matches) == 1:
+            user = matches[0]
+        else:
+            # Selber Username in mehreren Firmen: Passwort entscheidet (genau ein Treffer).
+            pwd_hits = [u for u in matches if verify_password(body.password, u)]
+            if len(pwd_hits) == 1:
+                user = pwd_hits[0]
+            else:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Benutzername mehrdeutig. Bitte den Geschäftsführer um einen eindeutigen Benutzernamen bitten.",
+                )
 
     if not user:
-        # Kein lokaler User vorhanden - aktuelle Auth-Architektur erfordert
-        # eine separate Registrierung. Wir geben den gleichen 401 zurueck wie
-        # bei Passwort-Fehlern und lassen das Frontend auf "Registrieren" leiten.
         raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
 
+    # Mitarbeiter-Zugang: kein SMTP-Sync, nur lokales Passwort + Sperre.
+    if is_worker(user):
+        if not worker_login_active(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Zugang gesperrt. Bitte den Geschäftsführer kontaktieren.",
+            )
+        if not verify_password(body.password, user):
+            raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
+        if not _effective_license_active(user):
+            raise HTTPException(status_code=403, detail=LICENSE_SUSPENDED_DETAIL)
+        return {
+            "access_token": user["id"],
+            "token_type": "bearer",
+            "user_id": user["id"],
+            **_auth_session_fields(user),
+            "mail": {"configured": bool(owner_email_for_smtp(users, user))},
+        }
+
+    email_norm = str(user.get("email") or "").strip().lower()
     local_pw_ok = verify_password(body.password, user)
 
     if not local_pw_ok:
@@ -966,7 +1086,11 @@ def get_company_profile(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.post("/api/company-profile")
-def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(get_tenant_store_write)):
+def post_company_profile(
+    body: CompanyProfileBody,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     _validate_company_profile_body(body)
     existing_raw = store.read_json("company_profile.json", {})
     existing = _normalize_company_profile(existing_raw if isinstance(existing_raw, dict) else {})
@@ -990,7 +1114,11 @@ def post_company_profile(body: CompanyProfileBody, store: TenantStore = Depends(
 
 
 @app.post("/api/company-logo")
-async def upload_logo(file: UploadFile = File(...), store: TenantStore = Depends(get_tenant_store_write)):
+async def upload_logo(
+    file: UploadFile = File(...),
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     if not file.filename:
         raise HTTPException(status_code=400, detail="Keine Datei")
 
@@ -1113,12 +1241,32 @@ def list_audio_uploads(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.get("/api/employees")
-def list_employees(store: TenantStore = Depends(get_tenant_store)):
-    return store.read_json("employees.json", {"employees": []})
+def list_employees(
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    data = store.read_json("employees.json", {"employees": []})
+    employees = list(data.get("employees") or [])
+    users = get_users()
+    tid = store.tenant_id
+    enriched = []
+    for emp in employees:
+        if not isinstance(emp, dict):
+            continue
+        row = dict(emp)
+        worker = find_worker_for_employee(users, tid, str(emp.get("id") or ""))
+        access = access_public_view(worker)
+        row["access"] = access if access else {"hasAccess": False, "loginActive": False, "permissions": []}
+        enriched.append(row)
+    return {"employees": enriched}
 
 
 @app.post("/api/employees")
-def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenant_store_write)):
+def create_employee(
+    body: EmployeeCreate,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     data = store.read_json("employees.json", {"employees": []})
     emp = {
         "id": str(uuid.uuid4()),
@@ -1135,11 +1283,18 @@ def create_employee(body: EmployeeCreate, store: TenantStore = Depends(get_tenan
         emp["hoursBalanceStartDate"] = start_date
     data.setdefault("employees", []).append(emp)
     store.write_json("employees.json", data)
-    return emp
+    emp_out = dict(emp)
+    emp_out["access"] = {"hasAccess": False, "loginActive": False, "permissions": []}
+    return emp_out
 
 
 @app.patch("/api/employees/{employee_id}")
-def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = Depends(get_tenant_store_write)):
+def patch_employee(
+    employee_id: str,
+    body: EmployeePatch,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     data = store.read_json("employees.json", {"employees": []})
     for e in data.get("employees", []):
         if e.get("id") == employee_id:
@@ -1166,31 +1321,143 @@ def patch_employee(employee_id: str, body: EmployeePatch, store: TenantStore = D
             if hours_start == 0:
                 e.pop("hoursBalanceStartDate", None)
             store.write_json("employees.json", data)
-            return e
+            # Anzeigename am Worker-Login mitziehen (nur displayName, Login-Username unverändert).
+            users = get_users()
+            worker = find_worker_for_employee(users, store.tenant_id, employee_id)
+            if worker and body.name is not None:
+                worker["displayName"] = str(body.name).strip()
+                save_users(users)
+            out = dict(e)
+            out["access"] = access_public_view(worker) or {
+                "hasAccess": False,
+                "loginActive": False,
+                "permissions": [],
+            }
+            return out
     raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
 
 
 @app.delete("/api/employees/{employee_id}")
-def delete_employee(employee_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+def delete_employee(
+    employee_id: str,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     """Entfernt einen Mitarbeiter dauerhaft (z. B. bei Kündigung).
 
     Additiv: bereits gespeicherte Tagesberichte/Stunden bleiben unverändert erhalten,
     da sie die Namen selbst tragen. Es wird nur der Stammdaten-Eintrag entfernt.
+    Zugehöriger App-Zugang wird gesperrt/entfernt.
     """
     data = store.read_json("employees.json", {"employees": []})
     employees_list = list(data.get("employees", []))
-    target = next((e for e in employees_list if e.get("id") == employee_id), None)
+    target = next((r for r in employees_list if r.get("id") == employee_id), None)
     if target is None:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
-    data["employees"] = [e for e in employees_list if e.get("id") != employee_id]
+    data["employees"] = [r for r in employees_list if r.get("id") != employee_id]
     store.write_json("employees.json", data)
+
+    users = get_users()
+    worker = find_worker_for_employee(users, store.tenant_id, employee_id)
+    if worker:
+        users = [u for u in users if str(u.get("id") or "") != str(worker.get("id") or "")]
+        save_users(users)
     return {"ok": True}
+
+
+@app.post("/api/employees/{employee_id}/access")
+def create_employee_access(
+    employee_id: str,
+    body: EmployeeAccessBody,
+    owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    """Zugang erstellen für bestehenden Mitarbeiter (Username + Passwort, firma-eindeutig)."""
+    data = store.read_json("employees.json", {"employees": []})
+    emp = next((e for e in data.get("employees", []) if e.get("id") == employee_id), None)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+
+    username = normalize_username(body.username)
+    if not username or "@" in username:
+        raise HTTPException(status_code=400, detail="Benutzername ungültig (kein E-Mail-Format).")
+    if not re.fullmatch(r"[a-z0-9._-]{2,64}", username):
+        raise HTTPException(
+            status_code=400,
+            detail="Benutzername: nur Kleinbuchstaben, Zahlen, Punkt, Unterstrich, Bindestrich.",
+        )
+
+    users = get_users()
+    tid = store.tenant_id
+    existing = find_worker_for_employee(users, tid, employee_id)
+    if existing:
+        raise HTTPException(status_code=400, detail="Für diesen Mitarbeiter existiert bereits ein Zugang.")
+    if username_taken_in_tenant(users, tid, username):
+        raise HTTPException(status_code=400, detail="Benutzername in dieser Firma bereits vergeben.")
+
+    owner = find_user_by_id(owner_id) or find_tenant_owner(users, tid)
+    worker = {
+        "id": str(uuid.uuid4()),
+        "tenantId": tid,
+        "accountRole": "worker",
+        "employeeId": employee_id,
+        "username": username,
+        "displayName": str(emp.get("name") or username),
+        "companyName": str((owner or {}).get("companyName") or ""),
+        "passwordHash": hash_password(body.password),
+        "permissions": normalize_permissions(body.permissions),
+        "loginActive": bool(body.loginActive),
+        "licenseActive": True,
+        "isAdmin": False,
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+    }
+    users.append(worker)
+    save_users(users)
+    return {"ok": True, "access": access_public_view(worker)}
+
+
+@app.patch("/api/employees/{employee_id}/access")
+def patch_employee_access(
+    employee_id: str,
+    body: EmployeeAccessPatchBody,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    users = get_users()
+    tid = store.tenant_id
+    worker = find_worker_for_employee(users, tid, employee_id)
+    if not worker:
+        raise HTTPException(status_code=404, detail="Kein Zugang für diesen Mitarbeiter.")
+
+    if body.username is not None:
+        username = normalize_username(body.username)
+        if not username or "@" in username:
+            raise HTTPException(status_code=400, detail="Benutzername ungültig (kein E-Mail-Format).")
+        if not re.fullmatch(r"[a-z0-9._-]{2,64}", username):
+            raise HTTPException(
+                status_code=400,
+                detail="Benutzername: nur Kleinbuchstaben, Zahlen, Punkt, Unterstrich, Bindestrich.",
+            )
+        if username_taken_in_tenant(users, tid, username, exclude_user_id=str(worker.get("id") or "")):
+            raise HTTPException(status_code=400, detail="Benutzername in dieser Firma bereits vergeben.")
+        worker["username"] = username
+
+    if body.password is not None:
+        apply_password_hash_to_user(worker, body.password)
+    if body.permissions is not None:
+        worker["permissions"] = normalize_permissions(body.permissions)
+    if body.loginActive is not None:
+        worker["loginActive"] = bool(body.loginActive)
+
+    save_users(users)
+    return {"ok": True, "access": access_public_view(worker)}
 
 
 @app.get("/api/time-entries")
 def list_time_entries_endpoint(
     employeeId: str | None = None,
     month: str | None = None,
+    _perm: str = Depends(require_permission("time_accounts")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     entries = time_account.list_time_entries(
@@ -1242,6 +1509,7 @@ def delete_time_entry_endpoint(entry_id: str, store: TenantStore = Depends(get_t
 @app.get("/api/time-accounts")
 def list_time_accounts_endpoint(
     month: str | None = None,
+    _perm: str = Depends(require_permission("time_accounts")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     employees_data = store.read_json("employees.json", {"employees": []})
@@ -1319,7 +1587,11 @@ def list_projects(store: TenantStore = Depends(get_tenant_store)):
 
 
 @app.post("/api/projects")
-def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_store_write)):
+def create_project(
+    body: ProjectCreate,
+    _perm: str = Depends(require_permission("projects")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     data = store.read_json("projects.json", {"projects": []})
     proj = {
         "id": str(uuid.uuid4()),
@@ -1336,7 +1608,12 @@ def create_project(body: ProjectCreate, store: TenantStore = Depends(get_tenant_
 
 
 @app.patch("/api/projects/{project_id}")
-def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depends(get_tenant_store_write)):
+def patch_project(
+    project_id: str,
+    body: ProjectPatch,
+    _perm: str = Depends(require_permission("projects")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     data = store.read_json("projects.json", {"projects": []})
     for p in data.get("projects", []):
         if p.get("id") == project_id:
@@ -1359,7 +1636,11 @@ def patch_project(project_id: str, body: ProjectPatch, store: TenantStore = Depe
 
 
 @app.delete("/api/projects/{project_id}")
-def delete_project(project_id: str, store: TenantStore = Depends(get_tenant_store_write)):
+def delete_project(
+    project_id: str,
+    _perm: str = Depends(require_permission("projects")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     """Entfernt eine Baustelle dauerhaft aus der Liste.
 
     Additiv: vorhandene Tagesberichte dieser Baustelle bleiben unter „Berichte"
@@ -1764,6 +2045,7 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
 def list_reports(
     projectId: str | None = None,
     month: str | None = None,
+    _perm: str = Depends(require_permission("reports_list")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     data = store.read_json("reports.json", {"reports": []})
@@ -2355,11 +2637,7 @@ def send_report_to_office_endpoint(
             detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.",
         )
 
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     if not sender_email:
         raise HTTPException(
             status_code=401,
@@ -2402,11 +2680,7 @@ def send_collective_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     if not sender_email:
         raise HTTPException(
             status_code=401,
@@ -2449,11 +2723,7 @@ def send_collective_protocol_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     if not sender_email:
         raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
     mail_config = get_mail_config(sender_email)
@@ -2827,11 +3097,7 @@ def send_protocol_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     if not sender_email:
         raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
     mail_config = get_mail_config(sender_email)
@@ -2885,6 +3151,7 @@ def export_protocol_pdf(protocol_id: str, store: TenantStore = Depends(get_tenan
 @app.get("/api/delivery-notes")
 def list_delivery_notes(
     projectId: str | None = None,
+    _perm: str = Depends(require_permission("delivery_notes")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     notes = read_delivery_notes(store)
@@ -2895,7 +3162,11 @@ def list_delivery_notes(
 
 
 @app.post("/api/delivery-notes")
-def create_delivery_note(body: DeliveryNoteCreateBody, store: TenantStore = Depends(get_tenant_store_write)):
+def create_delivery_note(
+    body: DeliveryNoteCreateBody,
+    _perm: str = Depends(require_permission("delivery_notes")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     prof = store.read_json("company_profile.json", {})
     logo_fn = prof.get("logoFilename")
     company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None
@@ -3064,11 +3335,7 @@ def send_delivery_note_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = ""
-    for u in get_users():
-        if u.get("id") == user_id:
-            sender_email = str(u.get("email", "")).strip().lower()
-            break
+    sender_email = _smtp_sender_email_for_user_id(user_id)
     if not sender_email:
         raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
     mail_config = get_mail_config(sender_email)
