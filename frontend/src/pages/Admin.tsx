@@ -123,16 +123,22 @@ export function AdminPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
-                        usedToday
-                          ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]'
-                          : 'bg-zinc-600'
-                      }`}
-                      title={activityTitle}
-                      aria-label={activityTitle}
-                    />
                     <h2 className="truncate text-base font-semibold text-white">{row.companyName || '—'}</h2>
+                    {usedToday ? (
+                      <span
+                        className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-400/40"
+                        title={activityTitle}
+                      >
+                        Heute aktiv
+                      </span>
+                    ) : (
+                      <span
+                        className="rounded-full bg-zinc-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 ring-1 ring-zinc-400/35"
+                        title={activityTitle}
+                      >
+                        Heute still
+                      </span>
+                    )}
                     {row.isAdmin ? (
                       <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-300 ring-1 ring-orange-500/30">
                         Admin
@@ -148,10 +154,9 @@ export function AdminPage() {
                   {row.entrepreneurName ? (
                     <p className="mt-0.5 text-xs text-zinc-500">{row.entrepreneurName}</p>
                   ) : null}
-                  <p className="mt-2 text-xs text-zinc-600">Registriert: {fmtDate(row.createdAt)}</p>
-                  <p className="mt-0.5 text-xs text-zinc-600" title={activityTitle}>
-                    {usedToday ? 'Heute aktiv' : row.lastActivityAt ? 'Heute noch nicht aktiv' : 'Noch keine Nutzung'}
-                    {row.lastActivityAt ? ` · ${activityTitle}` : ''}
+                  <p className="mt-2 text-xs text-zinc-500">Registriert: {fmtDate(row.createdAt)}</p>
+                  <p className="mt-1 text-sm font-medium text-zinc-200" title={activityTitle}>
+                    {row.lastActivityAt ? activityTitle : 'Noch keine Nutzung erkannt'}
                   </p>
                 </div>
               </div>
