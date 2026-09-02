@@ -102,7 +102,7 @@ export function ProtocolPreviewPage() {
           : ''
       setSaveMsg(
         doc.mode === 'thoughts'
-          ? 'Gedankensammlung gespeichert.'
+          ? 'Zur Tages-Sammlung hinzugefügt. Weiter einsprechen oder abends ans Büro senden.'
           : `Protokoll gespeichert${nr}.`,
       )
     } catch (ex) {
@@ -130,6 +130,11 @@ export function ProtocolPreviewPage() {
             ? 'SMTP ist noch nicht konfiguriert. Versand wurde simuliert.'
             : 'Protokoll wurde ans Büro gesendet.',
         )
+      if (isThoughts) {
+        setSavedProtocol((prev) =>
+          prev ? { ...prev, officeSentAt: new Date().toISOString() } : prev,
+        )
+      }
     } catch (ex) {
       setOfficeErr(ex instanceof Error ? ex.message : 'Protokoll konnte nicht gesendet werden.')
     } finally {
@@ -154,11 +159,21 @@ export function ProtocolPreviewPage() {
     <div key={`protocol-preview-${pageWakeKey}`} className="overflow-x-hidden">
       <PageTitle
         title="Protokoll"
-        subtitle={savedId ? 'Unterschrift & Versand' : `${modeTitle} — prüfen`}
+        subtitle={
+          savedId
+            ? isThoughts
+              ? 'Tages-Sammlung'
+              : 'Unterschrift & Versand'
+            : `${modeTitle} — prüfen`
+        }
       />
 
       {!savedId ? (
-        <p className="mb-2 text-center text-sm text-zinc-500">Text prüfen und bei Bedarf anpassen — danach speichern.</p>
+        <p className="mb-2 text-center text-sm text-zinc-500">
+          {isThoughts
+            ? 'Text prüfen — dann zur Tages-Sammlung hinzufügen. Ans Büro erst am Abend.'
+            : 'Text prüfen und bei Bedarf anpassen — danach speichern.'}
+        </p>
       ) : null}
       {dirty && !savedId ? (
         <p className="mb-3 text-center text-sm text-amber-400">Text geändert — vor dem Speichern prüfen</p>
@@ -251,7 +266,9 @@ export function ProtocolPreviewPage() {
 
         {savedId && mode === 'thoughts' ? (
           <p className="border-t border-zinc-800 pt-4 text-xs text-zinc-500">
-            Gedankensammlung — ohne Baustelle und ohne Unterschrift. Direkt ans Büro senden oder PDF laden.
+            {savedProtocol?.officeSentAt
+              ? 'Bereits ans Büro gesendet. Weitere Einträge am selben Tag starten eine neue Sammlung.'
+              : 'Tages-Sammlung — ohne Baustelle. Weiter einsprechen oder einmalig ans Büro senden.'}
           </p>
         ) : null}
       </Card>
@@ -259,7 +276,11 @@ export function ProtocolPreviewPage() {
       <div className="mt-6 space-y-3">
         {!savedId ? (
           <BigButton type="button" disabled={writeBlocked || saveBusy} onClick={() => void saveProtocol()}>
-            {saveBusy ? '…' : isThoughts ? 'Gedankensammlung speichern' : 'Protokoll speichern'}
+            {saveBusy
+              ? '…'
+              : isThoughts
+                ? 'Zur Tages-Sammlung hinzufügen'
+                : 'Protokoll speichern'}
           </BigButton>
         ) : null}
 
@@ -270,12 +291,32 @@ export function ProtocolPreviewPage() {
 
         {savedId ? (
           <>
+            {isThoughts && !savedProtocol?.officeSentAt ? (
+              <BigButton
+                type="button"
+                disabled={writeBlocked || officeBusy || dlBusy}
+                onClick={() =>
+                  nav('/protokoll/neu', {
+                    replace: true,
+                    state: { mode: 'thoughts', date: st.date },
+                  })
+                }
+              >
+                Weiter einsprechen
+              </BigButton>
+            ) : null}
+
             <BigButton
               type="button"
-              disabled={writeBlocked || officeBusy || dlBusy}
+              variant={isThoughts && !savedProtocol?.officeSentAt ? 'secondary' : undefined}
+              disabled={writeBlocked || officeBusy || dlBusy || Boolean(isThoughts && savedProtocol?.officeSentAt)}
               onClick={() => void sendOffice()}
             >
-              {officeBusy ? '…' : 'Ans Büro senden'}
+              {officeBusy
+                ? '…'
+                : isThoughts && savedProtocol?.officeSentAt
+                  ? 'Bereits ans Büro gesendet'
+                  : 'Ans Büro senden'}
             </BigButton>
 
             <div className="overflow-hidden rounded-2xl ring-1 ring-white/[0.08]">
@@ -316,7 +357,7 @@ export function ProtocolPreviewPage() {
             <button
               type="button"
               className="text-sm font-medium text-zinc-500 hover:text-zinc-300"
-              onClick={() => nav('/protokoll/neu', { state: { mode: st.mode } })}
+              onClick={() => nav('/protokoll/neu', { state: { mode: st.mode, date: st.date } })}
             >
               Zurück zur Erfassung
             </button>

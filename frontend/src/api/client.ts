@@ -234,6 +234,10 @@ export type AdminUserRow = {
   createdAt: string
   licenseActive: boolean
   isAdmin: boolean
+  /** UTC ISO — letzte echte Nutzung (Bericht/Protokoll/…), ohne Inhalte */
+  lastActivityAt?: string
+  /** Europe/Berlin: heute schon genutzt? */
+  usedToday?: boolean
 }
 
 export type FeedbackCategory = 'Problem' | 'Verbesserung' | 'Lob'
@@ -534,6 +538,9 @@ export type SiteProtocol = {
   exportFormat: string
   signatures: ReportSignaturesResponse['signatures']
   createdAt: string
+  updatedAt?: string
+  dayDraft?: boolean
+  officeSentAt?: string | null
 }
 
 export async function polishProtocolText(rawText: string): Promise<{ polishedText: string; polishedBy: string }> {

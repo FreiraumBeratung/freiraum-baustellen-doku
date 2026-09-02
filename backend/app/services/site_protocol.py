@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 
@@ -14,6 +15,7 @@ PROTOCOL_MODES = frozenset({"quick", "signed", "thoughts"})
 # Fester Baustellen-Platzhalter: Gedankensammlung ist bewusst nicht baustellengebunden.
 THOUGHTS_PROJECT_ID = "__gedankensammlung__"
 THOUGHTS_PROJECT_NAME = "Gedankensammlung"
+BERLIN = ZoneInfo("Europe/Berlin")
 
 
 def is_thoughts_mode(mode: str | None) -> bool:
@@ -94,6 +96,54 @@ def protocol_display_text(protocol: dict[str, Any]) -> str:
     return str(protocol.get("rawText") or "").strip()
 
 
+def find_open_thoughts_day_draft(store: TenantStore, date: str) -> dict[str, Any] | None:
+    """Offener Tages-Entwurf der Gedankensammlung (noch nicht ans Büro gesendet)."""
+    want = str(date or "").strip()
+    if not want:
+        return None
+    candidates: list[dict[str, Any]] = []
+    for item in read_protocols(store):
+        if not is_thoughts_mode(str(item.get("mode") or "")):
+            continue
+        if str(item.get("date") or "").strip() != want:
+            continue
+        if not item.get("dayDraft"):
+            continue
+        if str(item.get("officeSentAt") or "").strip():
+            continue
+        candidates.append(item)
+    if not candidates:
+        return None
+    candidates.sort(key=lambda p: str(p.get("updatedAt") or p.get("createdAt") or ""), reverse=True)
+    return candidates[0]
+
+
+def _append_thoughts_chunk(existing: dict[str, Any], *, raw: str, polished: str) -> dict[str, Any]:
+    stamp = datetime.now(BERLIN).strftime("%H:%M")
+    sep = f"\n\n—— {stamp} ——\n\n"
+    prev_raw = str(existing.get("rawText") or "").strip()
+    prev_pol = str(existing.get("polishedText") or "").strip() or prev_raw
+    new_raw = str(raw or "").strip()
+    new_pol = str(polished or "").strip() or new_raw
+    existing["rawText"] = f"{prev_raw}{sep}{new_raw}" if prev_raw else new_raw
+    existing["polishedText"] = f"{prev_pol}{sep}{new_pol}" if prev_pol else new_pol
+    existing["updatedAt"] = datetime.now(timezone.utc).isoformat()
+    existing["dayDraft"] = True
+    return existing
+
+
+def mark_protocol_office_sent(store: TenantStore, protocol_id: str) -> dict[str, Any] | None:
+    protocols = read_protocols(store)
+    for item in protocols:
+        if str(item.get("id") or "") != protocol_id:
+            continue
+        item["officeSentAt"] = datetime.now(timezone.utc).isoformat()
+        item["updatedAt"] = item["officeSentAt"]
+        write_protocols(store, protocols)
+        return item
+    return None
+
+
 def create_protocol_doc(
     store: TenantStore,
     *,
@@ -122,6 +172,8 @@ def create_protocol_doc(
     pname = str(project_name or "").strip()
     cname = str(customer_name or "").strip()
     parts = str(participants or "").strip()
+    date_norm = str(date or "").strip()
+    polished = str(polished_text or "").strip() or raw
 
     # Gedankensammlung: immer ohne echte Baustelle (additiv, signed/quick unverändert).
     if mode_norm == "thoughts":
@@ -129,6 +181,15 @@ def create_protocol_doc(
         pname = THOUGHTS_PROJECT_NAME
         cname = ""
         parts = ""
+        # Offenen Tages-Entwurf erweitern statt viele Einzelmails zu erzeugen.
+        open_draft = find_open_thoughts_day_draft(store, date_norm)
+        if open_draft is not None:
+            protocols = read_protocols(store)
+            for item in protocols:
+                if str(item.get("id") or "") == str(open_draft.get("id") or ""):
+                    _append_thoughts_chunk(item, raw=raw, polished=polished)
+                    write_protocols(store, protocols)
+                    return item
     elif not pid:
         raise HTTPException(status_code=400, detail="Baustelle fehlt.")
 
@@ -136,7 +197,8 @@ def create_protocol_doc(
     if mode_norm == "signed":
         seq = next_signed_sequence_number(store, pid)
 
-    doc = {
+    now = datetime.now(timezone.utc).isoformat()
+    doc: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "companyId": store.tenant_id,
         "companyName": company_name,
@@ -145,17 +207,21 @@ def create_protocol_doc(
         "projectId": pid,
         "projectName": pname,
         "customerName": cname,
-        "date": date,
+        "date": date_norm,
         "mode": mode_norm,
         "sequenceNumber": seq,
         "participants": parts,
         "rawText": raw,
-        "polishedText": str(polished_text or "").strip(),
+        "polishedText": polished,
         "exportFormat": export_format if export_format in {"PDF", "Word"} else "PDF",
         "signatures": empty_signatures(),
         "photos": [],
-        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "createdAt": now,
+        "updatedAt": now,
     }
+    if mode_norm == "thoughts":
+        doc["dayDraft"] = True
+        doc["officeSentAt"] = None
     protocols = read_protocols(store)
     protocols.append(doc)
     write_protocols(store, protocols)

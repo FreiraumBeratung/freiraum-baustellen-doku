@@ -55,6 +55,8 @@ from app.services.delivery_note import (
 from app.services.site_protocol import (
     create_protocol_doc,
     find_protocol,
+    is_thoughts_mode,
+    mark_protocol_office_sent,
     protocol_entrepreneur_display_name,
     protocol_partner_display_name,
     protocol_photos_list,
@@ -3121,6 +3123,9 @@ def send_protocol_to_office_endpoint(
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Protokoll konnte nicht gesendet werden.")
+    # Gedankensammlung: nach Versand Tages-Entwurf schließen (weitere Einträge → neuer Entwurf).
+    if is_thoughts_mode(str(protocol.get("mode") or "")):
+        mark_protocol_office_sent(store, protocol_id)
     return SendOfficeResponse(ok=True, simulated=simulated, message=message)
 
 

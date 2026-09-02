@@ -7,6 +7,7 @@ import os
 import shutil
 from typing import Any, Callable
 
+from app.services.admin_activity import activity_public_fields
 from app.services.license import is_license_active
 from app.services.mail_store import delete_mail_config
 from app.services.tenant_storage import BASE_DIR, tenant_data_dir
@@ -20,11 +21,12 @@ def is_user_admin(user: dict[str, Any] | None) -> bool:
     return bool(user.get("isAdmin"))
 
 
-def user_public_row(user: dict[str, Any]) -> dict[str, Any]:
+def user_public_row(user: dict[str, Any], *, include_activity: bool = True) -> dict[str, Any]:
     uid = str(user.get("id") or "")
-    return {
+    tid = str(user.get("tenantId") or uid)
+    row: dict[str, Any] = {
         "id": uid,
-        "tenantId": str(user.get("tenantId") or uid),
+        "tenantId": tid,
         "companyName": str(user.get("companyName") or ""),
         "entrepreneurName": str(user.get("entrepreneurName") or ""),
         "email": str(user.get("email") or ""),
@@ -32,10 +34,24 @@ def user_public_row(user: dict[str, Any]) -> dict[str, Any]:
         "licenseActive": is_license_active(user),
         "isAdmin": is_user_admin(user),
     }
+    if include_activity:
+        row.update(activity_public_fields(tid))
+    return row
 
 
 def list_users_public(users: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    rows = [user_public_row(u) for u in users if isinstance(u, dict) and u.get("id")]
+    # Aktivität einmal pro Mandant cachen (Chef + Mitarbeiter teilen tenantId).
+    activity_cache: dict[str, dict[str, Any]] = {}
+    rows: list[dict[str, Any]] = []
+    for u in users:
+        if not isinstance(u, dict) or not u.get("id"):
+            continue
+        row = user_public_row(u, include_activity=False)
+        tid = str(row.get("tenantId") or "")
+        if tid not in activity_cache:
+            activity_cache[tid] = activity_public_fields(tid)
+        row.update(activity_cache[tid])
+        rows.append(row)
     rows.sort(key=lambda r: str(r.get("createdAt") or ""), reverse=True)
     return rows
 

@@ -30,13 +30,17 @@ export type ProtocolPreviewState = {
 export function ProtocolNewPage() {
   const nav = useNavigate()
   const location = useLocation()
-  const mode = (location.state as { mode?: ProtocolMode } | null)?.mode ?? 'quick'
+  const locationState = location.state as { mode?: ProtocolMode; date?: string } | null
+  const mode = locationState?.mode ?? 'quick'
   const { writeBlocked } = useWriteBlocked()
 
   const [projects, setProjects] = useState<Project[]>([])
   const [projectId, setProjectId] = useState('')
   const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
-  const [date, setDate] = useState(today)
+  const [date, setDate] = useState(() => {
+    const d = locationState?.date?.trim() || ''
+    return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : new Date().toISOString().slice(0, 10)
+  })
   const [participants, setParticipants] = useState('')
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
@@ -224,6 +228,11 @@ export function ProtocolNewPage() {
               value={date}
               onChange={(e) => setDate(e.target.value)}
             />
+            {isThoughts ? (
+              <p className="mt-2 text-xs text-zinc-500">
+                Einträge am selben Datum werden gesammelt — Ans Büro erst am Abend einmal senden.
+              </p>
+            ) : null}
           </label>
 
           {mode === 'signed' ? (

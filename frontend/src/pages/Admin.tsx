@@ -17,6 +17,17 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
+function fmtActivityTooltip(iso: string | undefined, usedToday: boolean | undefined): string {
+  const s = (iso || '').trim()
+  if (!s) return 'Noch keine Nutzung erkannt'
+  const d = new Date(s)
+  if (Number.isNaN(d.getTime())) return 'Noch keine Nutzung erkannt'
+  const time = d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+  const date = d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  if (usedToday) return `Zuletzt heute ${time} Uhr`
+  return `Zuletzt ${date}, ${time} Uhr`
+}
+
 export function AdminPage() {
   const { token } = useAuth()
   const [users, setUsers] = useState<AdminUserRow[]>([])
@@ -102,6 +113,8 @@ export function AdminPage() {
         {users.map((row) => {
           const isSelf = row.id === token
           const busy = busyId === row.id
+          const usedToday = row.usedToday === true
+          const activityTitle = fmtActivityTooltip(row.lastActivityAt, row.usedToday)
           return (
             <Card
               key={row.id}
@@ -110,6 +123,15 @@ export function AdminPage() {
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${
+                        usedToday
+                          ? 'bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.65)]'
+                          : 'bg-zinc-600'
+                      }`}
+                      title={activityTitle}
+                      aria-label={activityTitle}
+                    />
                     <h2 className="truncate text-base font-semibold text-white">{row.companyName || '—'}</h2>
                     {row.isAdmin ? (
                       <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-300 ring-1 ring-orange-500/30">
@@ -127,6 +149,10 @@ export function AdminPage() {
                     <p className="mt-0.5 text-xs text-zinc-500">{row.entrepreneurName}</p>
                   ) : null}
                   <p className="mt-2 text-xs text-zinc-600">Registriert: {fmtDate(row.createdAt)}</p>
+                  <p className="mt-0.5 text-xs text-zinc-600" title={activityTitle}>
+                    {usedToday ? 'Heute aktiv' : row.lastActivityAt ? 'Heute noch nicht aktiv' : 'Noch keine Nutzung'}
+                    {row.lastActivityAt ? ` · ${activityTitle}` : ''}
+                  </p>
                 </div>
               </div>
 
