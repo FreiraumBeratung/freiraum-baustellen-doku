@@ -1,5 +1,5 @@
 import { Check, Mic } from 'lucide-react'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import {
   api,
@@ -36,7 +36,6 @@ export function ProtocolNewPage() {
 
   const [projects, setProjects] = useState<Project[]>([])
   const [projectId, setProjectId] = useState('')
-  const today = useMemo(() => new Date().toISOString().slice(0, 10), [])
   const [date, setDate] = useState(() => {
     const d = locationState?.date?.trim() || ''
     return /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : new Date().toISOString().slice(0, 10)
