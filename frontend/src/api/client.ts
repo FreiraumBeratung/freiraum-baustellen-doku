@@ -238,6 +238,8 @@ export type AdminUserRow = {
   lastActivityAt?: string
   /** Europe/Berlin: heute schon genutzt? */
   usedToday?: boolean
+  /** Anzahl Mitarbeiter-Logins (Benutzername) in dieser Firma */
+  workerCount?: number
 }
 
 export type FeedbackCategory = 'Problem' | 'Verbesserung' | 'Lob'

@@ -158,6 +158,11 @@ export function AdminPage() {
                   <p className="mt-1 text-sm font-medium text-zinc-200" title={activityTitle}>
                     {row.lastActivityAt ? activityTitle : 'Noch keine Nutzung erkannt'}
                   </p>
+                  {!row.isAdmin ? (
+                    <p className="mt-1 text-sm text-zinc-300">
+                      Registrierte Mitarbeiter: {typeof row.workerCount === 'number' ? row.workerCount : 0}
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
