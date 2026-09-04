@@ -5,7 +5,11 @@ import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
-import { getSpeechRecognition, speechRecognitionSupported } from '../utils/speechRecognition'
+import {
+  configureDictationSession,
+  getSpeechRecognition,
+  speechRecognitionSupported,
+} from '../utils/speechRecognition'
 
 type Project = { id: string; name: string; customer: string; status: string }
 type Employee = { id: string; name: string; active: boolean }
@@ -72,6 +76,8 @@ export function ReportNewPage() {
   const [voiceActive, setVoiceActive] = useState(false)
   const [voiceSavedFlash, setVoiceSavedFlash] = useState(false)
   const voiceRef = useRef<BrowserSpeechRecognition | null>(null)
+  const voiceWantedRef = useRef(false)
+  const voiceSessionDisposeRef = useRef<(() => void) | null>(null)
   const voiceFeedbackTimerRef = useRef<number | null>(null)
   const voiceSupported = speechRecognitionSupported()
   const [detailsOpen, setDetailsOpen] = useState(false)
@@ -112,6 +118,9 @@ export function ReportNewPage() {
   useEffect(() => {
     return () => {
       if (voiceFeedbackTimerRef.current) window.clearTimeout(voiceFeedbackTimerRef.current)
+      voiceWantedRef.current = false
+      voiceSessionDisposeRef.current?.()
+      voiceSessionDisposeRef.current = null
       try {
         voiceRef.current?.abort()
       } catch {
@@ -131,6 +140,9 @@ export function ReportNewPage() {
   }
 
   function stopVoice(opts?: { success?: boolean }) {
+    voiceWantedRef.current = false
+    voiceSessionDisposeRef.current?.()
+    voiceSessionDisposeRef.current = null
     try {
       voiceRef.current?.stop()
     } catch {
@@ -153,30 +165,29 @@ export function ReportNewPage() {
       setErr('Spracheingabe konnte nicht gestartet werden.')
       return
     }
-    r.lang = 'de-DE'
-    r.continuous = true
-    r.interimResults = false
-    r.onresult = (e) => {
-      let chunk = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        chunk += e.results[i]![0]!.transcript
-      }
-      const t = chunk.trim()
-      if (!t.length) return
-      setRawText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))
-    }
-    r.onerror = () => {
-      stopVoice()
-    }
-    r.onend = () => {
-      voiceRef.current = null
-      setVoiceActive(false)
-    }
+    voiceWantedRef.current = true
+    const session = configureDictationSession(r, {
+      wantActive: () => voiceWantedRef.current,
+      onTranscript: (t) => {
+        setRawText((prev) => (prev.trim() ? `${prev.trim()} ${t}` : t))
+      },
+      onBecameInactive: () => {
+        voiceWantedRef.current = false
+        voiceSessionDisposeRef.current?.()
+        voiceSessionDisposeRef.current = null
+        voiceRef.current = null
+        setVoiceActive(false)
+      },
+    })
+    voiceSessionDisposeRef.current = session.dispose
     voiceRef.current = r
     try {
       r.start()
       setVoiceActive(true)
     } catch {
+      voiceWantedRef.current = false
+      voiceSessionDisposeRef.current?.()
+      voiceSessionDisposeRef.current = null
       voiceRef.current = null
       setVoiceActive(false)
       setErr('Spracheingabe konnte nicht gestartet werden.')
