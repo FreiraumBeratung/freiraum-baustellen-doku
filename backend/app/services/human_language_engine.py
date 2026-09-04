@@ -34,8 +34,14 @@ def humanize_material(text: str) -> str:
         return ""
     l = t.casefold()
 
+    if "pflasterfl" in l or (l == "pflaster" or l.startswith("pflaster ")):
+        return "Pflaster"
     if "pflaster" in l:
         return "Pflastersteine"
+    if "zementmörtel" in l or "zementmoertel" in l:
+        return "Zementmörtel"
+    if re.search(r"\bboden\b", l) and "ablauf" not in l:
+        return "Boden"
     if "schotter" in l:
         return "Schotter"
     if "splitt" in l or "split" in l:
@@ -48,6 +54,8 @@ def humanize_material(text: str) -> str:
         return "Gipskartonplatten"
     if "sanierputz" in l:
         return "Sanierputz"
+    if re.search(r"\brohre?\b", l) and "leitung" not in l:
+        return "Rohre"
     if "rohr" in l or "wasserleitung" in l:
         return "Rohrleitungen"
     if "fittings" in l:

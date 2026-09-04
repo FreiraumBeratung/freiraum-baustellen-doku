@@ -1647,6 +1647,10 @@ _EXTRA_VERB_TOKENS = (
     "grundiert",
     "geschliffen",
     "asphaltiert",
+    "abgespritzt",
+    "abgesandet",
+    "abgesandelt",
+    "wiederhergestellt",
 )
 
 
@@ -1702,6 +1706,10 @@ _TRANSITION_VERBS = (
     "installiert",
     "geschlossen",
     "hergestellt",
+    "wiederhergestellt",
+    "abgespritzt",
+    "abgesandet",
+    "abgesandelt",
     "ausgeführt",
     "ausgefuehrt",
     "durchgeführt",
@@ -3518,6 +3526,27 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     ):
         label = "Drainage gebaut" if re.search(r"\b(erstellt|fertig|fertiggestellt)\b", t) else "Drainage/Entwässerung eingebaut"
         return CanonicalActivity("drainage_entwaesserung", label, 75.0, False)
+
+    # Spezifische Tiefbau-/Kanal-Schritte vor dem generischen Kanal-/Schacht-Sammelbegriff.
+    if re.search(r"\bwand\b", t) and re.search(r"\b(abgespritzt|abgespritzen)\b", t):
+        return CanonicalActivity("wand_abgespritzt", "Wand abgespritzt", 90.0, False)
+    if re.search(r"\bkehle\b", t) and re.search(r"\b(hergestellt|gemacht|gezogen|erstellt)\b", t):
+        return CanonicalActivity("kehle_hergestellt", "Kehle hergestellt", 89.0, False)
+    if re.search(r"\bschacht\b", t) and re.search(r"\b(gesetzt|eingebaut|gestellt)\b", t) and "kanal" not in t:
+        return CanonicalActivity("schacht_gesetzt", "Schacht gesetzt", 88.0, False)
+    if re.search(r"\brohre?\b", t) and re.search(r"\bangeschlossen\b", t) and "fallrohr" not in t:
+        return CanonicalActivity("rohre_angeschlossen", "Rohre angeschlossen", 87.0, False)
+    if re.search(r"\b(abgesandet|abgesandelt)\b", t):
+        return CanonicalActivity("flaeche_abgesandet", "Abgesandet", 82.0, False)
+    if re.search(r"\bpflaster(?:fl(ä|ae)che|steine?)?\b", t) and re.search(
+        r"\b(wiederhergestellt|hergestellt)\b",
+        t,
+    ):
+        qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text or "")
+        if re.search(r"\bwiederhergestellt\b", t):
+            text = f"{_qty_prefix(raw_text)}{qty} m² Pflasterfläche wiederhergestellt" if qty else "Pflasterfläche wiederhergestellt"
+            return CanonicalActivity("pflasterflaeche_wiederhergestellt", text, 91.0, bool(qty))
+
     if ("kanal" in t or "schacht" in t) and re.search(r"\b(angeschlossen|gesetzt|eingebaut|betoniert)\b", t):
         return CanonicalActivity("kanal_schacht", "Kanal-/Schachtarbeiten durchgeführt", 77.0, False)
     if re.search(r"\b(leitungstrasse|leitungs-?trasse|trasse)\b", t) and re.search(

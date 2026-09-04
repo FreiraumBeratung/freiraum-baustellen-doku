@@ -129,7 +129,11 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bunkraut entfernt\b", (), ("Handwerkzeug"), ()),
     (r"\bpflanzen gesetzt\b", ("Pflanzen",), ("Pflanzsubstrat"), ()),
     (r"\bgraben ausgehoben\b", (), ("Bodenmaterial",), ()),
-    (r"\buntergrund verdichtet\b", (), ("Frostschutzmaterial",), ()),
+    (r"\buntergrund verdichtet\b", (), ("Boden", "Frostschutzmaterial"), ()),
+    (r"\bkehle hergestellt\b", ("Zementmörtel",), (), ()),
+    (r"\brohre angeschlossen\b", ("Rohre",), (), ()),
+    (r"\bschacht gesetzt\b", (), (), ()),
+    (r"\bpflasterfläche wiederhergestellt\b|\b\d+(?:[.,]\d+)?\s*m²\s*pflasterfläche wiederhergestellt\b", ("Pflaster",), (), ()),
     (r"\bwasserleitungen montiert\b|\brohrleitungen installiert\b", ("Rohrleitungen",), ("Fittings",), ()),
     (r"\bheizungsanschlüsse montiert\b", (), ("Fittings",), ()),
     (r"\bwc montiert\b", ("WC",), ("Anschlussset",), ()),
@@ -179,6 +183,10 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bschotter\b", "Schotter"),
     (r"\bsplitt\b", "Splitt"),
     (r"\bpflastersteine?\b", "Pflastersteine"),
+    (r"\bpflasterfl(ä|ae)che\b", "Pflaster"),
+    (r"\bzementm(?:ö|oe)rtel\b", "Zementmörtel"),
+    (r"\brohre?\b", "Rohre"),
+    (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Boden"),
     (r"\brasen[\s-]*kanten[\s-]*stein(?:e|en)?\b|\brasen[\s-]*kanten\b", "Rasenkantensteine"),
     (r"\brandstein(?:e|en)?\b|\bkantenstein(?:e|en)?\b|\bbordstein(?:e|en)?\b", "Rasenkantensteine"),
     (r"\bfliesen\b", "Fliesen"),
@@ -877,6 +885,10 @@ _ACTIVITY_VERB_TOKENS = (
     "befüllt",
     "befuellt",
     "fertiggestellt",
+    "wiederhergestellt",
+    "abgespritzt",
+    "abgesandet",
+    "abgesandelt",
     "silikoniert",
 )
 
@@ -1190,6 +1202,7 @@ def _enforce_explicit_optional_materials(materials: list[str], raw_text: str) ->
         ("Heckenschere", r"\bheckenschere\b"),
         ("Frostschutzmaterial", r"\bfrostschutz\b"),
         ("Bodenmaterial", r"\bbodenmaterial\b"),
+        ("Boden", r"\bboden\b"),
     )
     out: list[str] = []
     for mat in materials:
@@ -2001,6 +2014,13 @@ def _drop_garbage_material_lines(materials: list[str]) -> list[str]:
         if re.search(r"\b(morgen|muessen|müssen|fertig\s+gestellt|fertiggestellt|wollten|wollen)\b", low):
             continue
         if re.search(r"\bm³\b", mat, flags=re.IGNORECASE) and re.search(r"\bpflaster\b", low):
+            continue
+        # Flächen-/Wiederherstellungs-Mengen gehören in Tätigkeiten, nicht ins Material.
+        if re.search(r"\b(wiederhergestellt|abgespritzt|abgesandet|abgesandelt)\b", low):
+            continue
+        # „1 m² Pflaster“ aus Flächenarbeit → nur Produktname behalten.
+        if re.search(r"\d+(?:[.,]\d+)?\s*m²\s*pflaster\b", low) and "stein" not in low:
+            out.append("Pflaster")
             continue
         if re.search(r"\b(reingepackt|reingemacht)\b", low):
             continue
