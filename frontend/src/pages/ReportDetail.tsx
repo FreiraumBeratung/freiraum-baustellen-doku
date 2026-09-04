@@ -8,6 +8,7 @@ import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
 import { buildReportPreviewStateFromDoc } from '../utils/reportEditState'
+import { formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
 import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
@@ -166,7 +167,7 @@ export function ReportDetailPage() {
       `Kunde: ${report.customerName}`,
       `Datum: ${report.date}`,
       `Mitarbeiter: ${report.employees.length ? report.employees.join(', ') : 'Keine Angabe'}`,
-      `Arbeitszeit: ${report.startTime} – ${report.endTime}`,
+      `Arbeitszeit: ${formatArbeitszeitWithHours(report.startTime, report.endTime)}`,
       `Format: ${report.exportFormat}`,
       '',
       'Zusammenfassung',
@@ -191,7 +192,7 @@ export function ReportDetailPage() {
         <Field k="Kunde" v={report.customerName} />
         <Field k="Datum" v={report.date} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
-        <Field k="Arbeitszeit" v={`${report.startTime} – ${report.endTime}`} />
+        <Field k="Arbeitszeit" v={formatArbeitszeitWithHours(report.startTime, report.endTime)} />
         <Field k="Format" v={report.exportFormat} />
       </Card>
 

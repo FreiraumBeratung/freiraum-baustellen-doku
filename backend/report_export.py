@@ -479,7 +479,7 @@ def build_pdf_bytes(
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")
     mitarbeiter = ", ".join(str(e) for e in emps_raw) if isinstance(emps_raw, list) and emps_raw else "Keine Angabe"
-    zeit = f"{report.get('startTime', '?')} – {report.get('endTime', '?')}"
+    zeit = format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
 
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
@@ -698,7 +698,7 @@ def build_docx_bytes(
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")
     mitarbeiter = ", ".join(str(e) for e in emps_raw) if isinstance(emps_raw, list) and emps_raw else "Keine Angabe"
-    zeit = f"{report.get('startTime', '?')} – {report.get('endTime', '?')}"
+    zeit = format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
 
     info_tbl = d.add_table(rows=0, cols=2)
     info_tbl.style = "Table Grid"
@@ -799,6 +799,30 @@ def _fmt_hours(value: Any) -> str:
         return f"{float(value):.2f}".replace(".", ",")
     except Exception:
         return "0,00"
+
+
+def _parse_hhmm_minutes(value: Any) -> int | None:
+    raw = str(value or "").strip()
+    m = re.match(r"^(\d{1,2}):(\d{2})$", raw)
+    if not m:
+        return None
+    hour, minute = int(m.group(1)), int(m.group(2))
+    if hour > 23 or minute > 59:
+        return None
+    return hour * 60 + minute
+
+
+def format_arbeitszeit_with_hours(start_time: Any, end_time: Any) -> str:
+    """Anzeige: „08:00 – 13:45 | 5,75 Stunden“ (Brutto-Differenz ohne Pause)."""
+    start = str(start_time or "?").strip() or "?"
+    end = str(end_time or "?").strip() or "?"
+    base = f"{start} – {end}"
+    start_min = _parse_hhmm_minutes(start)
+    end_min = _parse_hhmm_minutes(end)
+    if start_min is None or end_min is None or end_min <= start_min:
+        return base
+    hours = round((end_min - start_min) / 60.0, 2)
+    return f"{base} | {_fmt_hours(hours)} Stunden"
 
 
 def build_collective_pdf_bytes(

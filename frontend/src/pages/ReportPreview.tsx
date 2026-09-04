@@ -10,6 +10,7 @@ import {
   loadReportPreviewPersist,
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
+import { formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
 import type { ReportPreviewState, StructuredPayload } from './ReportNew'
 import type { FeedbackNavState } from './Feedback'
 
@@ -171,7 +172,7 @@ function buildPlainText(companyName: string, st: ReportPreviewState, structured:
   const s = structured
   const emps = st.employees.length ? st.employees.join(', ') : 'Keine Angabe'
   const empLine = `Mitarbeiter: ${emps}`
-  const timeLine = `Arbeitszeit: ${st.startTime} – ${st.endTime}`
+  const timeLine = `Arbeitszeit: ${formatArbeitszeitWithHours(st.startTime, st.endTime)}`
   const lines = [
     'TAGESBERICHT',
     `Firma: ${companyName}`,
@@ -767,7 +768,7 @@ function ReportPreviewInner({
               </div>
             ) : (
               <span className="mt-1 block min-w-0 whitespace-pre-wrap text-right text-white">
-                {st.startTime} – {st.endTime}
+                {formatArbeitszeitWithHours(st.startTime, st.endTime)}
                 {`\nPause: ${defaultBreakMinutes(st)} Min.`}
                 {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
               </span>
