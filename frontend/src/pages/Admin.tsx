@@ -163,6 +163,11 @@ export function AdminPage() {
                       Registrierte Mitarbeiter: {typeof row.workerCount === 'number' ? row.workerCount : 0}
                     </p>
                   ) : null}
+                  <p className="mt-2 break-all font-mono text-[11px] leading-snug text-zinc-600">
+                    ID: {row.id}
+                    <br />
+                    Tenant-ID: {row.tenantId || row.id}
+                  </p>
                 </div>
               </div>
 
