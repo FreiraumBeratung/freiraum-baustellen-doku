@@ -9,6 +9,8 @@ type Project = {
   name: string
   customer: string
   address: string
+  /** PLZ und Ort — optional, additiv */
+  city?: string
   contactPerson: string
   note: string
   status: 'aktiv' | 'pausiert' | 'abgeschlossen'
@@ -43,6 +45,7 @@ export function ProjectsPage() {
   const [name, setName] = useState('')
   const [customer, setCustomer] = useState('')
   const [address, setAddress] = useState('')
+  const [city, setCity] = useState('')
   const [contactPerson, setContactPerson] = useState('')
   const [note, setNote] = useState('')
   const [busyRunId, setBusyRunId] = useState<string | null>(null)
@@ -67,6 +70,7 @@ export function ProjectsPage() {
         name: name.trim(),
         customer,
         address,
+        city,
         contactPerson,
         note,
         status: 'aktiv',
@@ -75,6 +79,7 @@ export function ProjectsPage() {
     setName('')
     setCustomer('')
     setAddress('')
+    setCity('')
     setContactPerson('')
     setNote('')
     load()
@@ -195,6 +200,16 @@ export function ProjectsPage() {
             />
           </label>
           <label className="block min-w-0">
+            <span className="text-xs tracking-wide text-zinc-400">Ort</span>
+            <input
+              className="mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42"
+              value={city}
+              onChange={(e) => setCity(e.target.value)}
+              placeholder="PLZ und Ort"
+              autoComplete="address-level2"
+            />
+          </label>
+          <label className="block min-w-0">
             <span className="text-xs tracking-wide text-zinc-400">Ansprechpartner vor Ort</span>
             <input
               className="mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42"
@@ -230,7 +245,8 @@ export function ProjectsPage() {
                   {p.contactPerson ? (
                     <div className="text-xs tracking-wide text-zinc-600">{p.contactPerson}</div>
                   ) : null}
-                  <div className="text-xs text-zinc-500">{p.address}</div>
+                  {p.address ? <div className="text-xs text-zinc-500">{p.address}</div> : null}
+                  {p.city ? <div className="text-xs text-zinc-500">{p.city}</div> : null}
                 </div>
               </div>
 

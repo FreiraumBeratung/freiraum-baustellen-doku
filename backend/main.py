@@ -567,6 +567,7 @@ class ProjectCreate(BaseModel):
     name: str
     customer: str = ""
     address: str = ""
+    city: str = ""
     contactPerson: str = ""
     note: str = ""
     status: str = "aktiv"
@@ -576,6 +577,7 @@ class ProjectPatch(BaseModel):
     name: str | None = None
     customer: str | None = None
     address: str | None = None
+    city: str | None = None
     contactPerson: str | None = None
     note: str | None = None
     status: str | None = None
@@ -1609,6 +1611,7 @@ def create_project(
         "name": body.name.strip(),
         "customer": body.customer.strip(),
         "address": body.address.strip(),
+        "city": body.city.strip(),
         "contactPerson": body.contactPerson.strip(),
         "note": body.note.strip(),
         "status": body.status if body.status in {"aktiv", "pausiert", "abgeschlossen"} else "aktiv",
@@ -1634,6 +1637,8 @@ def patch_project(
                 p["customer"] = body.customer
             if body.address is not None:
                 p["address"] = body.address
+            if body.city is not None:
+                p["city"] = body.city
             if body.contactPerson is not None:
                 p["contactPerson"] = body.contactPerson
             if body.note is not None:
