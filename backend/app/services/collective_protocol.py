@@ -93,6 +93,8 @@ def build_collective_protocol_payload(
         "projectName": str(project.get("name") or signed[0].get("projectName") if signed else project.get("name") or "—"),
         "customerName": customer or "—",
         "companyName": company_name,
+        "projectAddress": str(project.get("address") or "").strip(),
+        "projectCity": str(project.get("city") or "").strip(),
         "visitCount": len(entries),
         "sequenceRange": nr_label,
         "dateRange": _zeitraum_label(dates),

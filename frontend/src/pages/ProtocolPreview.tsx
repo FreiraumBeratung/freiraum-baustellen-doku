@@ -88,6 +88,8 @@ export function ProtocolPreviewPage() {
         projectId: st.projectId,
         projectName: st.projectName,
         customerName: st.customerName,
+        projectAddress: st.projectAddress || '',
+        projectCity: st.projectCity || '',
         date: st.date,
         mode: st.mode,
         rawText: st.rawText,

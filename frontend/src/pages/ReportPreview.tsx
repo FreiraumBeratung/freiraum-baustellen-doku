@@ -1382,6 +1382,8 @@ export function ReportPreviewPage() {
         projectId: st.projectId,
         projectName: st.projectName,
         customerName: st.customerName,
+        projectAddress: st.projectAddress || '',
+        projectCity: st.projectCity || '',
         date: st.date,
         // Edit: Zeiten/Mitarbeiter aus Draft — Create: unverändert aus st.
         employees: isEdit ? draftMeta.employees : st.employees,

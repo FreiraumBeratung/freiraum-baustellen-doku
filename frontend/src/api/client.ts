@@ -556,6 +556,8 @@ export async function createProtocol(body: {
   projectId: string
   projectName: string
   customerName: string
+  projectAddress?: string
+  projectCity?: string
   date: string
   mode: ProtocolMode
   rawText: string

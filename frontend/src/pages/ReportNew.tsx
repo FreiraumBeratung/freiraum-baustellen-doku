@@ -16,13 +16,16 @@ import {
   type EmployeeTimeSlot,
 } from '../utils/employeeTimes'
 
-type Project = { id: string; name: string; customer: string; status: string }
+type Project = { id: string; name: string; customer: string; address?: string; city?: string; status: string }
 type Employee = { id: string; name: string; active: boolean }
 
 export type ReportPreviewState = {
   projectId: string
   projectName: string
   customerName: string
+  /** Baustellen-Adresse für Briefanschrift (additiv) */
+  projectAddress?: string
+  projectCity?: string
   date: string
   employees: string[]
   employeeIds: string[]
@@ -261,6 +264,8 @@ export function ReportNewPage() {
         projectId,
         projectName: proj?.name || r.projectName,
         customerName: proj?.customer || r.customerName,
+        projectAddress: proj?.address || '',
+        projectCity: proj?.city || '',
         date: r.date,
         employees: names,
         employeeIds: ids,

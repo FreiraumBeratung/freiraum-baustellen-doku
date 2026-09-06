@@ -21,6 +21,7 @@ from kodra_letterhead import (
     KODRA_RIGHT_MARGIN,
     KODRA_TOP_MARGIN,
     draw_kodra_letterhead,
+    recipient_address_lines,
 )
 from report_export import (
     LINE_HEX,
@@ -221,6 +222,28 @@ def _meta_table(rows: list[list[Any]], width: float) -> Table:
     return tbl
 
 
+def _recipient_address_story(
+    story: list[Any],
+    styles: dict[str, ParagraphStyle],
+    doc: dict[str, Any],
+) -> None:
+    """Briefanschrift über dem Betreff (nur wenn Daten vorhanden)."""
+    lines = recipient_address_lines(doc)
+    if not lines:
+        return
+    addr_style = ParagraphStyle(
+        name="KodraRecipient",
+        parent=styles["body"],
+        fontSize=10,
+        leading=13,
+        textColor=TEXT_DARK_HEX,
+        spaceAfter=1,
+    )
+    for line in lines:
+        story.append(Paragraph(_xml_para_text(line), addr_style))
+    story.append(Spacer(1, 16))
+
+
 def _finalize(buf: BytesIO, doc_tpl: SimpleDocTemplate, story: list[Any]) -> bytes:
     doc_tpl.build(story, canvasmaker=_KodraCanvas)
     return buf.getvalue()
@@ -255,6 +278,7 @@ def build_kodra_report_pdf_bytes(
     ktalk = str(st.get("customerTalk") or "Keine Angabe")
 
     story: list[Any] = []
+    _recipient_address_story(story, styles, report)
     story.append(_betreff_datum_block(styles, betreff=proj, datum=datum, width=doc_tpl.width))
     story.append(Spacer(1, 10))
     story.append(Paragraph("TAGESBERICHT", styles["title"]))
@@ -335,6 +359,7 @@ def build_kodra_collective_pdf_bytes(
     zeitraum = _zeitraum_label(payload)
 
     story: list[Any] = []
+    _recipient_address_story(story, styles, payload)
     story.append(_betreff_datum_block(styles, betreff=proj, datum=zeitraum, width=doc_tpl.width))
     story.append(Spacer(1, 10))
     story.append(Paragraph("GESAMTBERICHT", styles["title"]))
@@ -433,6 +458,7 @@ def build_kodra_protocol_pdf_bytes(
     doc_tpl = _new_doc(buf, pdf_doc_title)
 
     story: list[Any] = []
+    _recipient_address_story(story, styles, protocol)
     story.append(_betreff_datum_block(styles, betreff=betreff, datum=datum, width=doc_tpl.width))
     story.append(Spacer(1, 10))
     story.append(Paragraph(doc_title, styles["title"]))
@@ -503,6 +529,7 @@ def build_kodra_collective_protocol_pdf_bytes(
     datum_label = date_range if date_range != "—" else _format_date_de(str(payload.get("dateTo") or ""))
 
     story: list[Any] = []
+    _recipient_address_story(story, styles, payload)
     story.append(_betreff_datum_block(styles, betreff=proj, datum=datum_label, width=doc_tpl.width))
     story.append(Spacer(1, 10))
     story.append(Paragraph("GESAMTPROTOKOLL", styles["title"]))

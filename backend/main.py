@@ -65,6 +65,7 @@ from app.services.site_protocol import (
     remove_protocol,
     save_protocol_photos,
     save_protocol_signatures,
+    write_protocols,
 )
 from app.services.quality_filter import apply_quality_filter
 from app.services.mail_autodiscover import (
@@ -623,6 +624,9 @@ class ReportCreateBody(BaseModel):
     projectId: str
     projectName: str
     customerName: str = ""
+    # Additiv: Baustellen-Adresse für Briefanschrift (z. B. Kodra-PDF)
+    projectAddress: str = ""
+    projectCity: str = ""
     date: str
     employees: list[str] = []
     employeeIds: list[str] = []
@@ -648,6 +652,8 @@ class ProtocolCreateBody(BaseModel):
     projectId: str = ""
     projectName: str = ""
     customerName: str = ""
+    projectAddress: str = ""
+    projectCity: str = ""
     date: str
     mode: str = Field(default="quick", pattern="^(quick|signed|thoughts)$")
     rawText: str = Field(..., min_length=3, max_length=50000)
@@ -2105,6 +2111,8 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "projectId": body.projectId,
         "projectName": body.projectName,
         "customerName": body.customerName,
+        "projectAddress": "",
+        "projectCity": "",
         "date": body.date,
         "employees": body.employees,
         "employeeIds": [str(x).strip() for x in body.employeeIds if str(x).strip()],
@@ -2123,6 +2131,12 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "signatures": {"customer": None, "employee": None},
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
+    doc = _enrich_project_address_fields(
+        store,
+        doc,
+        address_from_body=body.projectAddress,
+        city_from_body=body.projectCity,
+    )
     _write_json_reports(store, doc)
     employees_data = store.read_json("employees.json", {"employees": []})
     doc["timeBooking"] = time_account.sync_entries_for_report(
@@ -2186,6 +2200,12 @@ def update_report(
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }
     )
+    existing = _enrich_project_address_fields(
+        store,
+        existing,
+        address_from_body=body.projectAddress,
+        city_from_body=body.projectCity,
+    )
     # Fotos, Signaturen, createdAt, runId, id, companyId bewusst unangetastet.
     reports_list[idx] = existing
     data["reports"] = reports_list
@@ -2213,6 +2233,45 @@ def _find_report_doc(store: TenantStore, report_id: str) -> dict[str, Any]:
         if r.get("id") == report_id:
             return r
     raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+
+
+def _lookup_project_address(store: TenantStore, project_id: str) -> tuple[str, str, str]:
+    """Liefert (customer, address, city) aus projects.json — leer wenn unbekannt."""
+    pid = str(project_id or "").strip()
+    if not pid:
+        return "", "", ""
+    data = store.read_json("projects.json", {"projects": []})
+    for p in data.get("projects") or []:
+        if not isinstance(p, dict):
+            continue
+        if str(p.get("id") or "") != pid:
+            continue
+        return (
+            str(p.get("customer") or "").strip(),
+            str(p.get("address") or "").strip(),
+            str(p.get("city") or "").strip(),
+        )
+    return "", "", ""
+
+
+def _enrich_project_address_fields(
+    store: TenantStore,
+    doc: dict[str, Any],
+    *,
+    address_from_body: str = "",
+    city_from_body: str = "",
+) -> dict[str, Any]:
+    """Additiv: projectAddress/projectCity setzen (Body oder Baustellen-Lookup)."""
+    out = dict(doc)
+    pid = str(out.get("projectId") or "").strip()
+    cust_l, addr_l, city_l = _lookup_project_address(store, pid)
+    addr = str(address_from_body or out.get("projectAddress") or "").strip() or addr_l
+    city = str(city_from_body or out.get("projectCity") or "").strip() or city_l
+    out["projectAddress"] = addr
+    out["projectCity"] = city
+    if not str(out.get("customerName") or "").strip() and cust_l:
+        out["customerName"] = cust_l
+    return out
 
 
 def _report_photos_list(report: dict[str, Any]) -> list[dict[str, Any]]:
@@ -2650,7 +2709,7 @@ def send_report_to_office_endpoint(
     user_id: str = Depends(require_active_license),
     store: TenantStore = Depends(get_tenant_store_write),
 ) -> SendOfficeResponse:
-    rep = _find_report_doc(store, report_id)
+    rep = _enrich_project_address_fields(store, _find_report_doc(store, report_id))
     prof = store.read_json("company_profile.json", {})
     office = str(prof.get("officeEmail") or "").strip()
     if not office:
@@ -2790,7 +2849,7 @@ def _export_resolve_signature(store: TenantStore):
 
 @app.get("/api/reports/{report_id}/export/pdf")
 def export_report_pdf(report_id: str, store: TenantStore = Depends(get_tenant_store)):
-    rep = _find_report_doc(store, report_id)
+    rep = _enrich_project_address_fields(store, _find_report_doc(store, report_id))
     prof = store.read_json("company_profile.json", {})
     try:
         blob = build_pdf_bytes(
@@ -2892,6 +2951,18 @@ def create_protocol(body: ProtocolCreateBody, store: TenantStore = Depends(get_t
         participants=body.participants,
         export_format=body.exportFormat,
     )
+    # Body-Felder überschreiben Lookup, falls gesetzt (additiv).
+    if str(body.projectAddress or "").strip() or str(body.projectCity or "").strip():
+        protocols = read_protocols(store)
+        for item in protocols:
+            if str(item.get("id") or "") == str(doc.get("id") or ""):
+                if str(body.projectAddress or "").strip():
+                    item["projectAddress"] = body.projectAddress.strip()
+                if str(body.projectCity or "").strip():
+                    item["projectCity"] = body.projectCity.strip()
+                write_protocols(store, protocols)
+                doc = item
+                break
     return doc
 
 
@@ -3113,7 +3184,7 @@ def send_protocol_to_office_endpoint(
     user_id: str = Depends(require_active_license),
     store: TenantStore = Depends(get_tenant_store_write),
 ) -> SendOfficeResponse:
-    protocol = find_protocol(store, protocol_id)
+    protocol = _enrich_project_address_fields(store, find_protocol(store, protocol_id))
     prof = store.read_json("company_profile.json", {})
     office = str(prof.get("officeEmail") or "").strip()
     if not office:
@@ -3151,7 +3222,7 @@ def send_protocol_to_office_endpoint(
 
 @app.get("/api/protocols/{protocol_id}/export/pdf")
 def export_protocol_pdf(protocol_id: str, store: TenantStore = Depends(get_tenant_store)):
-    protocol = find_protocol(store, protocol_id)
+    protocol = _enrich_project_address_fields(store, find_protocol(store, protocol_id))
     prof = store.read_json("company_profile.json", {})
     try:
         blob = build_protocol_pdf_bytes(

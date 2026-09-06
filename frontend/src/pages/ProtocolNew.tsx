@@ -17,13 +17,15 @@ import {
   speechRecognitionSupported,
 } from '../utils/speechRecognition'
 
-type Project = { id: string; name: string; customer: string; status: string }
+type Project = { id: string; name: string; customer: string; address?: string; city?: string; status: string }
 
 export type ProtocolPreviewState = {
   mode: ProtocolMode
   projectId: string
   projectName: string
   customerName: string
+  projectAddress?: string
+  projectCity?: string
   date: string
   participants: string
   exportFormat: string
@@ -189,6 +191,8 @@ export function ProtocolNewPage() {
       projectId: isThoughts ? THOUGHTS_PROJECT_ID : proj!.id,
       projectName: isThoughts ? THOUGHTS_PROJECT_NAME : proj!.name,
       customerName: isThoughts ? '' : proj!.customer || '',
+      projectAddress: isThoughts ? '' : proj!.address || '',
+      projectCity: isThoughts ? '' : proj!.city || '',
       date,
       participants: isThoughts ? '' : participants.trim(),
       exportFormat,

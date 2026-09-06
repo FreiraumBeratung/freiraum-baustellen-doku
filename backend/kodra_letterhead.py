@@ -44,10 +44,21 @@ KODRA_FOOTER_BANK = (
 )
 
 # Ränder für Flowables (Briefkopf + Fußzeile freilassen)
+# Top bewusst so, dass unter der Fensterzeile Platz für Empfängeranschrift ist.
 KODRA_LEFT_MARGIN = 2.5 * cm
 KODRA_RIGHT_MARGIN = 2.0 * cm
-KODRA_TOP_MARGIN = 7.0 * cm
+KODRA_TOP_MARGIN = 5.85 * cm
 KODRA_BOTTOM_MARGIN = 3.4 * cm
+
+
+def recipient_address_lines(doc: dict[str, Any] | None) -> list[str]:
+    """Kunden-Briefanschrift: Name, Straße, PLZ/Ort (leer = nichts anzeigen)."""
+    if not isinstance(doc, dict):
+        return []
+    name = str(doc.get("customerName") or "").strip()
+    address = str(doc.get("projectAddress") or doc.get("address") or "").strip()
+    city = str(doc.get("projectCity") or doc.get("city") or "").strip()
+    return [line for line in (name, address, city) if line]
 
 
 def is_kodra_export(doc: dict[str, Any] | None, company_profile: dict[str, Any] | None = None) -> bool:

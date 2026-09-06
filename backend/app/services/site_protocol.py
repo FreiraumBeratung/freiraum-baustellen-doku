@@ -207,6 +207,8 @@ def create_protocol_doc(
         "projectId": pid,
         "projectName": pname,
         "customerName": cname,
+        "projectAddress": "",
+        "projectCity": "",
         "date": date_norm,
         "mode": mode_norm,
         "sequenceNumber": seq,
@@ -219,6 +221,18 @@ def create_protocol_doc(
         "createdAt": now,
         "updatedAt": now,
     }
+    if mode_norm != "thoughts" and pid:
+        projects = store.read_json("projects.json", {"projects": []})
+        for p in projects.get("projects") or []:
+            if not isinstance(p, dict):
+                continue
+            if str(p.get("id") or "") != pid:
+                continue
+            doc["projectAddress"] = str(p.get("address") or "").strip()
+            doc["projectCity"] = str(p.get("city") or "").strip()
+            if not cname:
+                doc["customerName"] = str(p.get("customer") or "").strip()
+            break
     if mode_norm == "thoughts":
         doc["dayDraft"] = True
         doc["officeSentAt"] = None

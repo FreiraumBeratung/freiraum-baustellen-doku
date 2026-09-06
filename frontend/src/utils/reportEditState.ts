@@ -7,6 +7,8 @@ export type ReportDocForEdit = {
   projectId?: string
   projectName?: string
   customerName?: string
+  projectAddress?: string
+  projectCity?: string
   date?: string
   employees?: string[]
   employeeIds?: string[]
@@ -50,6 +52,8 @@ export function buildReportPreviewStateFromDoc(doc: ReportDocForEdit): ReportPre
     projectId: String(doc.projectId || ''),
     projectName: String(doc.projectName || ''),
     customerName: String(doc.customerName || ''),
+    projectAddress: String(doc.projectAddress || ''),
+    projectCity: String(doc.projectCity || ''),
     date: String(doc.date || ''),
     employees: Array.isArray(doc.employees) ? doc.employees.map(String) : [],
     employeeIds: Array.isArray(doc.employeeIds) ? doc.employeeIds.map(String) : [],
