@@ -607,6 +607,13 @@ class StructuredBlock(BaseModel):
     customerTalk: str = ""
 
 
+class EmployeeTimeBody(BaseModel):
+    employeeId: str = Field(..., min_length=1, max_length=200)
+    startTime: str
+    endTime: str
+    breakMinutes: int = Field(default=45, ge=0, le=480)
+
+
 class ReportCreateBody(BaseModel):
     companyName: str
     companyLogoUrl: str | None = None
@@ -620,6 +627,8 @@ class ReportCreateBody(BaseModel):
     startTime: str
     endTime: str
     breakMinutes: int = Field(default=45, ge=0, le=480)
+    # Optional: abweichende Zeiten je Mitarbeiter — leer = alle wie start/end/pause.
+    employeeTimes: list[EmployeeTimeBody] = []
     exportFormat: str = "PDF"
     rawText: str
     structured: StructuredBlock
@@ -2097,6 +2106,9 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "startTime": body.startTime,
         "endTime": body.endTime,
         "breakMinutes": int(body.breakMinutes),
+        "employeeTimes": time_account.normalize_employee_times_payload(
+            [t.model_dump() for t in body.employeeTimes]
+        ),
         "exportFormat": body.exportFormat,
         "rawText": body.rawText,
         "structured": body.structured.model_dump(),
@@ -2159,6 +2171,9 @@ def update_report(
             "startTime": body.startTime,
             "endTime": body.endTime,
             "breakMinutes": int(body.breakMinutes),
+            "employeeTimes": time_account.normalize_employee_times_payload(
+                [t.model_dump() for t in body.employeeTimes]
+            ),
             "exportFormat": body.exportFormat,
             "rawText": body.rawText,
             "structured": body.structured.model_dump(),

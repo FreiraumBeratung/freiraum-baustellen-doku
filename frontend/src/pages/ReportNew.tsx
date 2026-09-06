@@ -10,6 +10,11 @@ import {
   getSpeechRecognition,
   speechRecognitionSupported,
 } from '../utils/speechRecognition'
+import {
+  buildEmployeeTimesPayload,
+  defaultEmployeeTimeSlot,
+  type EmployeeTimeSlot,
+} from '../utils/employeeTimes'
 
 type Project = { id: string; name: string; customer: string; status: string }
 type Employee = { id: string; name: string; active: boolean }
@@ -24,6 +29,8 @@ export type ReportPreviewState = {
   startTime: string
   endTime: string
   breakMinutes: number
+  /** Optional: abweichende Zeiten je Mitarbeiter */
+  employeeTimes?: EmployeeTimeSlot[]
   exportFormat: string
   rawText: string
   structured: StructuredPayload
@@ -66,6 +73,8 @@ export function ReportNewPage() {
   const [startTime, setStartTime] = useState('08:00')
   const [endTime, setEndTime] = useState('16:30')
   const [breakMinutes, setBreakMinutes] = useState(45)
+  const [perEmployeeTimes, setPerEmployeeTimes] = useState(false)
+  const [employeeTimesById, setEmployeeTimesById] = useState<Record<string, EmployeeTimeSlot>>({})
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
   const [notes, setNotes] = useState('')
@@ -258,6 +267,11 @@ export function ReportNewPage() {
         startTime,
         endTime,
         breakMinutes,
+        employeeTimes: buildEmployeeTimesPayload(perEmployeeTimes, ids, employeeTimesById, {
+          startTime,
+          endTime,
+          breakMinutes,
+        }),
         exportFormat: r.exportFormat,
         rawText,
         structured,
@@ -274,7 +288,38 @@ export function ReportNewPage() {
   }
 
   function toggleEmp(id: string) {
-    setSelectedEmp((s) => ({ ...s, [id]: !s[id] }))
+    setSelectedEmp((s) => {
+      const nextOn = !s[id]
+      if (nextOn && perEmployeeTimes) {
+        setEmployeeTimesById((prev) => ({
+          ...prev,
+          [id]:
+            prev[id] ??
+            defaultEmployeeTimeSlot(id, startTime, endTime, breakMinutes),
+        }))
+      }
+      return { ...s, [id]: nextOn }
+    })
+  }
+
+  function enablePerEmployeeTimes() {
+    const ids = employees.filter((e) => selectedEmp[e.id]).map((e) => e.id)
+    const next: Record<string, EmployeeTimeSlot> = {}
+    for (const id of ids) {
+      next[id] =
+        employeeTimesById[id] ??
+        defaultEmployeeTimeSlot(id, startTime, endTime, breakMinutes)
+    }
+    setEmployeeTimesById(next)
+    setPerEmployeeTimes(true)
+  }
+
+  function updateEmpTime(id: string, patch: Partial<EmployeeTimeSlot>) {
+    setEmployeeTimesById((prev) => {
+      const base =
+        prev[id] ?? defaultEmployeeTimeSlot(id, startTime, endTime, breakMinutes)
+      return { ...prev, [id]: { ...base, ...patch, employeeId: id } }
+    })
   }
 
   return (
@@ -479,6 +524,89 @@ export function ReportNewPage() {
                     <p className="text-sm text-zinc-500">Keine aktiven Mitarbeitenden.</p>
                   ) : null}
                 </div>
+
+                {selectedCount >= 2 ? (
+                  <div className="mt-3 space-y-3">
+                    {perEmployeeTimes ? (
+                      <>
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-orange-400 hover:underline"
+                          onClick={() => setPerEmployeeTimes(false)}
+                        >
+                          Alle gleiche Zeit (wie oben)
+                        </button>
+                        <div className="space-y-3">
+                          {employees
+                            .filter((e) => selectedEmp[e.id])
+                            .map((e) => {
+                              const slot =
+                                employeeTimesById[e.id] ??
+                                defaultEmployeeTimeSlot(e.id, startTime, endTime, breakMinutes)
+                              return (
+                                <div
+                                  key={e.id}
+                                  className="rounded-2xl border border-white/[0.08] bg-black/40 px-3 py-3"
+                                >
+                                  <p className="text-sm font-medium text-zinc-200">{e.name}</p>
+                                  <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-xs text-zinc-500">Start</span>
+                                      <input
+                                        type="time"
+                                        className="mt-1 w-full rounded-xl border border-white/[0.1] bg-black/55 px-2 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+                                        value={slot.startTime}
+                                        onChange={(ev) =>
+                                          updateEmpTime(e.id, { startTime: ev.target.value })
+                                        }
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-xs text-zinc-500">Ende</span>
+                                      <input
+                                        type="time"
+                                        className="mt-1 w-full rounded-xl border border-white/[0.1] bg-black/55 px-2 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+                                        value={slot.endTime}
+                                        onChange={(ev) =>
+                                          updateEmpTime(e.id, { endTime: ev.target.value })
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+                                  <label className="mt-2 block">
+                                    <span className="text-xs text-zinc-500">Pause</span>
+                                    <select
+                                      className="mt-1 w-full rounded-xl border border-white/[0.1] bg-black/55 px-2 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+                                      value={slot.breakMinutes}
+                                      onChange={(ev) =>
+                                        updateEmpTime(e.id, {
+                                          breakMinutes: Number(ev.target.value),
+                                        })
+                                      }
+                                    >
+                                      <option value={0}>Keine Pause</option>
+                                      <option value={30}>30 Minuten</option>
+                                      <option value={45}>45 Minuten</option>
+                                      <option value={60}>60 Minuten</option>
+                                      <option value={90}>90 Minuten</option>
+                                    </select>
+                                  </label>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-orange-400 hover:underline"
+                        onClick={() => enablePerEmployeeTimes()}
+                      >
+                        Zeiten einzeln anpassen
+                      </button>
+                    )}
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}

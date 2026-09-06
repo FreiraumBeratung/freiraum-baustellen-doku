@@ -11,6 +11,12 @@ import {
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
 import { formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
+import {
+  buildEmployeeTimesPayload,
+  defaultEmployeeTimeSlot,
+  employeeTimesToMap,
+  type EmployeeTimeSlot,
+} from '../utils/employeeTimes'
 import type { ReportPreviewState, StructuredPayload } from './ReportNew'
 import type { FeedbackNavState } from './Feedback'
 
@@ -83,15 +89,32 @@ type DraftMeta = {
   breakMinutes: number
   employees: string[]
   employeeIds: string[]
+  perEmployeeTimes: boolean
+  employeeTimesById: Record<string, EmployeeTimeSlot>
+}
+
+function emptyDraftMeta(): DraftMeta {
+  return {
+    startTime: '08:00',
+    endTime: '16:30',
+    breakMinutes: 45,
+    employees: [],
+    employeeIds: [],
+    perEmployeeTimes: false,
+    employeeTimesById: {},
+  }
 }
 
 function metaFromState(st: ReportPreviewState): DraftMeta {
+  const times = Array.isArray(st.employeeTimes) ? st.employeeTimes : []
   return {
     startTime: st.startTime,
     endTime: st.endTime,
     breakMinutes: defaultBreakMinutes(st),
     employees: [...(st.employees || [])],
     employeeIds: [...defaultEmployeeIds(st)],
+    perEmployeeTimes: times.length > 0,
+    employeeTimesById: employeeTimesToMap(times),
   }
 }
 
@@ -99,12 +122,24 @@ function metaEqual(a: DraftMeta, b: DraftMeta): boolean {
   if (a.startTime !== b.startTime || a.endTime !== b.endTime || a.breakMinutes !== b.breakMinutes) {
     return false
   }
+  if (a.perEmployeeTimes !== b.perEmployeeTimes) return false
   if (a.employees.length !== b.employees.length || a.employeeIds.length !== b.employeeIds.length) {
     return false
   }
   if (!a.employees.every((v, i) => v === b.employees[i])) return false
   if (!a.employeeIds.every((v, i) => v === b.employeeIds[i])) return false
-  return true
+  const aPayload = buildEmployeeTimesPayload(a.perEmployeeTimes, a.employeeIds, a.employeeTimesById, a)
+  const bPayload = buildEmployeeTimesPayload(b.perEmployeeTimes, b.employeeIds, b.employeeTimesById, b)
+  if (aPayload.length !== bPayload.length) return false
+  return aPayload.every((row, i) => {
+    const other = bPayload[i]!
+    return (
+      row.employeeId === other.employeeId &&
+      row.startTime === other.startTime &&
+      row.endTime === other.endTime &&
+      row.breakMinutes === other.breakMinutes
+    )
+  })
 }
 
 function formatHoursDe(h: number | null | undefined): string {
@@ -123,6 +158,8 @@ function formatBookedEmployeeNames(names: string[]): string {
 function timeBookingMessage(booking: {
   created?: number
   hoursPerEmployee?: number | null
+  hoursByEmployee?: { name?: string; hours?: number }[]
+  hoursUniform?: boolean
   bookedNames?: string[]
   skippedNames?: string[]
   reason?: string | null
@@ -130,6 +167,20 @@ function timeBookingMessage(booking: {
   if (!booking) return { ok: '', warn: '' }
   const created = booking.created ?? 0
   if (created > 0) {
+    const byEmp = Array.isArray(booking.hoursByEmployee) ? booking.hoursByEmployee : []
+    const uniform = booking.hoursUniform !== false
+    if (!uniform && byEmp.length > 0) {
+      const parts = byEmp
+        .map((row) => {
+          const n = String(row.name || '').trim()
+          if (!n) return ''
+          return `${n} ${formatHoursDe(row.hours)}`
+        })
+        .filter(Boolean)
+      if (parts.length) {
+        return { ok: `Stundenkonto: ${parts.join(' · ')}.`, warn: '' }
+      }
+    }
     const per = formatHoursDe(booking.hoursPerEmployee)
     const names = formatBookedEmployeeNames(booking.bookedNames ?? [])
     if (names) {
@@ -694,7 +745,27 @@ function ReportPreviewInner({
                               const nextNames = roster
                                 .filter((row) => idSet.has(row.id))
                                 .map((row) => row.name)
-                              return { ...prev, employeeIds: nextIds, employees: nextNames }
+                              const nextTimes = { ...prev.employeeTimesById }
+                              if (!checked && prev.perEmployeeTimes) {
+                                nextTimes[e.id] =
+                                  nextTimes[e.id] ??
+                                  defaultEmployeeTimeSlot(
+                                    e.id,
+                                    prev.startTime,
+                                    prev.endTime,
+                                    prev.breakMinutes,
+                                  )
+                              }
+                              return {
+                                ...prev,
+                                employeeIds: nextIds,
+                                employees: nextNames,
+                                employeeTimesById: nextTimes,
+                                perEmployeeTimes:
+                                  prev.perEmployeeTimes && nextIds.length >= 2
+                                    ? prev.perEmployeeTimes
+                                    : false,
+                              }
                             })
                           }}
                         />
@@ -765,12 +836,168 @@ function ReportPreviewInner({
                     <option value={90}>90 Minuten</option>
                   </select>
                 </label>
+                {draftMeta.employeeIds.length >= 2 ? (
+                  <div className="space-y-3 text-left">
+                    {draftMeta.perEmployeeTimes ? (
+                      <>
+                        <button
+                          type="button"
+                          className="text-sm font-medium text-orange-400 hover:underline disabled:opacity-60"
+                          disabled={writeBlocked}
+                          onClick={() =>
+                            setDraftMeta((prev) => ({ ...prev, perEmployeeTimes: false }))
+                          }
+                        >
+                          Alle gleiche Zeit (wie oben)
+                        </button>
+                        <div className="space-y-3">
+                          {roster
+                            .filter((e) => draftMeta.employeeIds.includes(e.id))
+                            .map((e) => {
+                              const slot =
+                                draftMeta.employeeTimesById[e.id] ??
+                                defaultEmployeeTimeSlot(
+                                  e.id,
+                                  draftMeta.startTime,
+                                  draftMeta.endTime,
+                                  draftMeta.breakMinutes,
+                                )
+                              return (
+                                <div
+                                  key={e.id}
+                                  className="rounded-2xl border border-white/[0.08] bg-black/40 px-3 py-3"
+                                >
+                                  <p className="text-sm font-medium text-zinc-200">{e.name}</p>
+                                  <div className="mt-2 grid grid-cols-2 gap-2">
+                                    <label className="block">
+                                      <span className="text-xs text-zinc-500">Start</span>
+                                      <input
+                                        type="time"
+                                        className={`${inputClass} disabled:opacity-60`}
+                                        value={slot.startTime}
+                                        disabled={writeBlocked}
+                                        onChange={(ev) =>
+                                          setDraftMeta((prev) => ({
+                                            ...prev,
+                                            employeeTimesById: {
+                                              ...prev.employeeTimesById,
+                                              [e.id]: {
+                                                ...slot,
+                                                startTime: ev.target.value,
+                                                employeeId: e.id,
+                                              },
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </label>
+                                    <label className="block">
+                                      <span className="text-xs text-zinc-500">Ende</span>
+                                      <input
+                                        type="time"
+                                        className={`${inputClass} disabled:opacity-60`}
+                                        value={slot.endTime}
+                                        disabled={writeBlocked}
+                                        onChange={(ev) =>
+                                          setDraftMeta((prev) => ({
+                                            ...prev,
+                                            employeeTimesById: {
+                                              ...prev.employeeTimesById,
+                                              [e.id]: {
+                                                ...slot,
+                                                endTime: ev.target.value,
+                                                employeeId: e.id,
+                                              },
+                                            },
+                                          }))
+                                        }
+                                      />
+                                    </label>
+                                  </div>
+                                  <label className="mt-2 block">
+                                    <span className="text-xs text-zinc-500">Pause</span>
+                                    <select
+                                      className={`${inputClass} disabled:opacity-60`}
+                                      value={slot.breakMinutes}
+                                      disabled={writeBlocked}
+                                      onChange={(ev) =>
+                                        setDraftMeta((prev) => ({
+                                          ...prev,
+                                          employeeTimesById: {
+                                            ...prev.employeeTimesById,
+                                            [e.id]: {
+                                              ...slot,
+                                              breakMinutes: Number(ev.target.value),
+                                              employeeId: e.id,
+                                            },
+                                          },
+                                        }))
+                                      }
+                                    >
+                                      <option value={0}>Keine Pause</option>
+                                      <option value={30}>30 Minuten</option>
+                                      <option value={45}>45 Minuten</option>
+                                      <option value={60}>60 Minuten</option>
+                                      <option value={90}>90 Minuten</option>
+                                    </select>
+                                  </label>
+                                </div>
+                              )
+                            })}
+                        </div>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="text-sm font-medium text-orange-400 hover:underline disabled:opacity-60"
+                        disabled={writeBlocked}
+                        onClick={() =>
+                          setDraftMeta((prev) => {
+                            const next: Record<string, EmployeeTimeSlot> = {
+                              ...prev.employeeTimesById,
+                            }
+                            for (const id of prev.employeeIds) {
+                              next[id] =
+                                next[id] ??
+                                defaultEmployeeTimeSlot(
+                                  id,
+                                  prev.startTime,
+                                  prev.endTime,
+                                  prev.breakMinutes,
+                                )
+                            }
+                            return {
+                              ...prev,
+                              perEmployeeTimes: true,
+                              employeeTimesById: next,
+                            }
+                          })
+                        }
+                      >
+                        Zeiten einzeln anpassen
+                      </button>
+                    )}
+                  </div>
+                ) : null}
               </div>
             ) : (
               <span className="mt-1 block min-w-0 whitespace-pre-wrap text-right text-white">
                 {formatArbeitszeitWithHours(st.startTime, st.endTime)}
                 {`\nPause: ${defaultBreakMinutes(st)} Min.`}
                 {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
+                {Array.isArray(st.employeeTimes) && st.employeeTimes.length > 0
+                  ? `\n\nStunden je Mitarbeiter:\n${(() => {
+                      const ids = defaultEmployeeIds(st)
+                      const names = st.employees || []
+                      const nameById = new Map(ids.map((id, i) => [id, names[i] || id]))
+                      return st.employeeTimes
+                        .map((row) => {
+                          const name = nameById.get(row.employeeId) || row.employeeId
+                          return `• ${name}: ${formatArbeitszeitWithHours(row.startTime, row.endTime)} (Pause ${row.breakMinutes} Min.)`
+                        })
+                        .join('\n')
+                    })()}`
+                  : ''}
               </span>
             )}
           </div>
@@ -1075,10 +1302,10 @@ export function ReportPreviewPage() {
     st ? cloneStructured(st.structured) : defaultEmptyStructured(),
   )
   const [draftMeta, setDraftMeta] = useState<DraftMeta>(() =>
-    st ? metaFromState(st) : { startTime: '08:00', endTime: '16:30', breakMinutes: 45, employees: [], employeeIds: [] },
+    st ? metaFromState(st) : emptyDraftMeta(),
   )
   const [metaBaseline, setMetaBaseline] = useState<DraftMeta>(() =>
-    st ? metaFromState(st) : { startTime: '08:00', endTime: '16:30', breakMinutes: 45, employees: [], employeeIds: [] },
+    st ? metaFromState(st) : emptyDraftMeta(),
   )
   const [savedReportId, setSavedReportId] = useState<string | null>(null)
   const [saveBusy, setSaveBusy] = useState(false)
@@ -1134,6 +1361,20 @@ export function ReportPreviewPage() {
     try {
       const s = draftStructured
       const isEdit = Boolean(st.existingReportId)
+      const employeeTimes = isEdit
+        ? buildEmployeeTimesPayload(
+            draftMeta.perEmployeeTimes,
+            draftMeta.employeeIds,
+            draftMeta.employeeTimesById,
+            {
+              startTime: draftMeta.startTime,
+              endTime: draftMeta.endTime,
+              breakMinutes: draftMeta.breakMinutes,
+            },
+          )
+        : Array.isArray(st.employeeTimes)
+          ? st.employeeTimes
+          : []
       const payload = {
         companyName,
         companyLogoUrl: resolveBackendPublicUrl(logoUrl),
@@ -1148,6 +1389,7 @@ export function ReportPreviewPage() {
         startTime: isEdit ? draftMeta.startTime : st.startTime,
         endTime: isEdit ? draftMeta.endTime : st.endTime,
         breakMinutes: isEdit ? draftMeta.breakMinutes : defaultBreakMinutes(st),
+        employeeTimes,
         exportFormat: st.exportFormat,
         rawText: st.rawText,
         seriesMode: Boolean(st.seriesMode),
@@ -1183,6 +1425,8 @@ export function ReportPreviewPage() {
         timeBooking?: {
           created?: number
           hoursPerEmployee?: number | null
+          hoursByEmployee?: { name?: string; hours?: number }[]
+          hoursUniform?: boolean
           bookedNames?: string[]
           skippedNames?: string[]
           reason?: string | null

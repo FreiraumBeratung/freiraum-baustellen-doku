@@ -28,6 +28,12 @@ type ReportDoc = {
   startTime: string
   endTime: string
   breakMinutes?: number
+  employeeTimes?: {
+    employeeId: string
+    startTime: string
+    endTime: string
+    breakMinutes: number
+  }[]
   exportFormat: string
   rawText: string
   notes?: string
@@ -193,6 +199,22 @@ export function ReportDetailPage() {
         <Field k="Datum" v={report.date} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
         <Field k="Arbeitszeit" v={formatArbeitszeitWithHours(report.startTime, report.endTime)} />
+        {Array.isArray(report.employeeTimes) && report.employeeTimes.length > 0 ? (
+          <Field
+            k="Stunden je Mitarbeiter"
+            v={(() => {
+              const ids = Array.isArray(report.employeeIds) ? report.employeeIds : []
+              const names = report.employees || []
+              const nameById = new Map(ids.map((id, i) => [id, names[i] || id]))
+              return report.employeeTimes!
+                .map((row) => {
+                  const name = nameById.get(row.employeeId) || row.employeeId
+                  return `${name}: ${formatArbeitszeitWithHours(row.startTime, row.endTime)} (Pause ${row.breakMinutes} Min.)`
+                })
+                .join('\n')
+            })()}
+          />
+        ) : null}
         <Field k="Format" v={report.exportFormat} />
       </Card>
 

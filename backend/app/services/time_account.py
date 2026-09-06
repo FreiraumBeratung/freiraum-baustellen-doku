@@ -63,6 +63,84 @@ def compute_booked_hours(start_time: str, end_time: str, break_minutes: int) -> 
     return round(net / 60.0, 2)
 
 
+def employee_time_overrides(report: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Optional: abweichende Zeiten pro Mitarbeiter-ID (leer = alle wie Bericht)."""
+    raw = report.get("employeeTimes")
+    if not isinstance(raw, list):
+        return {}
+    out: dict[str, dict[str, Any]] = {}
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        eid = str(item.get("employeeId") or "").strip()
+        if not eid or eid in out:
+            continue
+        out[eid] = item
+    return out
+
+
+def work_time_for_employee(
+    report: dict[str, Any],
+    employee_id: str,
+) -> tuple[str, str, int]:
+    """Start/Ende/Pause für einen Mitarbeiter — Override oder Bericht-Default."""
+    default_start = str(report.get("startTime") or "")
+    default_end = str(report.get("endTime") or "")
+    default_break = int(
+        report.get("breakMinutes") if report.get("breakMinutes") is not None else DEFAULT_BREAK_MINUTES
+    )
+    default_break = max(0, min(default_break, 480))
+    override = employee_time_overrides(report).get(str(employee_id or "").strip())
+    if not override:
+        return default_start, default_end, default_break
+    start = str(override.get("startTime") or default_start).strip() or default_start
+    end = str(override.get("endTime") or default_end).strip() or default_end
+    if override.get("breakMinutes") is not None:
+        try:
+            br = int(override.get("breakMinutes"))
+        except (TypeError, ValueError):
+            br = default_break
+    else:
+        br = default_break
+    br = max(0, min(br, 480))
+    return start, end, br
+
+
+def normalize_employee_times_payload(raw: Any) -> list[dict[str, Any]]:
+    """Säubert API-Payload employeeTimes (additiv, ungültige Einträge weg)."""
+    if not isinstance(raw, list):
+        return []
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        eid = str(item.get("employeeId") or "").strip()
+        if not eid or eid in seen:
+            continue
+        start = str(item.get("startTime") or "").strip()
+        end = str(item.get("endTime") or "").strip()
+        if not start or not end:
+            continue
+        try:
+            br = int(item.get("breakMinutes") if item.get("breakMinutes") is not None else DEFAULT_BREAK_MINUTES)
+        except (TypeError, ValueError):
+            br = DEFAULT_BREAK_MINUTES
+        br = max(0, min(br, 480))
+        if compute_booked_hours(start, end, br) is None:
+            continue
+        seen.add(eid)
+        out.append(
+            {
+                "employeeId": eid,
+                "startTime": start,
+                "endTime": end,
+                "breakMinutes": br,
+            }
+        )
+    return out
+
+
 def _parse_report_date(date_raw: Any) -> date | None:
     s = str(date_raw or "").strip()
     m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
@@ -343,6 +421,8 @@ def sync_entries_for_report(
         return {
             "created": 0,
             "hoursPerEmployee": None,
+            "hoursByEmployee": [],
+            "hoursUniform": True,
             "bookedNames": [],
             "skippedNames": [],
             "skippedEmployeeIds": [],
@@ -367,6 +447,8 @@ def sync_entries_for_report(
         return {
             "created": 0,
             "hoursPerEmployee": hours,
+            "hoursByEmployee": [],
+            "hoursUniform": True,
             "bookedNames": [],
             "skippedNames": skipped_names,
             "skippedEmployeeIds": skipped if match_mode == "ids" else [],
@@ -377,37 +459,50 @@ def sync_entries_for_report(
     doc = _read_entries_doc(read_json)
     entries = list(doc.get("entries") or [])
 
+    booked_names: list[str] = []
+    hours_by_employee: list[dict[str, Any]] = []
+    booked_hour_values: list[float] = []
+
     for emp, label in matched:
+        eid = str(emp.get("id") or "").strip()
+        emp_start, emp_end, emp_break = work_time_for_employee(report, eid)
+        emp_hours = compute_booked_hours(emp_start, emp_end, emp_break)
+        if emp_hours is None:
+            emp_start, emp_end, emp_break = start_time, end_time, break_minutes
+            emp_hours = hours
+        display_name = str(emp.get("name") or label).strip()
         entry = {
             "id": str(uuid.uuid4()),
             "source": "report",
             "reportId": report_id,
-            "employeeId": str(emp.get("id") or ""),
-            "employeeName": str(emp.get("name") or label),
+            "employeeId": eid,
+            "employeeName": display_name or label,
             "date": str(report.get("date") or ""),
             "projectId": report.get("projectId"),
             "projectName": str(report.get("projectName") or ""),
-            "startTime": start_time,
-            "endTime": end_time,
-            "breakMinutes": break_minutes,
-            "hours": hours,
+            "startTime": emp_start,
+            "endTime": emp_end,
+            "breakMinutes": emp_break,
+            "hours": emp_hours,
             "createdAt": now,
             "updatedAt": now,
         }
         entries.append(entry)
-
-    booked_names = [
-        str(emp.get("name") or label).strip()
-        for emp, label in matched
-        if str(emp.get("name") or label).strip()
-    ]
+        if display_name:
+            booked_names.append(display_name)
+        hours_by_employee.append({"name": display_name or label, "hours": emp_hours})
+        booked_hour_values.append(float(emp_hours))
 
     doc["entries"] = entries
     _write_entries_doc(write_json, doc)
 
+    hours_uniform = len(set(booked_hour_values)) <= 1
+
     return {
         "created": len(matched),
         "hoursPerEmployee": hours,
+        "hoursByEmployee": hours_by_employee,
+        "hoursUniform": hours_uniform,
         "bookedNames": booked_names,
         "skippedNames": skipped_names,
         "skippedEmployeeIds": [],

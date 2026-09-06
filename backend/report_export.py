@@ -562,6 +562,13 @@ def build_pdf_bytes(
     story.append(tbl)
     story.append(Spacer(1, 10))
 
+    emp_hour_lines = _employee_hours_lines_for_report(report)
+    if emp_hour_lines:
+        story.append(Paragraph(_xml_para_text("Stunden je Mitarbeiter"), section_head))
+        for line in emp_hour_lines:
+            story.append(Paragraph(f"\u2022 {_xml_para_text(line)}", bullet_style))
+        story.append(Spacer(1, 8))
+
     def sec(title: str) -> Paragraph:
         return Paragraph(_xml_para_text(title), section_head)
 
@@ -723,6 +730,10 @@ def build_docx_bytes(
 
     d.add_paragraph()
 
+    emp_hour_lines = _employee_hours_lines_for_report(report)
+    if emp_hour_lines:
+        _section_list_docx(d, "Stunden je Mitarbeiter", emp_hour_lines)
+
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
     mats = _list_or_keine(st.get("materials"))
@@ -823,6 +834,43 @@ def format_arbeitszeit_with_hours(start_time: Any, end_time: Any) -> str:
         return base
     hours = round((end_min - start_min) / 60.0, 2)
     return f"{base} | {_fmt_hours(hours)} Stunden"
+
+
+def _employee_hours_lines_for_report(report: dict[str, Any]) -> list[str]:
+    """Wenn Einzelzeiten gesetzt sind: Zeilen „Name: 08:00 – 13:00 | 4,50 Stunden“."""
+    raw_times = report.get("employeeTimes")
+    if not isinstance(raw_times, list) or not raw_times:
+        return []
+    names = report.get("employees") if isinstance(report.get("employees"), list) else []
+    ids = report.get("employeeIds") if isinstance(report.get("employeeIds"), list) else []
+    name_by_id: dict[str, str] = {}
+    for i, eid_raw in enumerate(ids):
+        eid = str(eid_raw or "").strip()
+        if not eid:
+            continue
+        label = str(names[i] if i < len(names) else "").strip() or eid
+        name_by_id[eid] = label
+
+    # Fallback: nur IDs aus employeeTimes
+    from app.services.time_account import compute_booked_hours, work_time_for_employee
+
+    lines: list[str] = []
+    seen: set[str] = set()
+    for item in raw_times:
+        if not isinstance(item, dict):
+            continue
+        eid = str(item.get("employeeId") or "").strip()
+        if not eid or eid in seen:
+            continue
+        seen.add(eid)
+        start, end, br = work_time_for_employee(report, eid)
+        net = compute_booked_hours(start, end, br)
+        label = name_by_id.get(eid) or eid
+        if net is None:
+            lines.append(f"{label}: {start} – {end}")
+        else:
+            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden")
+    return lines
 
 
 def build_collective_pdf_bytes(

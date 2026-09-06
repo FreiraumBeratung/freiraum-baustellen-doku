@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.time_account import compute_booked_hours
+from app.services.time_account import compute_booked_hours, work_time_for_employee
 
 VALID_PROJECT_STATUS = {"aktiv", "pausiert", "abgeschlossen"}
 
@@ -109,6 +109,14 @@ def _day_hours(report: dict[str, Any]) -> float:
     return float(hours or 0.0)
 
 
+def _employee_day_hours(report: dict[str, Any], employee_id: str) -> float:
+    start, end, br = work_time_for_employee(report, employee_id)
+    hours = compute_booked_hours(start, end, br)
+    if hours is None:
+        return _day_hours(report)
+    return float(hours)
+
+
 def build_collective_payload(
     project: dict[str, Any],
     reports: list[dict[str, Any]],
@@ -142,10 +150,13 @@ def build_collective_payload(
         ktalk = str(st.get("customerTalk") or "").strip()
         day_summary = str(st.get("summary") or "").strip()
         emps = _as_list(r.get("employees"))
+        emp_ids = _as_list(r.get("employeeIds"))
         day_h = _day_hours(r)
         total_hours += day_h
-        for name in emps:
-            hours_by_emp[name] = round(hours_by_emp.get(name, 0.0) + day_h, 2)
+        for idx, name in enumerate(emps):
+            eid = emp_ids[idx] if idx < len(emp_ids) else ""
+            person_h = _employee_day_hours(r, eid) if eid else day_h
+            hours_by_emp[name] = round(hours_by_emp.get(name, 0.0) + person_h, 2)
 
         all_materials.extend(mats)
         all_open.extend(opens)
