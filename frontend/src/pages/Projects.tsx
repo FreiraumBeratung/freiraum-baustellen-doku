@@ -200,12 +200,11 @@ export function ProjectsPage() {
             />
           </label>
           <label className="block min-w-0">
-            <span className="text-xs tracking-wide text-zinc-400">Ort</span>
+            <span className="text-xs tracking-wide text-zinc-400">PLZ und Ort</span>
             <input
               className="mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42"
               value={city}
               onChange={(e) => setCity(e.target.value)}
-              placeholder="PLZ und Ort"
               autoComplete="address-level2"
             />
           </label>
