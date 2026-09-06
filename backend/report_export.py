@@ -390,6 +390,17 @@ def build_pdf_bytes(
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
+    from kodra_letterhead import is_kodra_export
+    from kodra_report_export import build_kodra_report_pdf_bytes
+
+    if is_kodra_export(report, company_profile):
+        return build_kodra_report_pdf_bytes(
+            report,
+            company_profile,
+            resolve_logo=resolve_logo,
+            resolve_signature=resolve_signature,
+        )
+
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
         buf,
@@ -881,6 +892,18 @@ def build_collective_pdf_bytes(
     resolve_photo: PhotoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
+    from kodra_letterhead import is_kodra_export
+    from kodra_report_export import build_kodra_collective_pdf_bytes
+
+    if is_kodra_export(payload, company_profile):
+        return build_kodra_collective_pdf_bytes(
+            payload,
+            company_profile,
+            resolve_logo=resolve_logo,
+            resolve_photo=resolve_photo,
+            resolve_signature=resolve_signature,
+        )
+
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
         buf,
@@ -1257,6 +1280,16 @@ def build_protocol_pdf_bytes(
     resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
     from app.services.site_protocol import protocol_display_text, protocol_for_pdf_signatures
+    from kodra_letterhead import is_kodra_export
+    from kodra_report_export import build_kodra_protocol_pdf_bytes
+
+    if is_kodra_export(protocol, company_profile):
+        return build_kodra_protocol_pdf_bytes(
+            protocol,
+            company_profile,
+            resolve_logo=resolve_logo,
+            resolve_signature=resolve_signature,
+        )
 
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
@@ -1470,6 +1503,16 @@ def build_collective_protocol_pdf_bytes(
     resolve_signature: SignaturePathResolver | None = None,
 ) -> bytes:
     from app.services.site_protocol import protocol_for_pdf_signatures
+    from kodra_letterhead import is_kodra_export
+    from kodra_report_export import build_kodra_collective_protocol_pdf_bytes
+
+    if is_kodra_export(payload, company_profile):
+        return build_kodra_collective_protocol_pdf_bytes(
+            payload,
+            company_profile,
+            resolve_logo=resolve_logo,
+            resolve_signature=resolve_signature,
+        )
 
     buf = BytesIO()
     doc_tpl = SimpleDocTemplate(
