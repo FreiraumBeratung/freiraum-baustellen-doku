@@ -257,6 +257,21 @@ def _location_prefix(main: str, *, raw_text: str, project_name: str) -> str:
     probe = f"{raw_text} {main}".casefold()
     if "fliesen" in probe and re.search(r"\b(bad|badezimmer|nasszelle|duschbad|gäste-?wc|gaeste-?wc)\b", probe):
         return "Im Bad wurden"
+    # Nur Drainage-/Hauswand-Segment: Baustellenname wie bei gelungenem KI-Polish.
+    drainage_hit = bool(
+        re.search(
+            r"\b(drainagesplitt|hauswand|vlies verteilt|rohre eingesandelt|"
+            r"boden verfüllt|füllboden verfüllt|fuellboden verfüllt)\b",
+            probe,
+        )
+    )
+    proj = str(project_name or "").strip()
+    if (
+        drainage_hit
+        and proj
+        and proj.casefold() not in {"keine angabe", "n/a", "-", "unbekannt"}
+    ):
+        return f"Auf der Baustelle {proj} wurden"
     return "Auf der Baustelle wurden"
 
 
@@ -353,6 +368,9 @@ def _humanize_quantity_phrases(text: str, *, raw_text: str = "") -> str:
 
 def _is_secondary_fragment(fragment: str) -> bool:
     f = str(fragment or "").casefold()
+    # Drainagesplitt ist Hauptarbeit — nicht als Sekundär „Splitt“ einstufen.
+    if "drainagesplitt" in f:
+        return False
     secondary_terms = ("silikon", "spachtel", "fittings", "splitt", "verfugt")
     return any(t in f for t in secondary_terms)
 
@@ -433,6 +451,18 @@ _ARTICLE_FOR_SINGLE_MODE: tuple[tuple[str, str], ...] = (
     ("dämmung eingebaut", "die Dämmung eingebaut"),
     ("daemmung eingebaut", "die Dämmung eingebaut"),
     ("drainage/entwässerung eingebaut", "die Drainage eingebaut"),
+    ("hauswand freigelegt", "die Hauswand freigelegt"),
+    ("hauswand abgedichtet", "die Hauswand abgedichtet"),
+    ("boden verfüllt", "der Boden verfüllt"),
+    ("mit boden verfüllt", "der Boden verfüllt"),
+    ("füllboden verfüllt", "der Füllboden verfüllt"),
+    ("fuellboden verfüllt", "der Füllboden verfüllt"),
+    ("mit füllboden verfüllt", "der Füllboden verfüllt"),
+    ("mit fuellboden verfüllt", "der Füllboden verfüllt"),
+    ("vlies verteilt", "das Vlies verteilt"),
+    ("geotextil verlegt", "das Geotextil verlegt"),
+    ("rohre eingesandelt", "die Rohre eingesandelt"),
+    ("drainagesplitt eingebaut", "Drainagesplitt eingebaut"),
 )
 
 

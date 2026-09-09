@@ -175,7 +175,7 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bdrainagesplitt eingebaut\b", ("Drainagesplitt",), ("Rohre", "Füllboden"), ()),
     (r"\bvlies verteilt\b|\bgeotextil verlegt\b", ("Geotextil",), (), ()),
     (r"\brohre eingesandelt\b", ("Rohre",), ("Sand",), ()),
-    (r"\bmit (?:füllboden|boden) verfüllt\b|\bmit fuellboden verfuellt\b", ("Füllboden",), (), ()),
+    (r"\bmit (?:füllboden|boden) verfüllt\b|\bmit fuellboden verfuellt\b|\bboden verfüllt\b|\bfüllboden verfüllt\b|\bfuellboden verfuellt\b", ("Füllboden",), (), ()),
     (r"\bhauswand abgedichtet\b", (), ("Noppenbahn", "Dickbeschichtung"), ()),
     (r"\bgraben verfüllt\b", ("Kies", "Schotter"), (), ()),
     (r"\bgroßformatfliesen verlegt\b|\bgrossformatfliesen verlegt\b", ("Fliesen",), ("Nivelliersystem"), ()),
@@ -1199,6 +1199,13 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
     if "splitt" in mats_probe and "splitt" not in acts_probe and re.search(r"\bsplitt|split\b", raw_probe):
         if re.search(r"\b(eingebaut|verarbeitet|eingebracht|verwendet)\b", raw_probe):
             out.append("Splitt eingebaut")
+    # Drainage: Rohre in Material + Einsandel-/Besand-Hinweis → Tätigkeit nachziehen
+    if "rohre" in mats_probe and "rohre eingesandelt" not in acts_probe:
+        if re.search(r"\brohre?\b", raw_probe) and re.search(
+            r"\b((?:ein|rein)gesandel(?:t|d)|(?:ein|rein)gesandet|besandet|eingesandet)\b",
+            raw_probe,
+        ):
+            out.append("Rohre eingesandelt")
     if ("steinwolle" in mats_probe or "mineralwolle" in mats_probe) and "dämmung eingebaut" not in acts_probe:
         if re.search(r"\b(dämmung|daemmung|steinwolle|mineralwolle|dämmmatte|daemmatte)\b", raw_probe) and re.search(
             r"\b(eingebaut|verlegt|angebracht|montiert|eingebracht|reingepackt|reingemacht|eingesetzt)\b",

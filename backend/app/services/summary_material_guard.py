@@ -69,6 +69,17 @@ def _sentence_reflects_activity(sentence: str, activities: list[str]) -> bool:
         "geschnitten",
         "entfernt",
         "verfugt",
+        # Drainage-/Erdarbeiten: sonst fliegt KI-Polish wegen Material-Echo
+        # (z. B. „Boden verfüllt“ vs. Material „Füllboden“).
+        "verfüllt",
+        "verfuellt",
+        "freigelegt",
+        "abgedichtet",
+        "eingesandelt",
+        "reingesandelt",
+        "eingesandet",
+        "verteilt",
+        "ausgelegt",
     )
     for act in activities:
         a = str(act).casefold().strip()

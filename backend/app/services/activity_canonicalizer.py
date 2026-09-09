@@ -111,6 +111,7 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bein\s+gesandelt\b", "eingesandelt", t, flags=re.IGNORECASE)
     t = re.sub(r"\brein\s+gesandelt\b", "reingesandelt", t, flags=re.IGNORECASE)
     t = re.sub(r"\brein\s+gesandet\b", "reingesandet", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bbe\s*sandet\b", "besandet", t, flags=re.IGNORECASE)
     # Whisper: Fließ/Flies = Vlies (Drainage/GaLaBau)
     t = re.sub(r"\bflie(?:ss|ß|s)\b", "vlies", t, flags=re.IGNORECASE)
     t = re.sub(r"\bdrainage\s*splitt\b", "drainagesplitt", t, flags=re.IGNORECASE)
@@ -2802,7 +2803,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         text = f"Drainagesplitt {size} eingebaut" if size else "Drainagesplitt eingebaut"
         return CanonicalActivity("drainagesplitt_eingebaut", text, 86.0, bool(size))
     if re.search(r"\brohre?\b", t) and re.search(
-        r"\b(ein|rein)gesandel(?:t|d)\b",
+        r"\b((?:ein|rein)gesandel(?:t|d)|(?:ein|rein)gesandet|besandet|eingesandet|sanden)\b",
         t,
     ):
         return CanonicalActivity("rohre_eingesandelt", "Rohre eingesandelt", 84.0, False)
@@ -2810,9 +2811,9 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         r"\b(verf(?:ü|ue|u)llt|eingebaut|eingebracht|verarbeitet)\b",
         t,
     ):
-        return CanonicalActivity("fuellboden_verfuellt", "mit Füllboden verfüllt", 83.0, False)
-    if re.search(r"\bmit\s+boden\b", t) and re.search(r"\bverf(?:ü|ue|u)llt\b", t):
-        return CanonicalActivity("fuellboden_verfuellt", "mit Boden verfüllt", 82.5, False)
+        return CanonicalActivity("fuellboden_verfuellt", "Füllboden verfüllt", 83.0, False)
+    if re.search(r"\b(mit\s+)?boden\b", t) and re.search(r"\bverf(?:ü|ue|u)llt\b", t):
+        return CanonicalActivity("fuellboden_verfuellt", "Boden verfüllt", 82.5, False)
     if re.search(r"\bhauswand\b", t) and re.search(r"\bfreigelegt\b", t):
         return CanonicalActivity("hauswand_freigelegt", "Hauswand freigelegt", 85.0, False)
     if re.search(r"\bhauswand\b", t) and re.search(r"\b(abgedichtet|abdichtet)\b", t):
@@ -2946,6 +2947,22 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         ):
             return None
         size = _extract_splitt_size(t)
+        # Drainage-Kontext (Hauswand/Vlies/Rohre/Einsandeln): generisches Splitt → Drainagesplitt
+        raw_cf = str(raw_text or "").casefold()
+        drainage_ctx = bool(
+            re.search(r"\bdrainagesplitt\b|\bdrainage\b", raw_cf)
+            or (
+                re.search(r"\b(hauswand|vlies|flies|fließ|geotextil|füllboden|fuellboden)\b", raw_cf)
+                and re.search(
+                    r"\b(rohre?|eingesandel|reingesandel|eingesandet|besandet|freigelegt|abgedichtet)\b",
+                    raw_cf,
+                )
+            )
+        )
+        if drainage_ctx:
+            size = size or _extract_splitt_size(raw_text or "")
+            text = f"Drainagesplitt {size} eingebaut" if size else "Drainagesplitt eingebaut"
+            return CanonicalActivity("drainagesplitt_eingebaut", text, 86.0, bool(size))
         if size:
             return CanonicalActivity("splitt_eingebaut", f"Splitt {size} eingebaut", 72.0, False)
         return CanonicalActivity("splitt_eingebaut", "Splitt eingebaut", 70.0, False)
