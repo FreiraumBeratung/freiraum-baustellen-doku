@@ -172,6 +172,11 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bstraßenabläufe gesetzt\b", ("Straßenablauf Guss",), ("Schachtrahmen",), ()),
     (r"\bschichtenverbund hergestellt\b", ("Bitumenemulsion",), (), ("Bindemittelwagen?")),
     (r"\bnähte hergestellt\b", ("Heißbitumen",), (), ("Nahtspritze?")),
+    (r"\bdrainagesplitt eingebaut\b", ("Drainagesplitt",), ("Rohre", "Füllboden"), ()),
+    (r"\bvlies verteilt\b|\bgeotextil verlegt\b", ("Geotextil",), (), ()),
+    (r"\brohre eingesandelt\b", ("Rohre",), ("Sand",), ()),
+    (r"\bmit (?:füllboden|boden) verfüllt\b|\bmit fuellboden verfuellt\b", ("Füllboden",), (), ()),
+    (r"\bhauswand abgedichtet\b", (), ("Noppenbahn", "Dickbeschichtung"), ()),
     (r"\bgraben verfüllt\b", ("Kies", "Schotter"), (), ()),
     (r"\bgroßformatfliesen verlegt\b|\bgrossformatfliesen verlegt\b", ("Fliesen",), ("Nivelliersystem"), ()),
     (r"\bnivelliermasse aufgetragen\b", ("Nivelliermasse",), (), ()),
@@ -181,12 +186,14 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
 
 _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bschotter\b", "Schotter"),
+    (r"\bdrainagesplitt\b|\bdrainage[\s-]*splitt\b", "Drainagesplitt"),
     (r"\bsplitt\b", "Splitt"),
     (r"\bpflastersteine?\b", "Pflastersteine"),
     (r"\bpflasterfl(ä|ae)che\b", "Pflaster"),
     (r"\bzementm(?:ö|oe)rtel\b", "Zementmörtel"),
     (r"\brohre?\b", "Rohre"),
-    (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Boden"),
+    (r"\bf(?:ü|ue|u)llboden\b", "Füllboden"),
+    (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Füllboden"),
     (r"\brasen[\s-]*kanten[\s-]*stein(?:e|en)?\b|\brasen[\s-]*kanten\b", "Rasenkantensteine"),
     (r"\brandstein(?:e|en)?\b|\bkantenstein(?:e|en)?\b|\bbordstein(?:e|en)?\b", "Rasenkantensteine"),
     (r"\bfliesen\b", "Fliesen"),
@@ -890,6 +897,14 @@ _ACTIVITY_VERB_TOKENS = (
     "abgesandet",
     "abgesandelt",
     "silikoniert",
+    "verfüllt",
+    "verfuellt",
+    "eingesandelt",
+    "reingesandelt",
+    "eingesandet",
+    "verteilt",
+    "freigelegt",
+    "abgedichtet",
 )
 
 
@@ -1507,6 +1522,7 @@ def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
         re.search(r"\b\d{1,2}(?:[.,]5)?er\s*(?:ks|kalksandstein)\b", probe, flags=re.IGNORECASE)
     )
     has_armierungsmoertel = "armierungsmörtel" in probe or "armierungsmoertel" in probe
+    has_drainagesplitt = "drainagesplitt" in probe
 
     out: list[str] = []
     for value in vals:
@@ -1524,6 +1540,12 @@ def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
         if has_specific_ks and low in ("kalksandsteine", "kalksandstein", "ks", "ks-steine", "ks-stein"):
             continue
         if has_armierungsmoertel and low in ("mörtel", "moertel"):
+            continue
+        # Drainagesplitt ist die spez. Variante — generisches „Splitt“ dann weglassen.
+        if has_drainagesplitt and (low == "splitt" or re.fullmatch(r"splitt\s+\d{1,2}\s*/\s*\d{1,2}(?:\s*mm)?", low)):
+            continue
+        # „mit Boden verfüllt“ → Füllboden; nacktes „Boden“ ist dann redundant.
+        if ("füllboden" in probe or "fuellboden" in probe) and low == "boden":
             continue
         out.append(value)
     return _dedupe(out)

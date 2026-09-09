@@ -40,10 +40,14 @@ def humanize_material(text: str) -> str:
         return "Pflastersteine"
     if "zementmörtel" in l or "zementmoertel" in l:
         return "Zementmörtel"
-    if re.search(r"\bboden\b", l) and "ablauf" not in l:
+    if "füllboden" in l or "fuellboden" in l:
+        return "Füllboden"
+    if re.search(r"\bboden\b", l) and "ablauf" not in l and "aushub" not in l:
         return "Boden"
     if "schotter" in l:
         return "Schotter"
+    if "drainagesplitt" in l or "drainage splitt" in l or "drainage-splitt" in l:
+        return "Drainagesplitt"
     if "splitt" in l or "split" in l:
         return "Splitt"
     if "fliesen" in l:

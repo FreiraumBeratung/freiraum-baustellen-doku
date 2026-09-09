@@ -108,6 +108,49 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bschotter\s+planum\b", "schotterplanum", t, flags=re.IGNORECASE)
     t = re.sub(r"\bein\s+gesandet\b", "eingesandet", t, flags=re.IGNORECASE)
     t = re.sub(r"\bein\s+ge\s+sandet\b", "eingesandet", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bein\s+gesandelt\b", "eingesandelt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\brein\s+gesandelt\b", "reingesandelt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\brein\s+gesandet\b", "reingesandet", t, flags=re.IGNORECASE)
+    # Whisper: Fließ/Flies = Vlies (Drainage/GaLaBau)
+    t = re.sub(r"\bflie(?:ss|ß|s)\b", "vlies", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdrainage\s*splitt\b", "drainagesplitt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdrainage\s*split\b", "drainagesplitt", t, flags=re.IGNORECASE)
+    # Whisper: „Drainage spielt“ / „Drainage Split“ → Drainagesplitt
+    t = re.sub(r"\bdrainage\s+spielt\b", "drainagesplitt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bhaus\s*wand\b", "hauswand", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfrei\s+gelegt\b", "freigelegt", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bf(ü|ue|u)ll\s*boden\b", "füllboden", t, flags=re.IGNORECASE)
+    # Run-on-Diktat: Drainage-Arbeitskette in getrennte Chunks
+    t = re.sub(
+        r"\b(drainagesplitt\s+eingebaut)\s+(?=vlies|flies|flie)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:vlies|filtervlies|trennvlies|geotextil)\s+verteilt)\s+(?=rohre?|drain)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(rohre?\s+(?:ein|rein)gesandel(?:t|d))\s+(?=(?:und\s+)?(?:anschließend|anschliessend|danach|dann|mit))",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b((?:mit\s+)?(?:füllboden|fuellboden|boden)\s+verf(?:ü|ue|u)llt)\s+(?=hauswand|wand)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(hauswand\s+freigelegt)\s+(?=(?:und\s+)?hauswand|wand|abgedichtet)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bfall\s+rohre?\b", "fallrohre", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmerk\s+stein\b", "merkstein", t, flags=re.IGNORECASE)
     t = re.sub(r"\brand\s+steine\b", "randsteine", t, flags=re.IGNORECASE)
@@ -1710,6 +1753,12 @@ _TRANSITION_VERBS = (
     "abgespritzt",
     "abgesandet",
     "abgesandelt",
+    "eingesandet",
+    "eingesandelt",
+    "reingesandet",
+    "reingesandelt",
+    "freigelegt",
+    "abgedichtet",
     "ausgeführt",
     "ausgefuehrt",
     "durchgeführt",
@@ -2019,6 +2068,15 @@ def _normalize_for_match(text: str) -> str:
     out = text.casefold()
     out = re.sub(r"\barmierungs\s+m(?:ö|oe)rtel\b", "armierungsmörtel", out)
     out = re.sub(r"\bas\s+fault\b", "asphalt", out)
+    out = re.sub(r"\bflie(?:ss|ß|s)\b", "vlies", out)
+    out = re.sub(r"\bdrainage\s*splitt\b", "drainagesplitt", out)
+    out = re.sub(r"\bdrainage\s*split\b", "drainagesplitt", out)
+    out = re.sub(r"\bdrainage\s+spielt\b", "drainagesplitt", out)
+    out = re.sub(r"\bhaus\s*wand\b", "hauswand", out)
+    out = re.sub(r"\bfrei\s+gelegt\b", "freigelegt", out)
+    out = re.sub(r"\bf(ü|ue|u)ll\s*boden\b", "füllboden", out)
+    out = re.sub(r"\bein\s+gesandelt\b", "eingesandelt", out)
+    out = re.sub(r"\brein\s+gesandelt\b", "reingesandelt", out)
     out = re.sub(r"\bfss\b", "frostschutz", out)
     out = re.sub(r"\bsts\b", "schottertragschicht", out)
     out = re.sub(r"\basphaltfräse\b", "asphalt fräse", out)
@@ -2730,8 +2788,42 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("winterdienst_ausgefuehrt", "Winterdienst durchgeführt", 73.0, False)
-    if re.search(r"\b(geotextil|trennvlies|filtervlies|vlies)\b", t) and re.search(r"\b(verlegt|eingebaut|eingebracht)\b", t):
-        return CanonicalActivity("geotextil_verlegt", "Geotextil verlegt", 68.0, False)
+    if re.search(r"\b(geotextil|trennvlies|filtervlies|vlies)\b", t) and re.search(
+        r"\b(verlegt|eingebaut|eingebracht|verteilt|ausgelegt)\b",
+        t,
+    ):
+        return CanonicalActivity("geotextil_verlegt", "Vlies verteilt", 78.0, False)
+    # Drainage-Splitt vor generischem Splitt (sonst verschluckt der Splitt-Match den Chunk)
+    if re.search(r"\bdrainagesplitt\b", t) and re.search(
+        r"\b(eingebaut|eingebracht|verteilt|verarbeitet|verdichtet|reingemacht|rein gemacht)\b",
+        t,
+    ):
+        size = _extract_splitt_size(t) or _extract_splitt_size(raw_text or "")
+        text = f"Drainagesplitt {size} eingebaut" if size else "Drainagesplitt eingebaut"
+        return CanonicalActivity("drainagesplitt_eingebaut", text, 86.0, bool(size))
+    if re.search(r"\brohre?\b", t) and re.search(
+        r"\b(ein|rein)gesandel(?:t|d)\b",
+        t,
+    ):
+        return CanonicalActivity("rohre_eingesandelt", "Rohre eingesandelt", 84.0, False)
+    if re.search(r"\b(füllboden|fuellboden)\b", t) and re.search(
+        r"\b(verf(?:ü|ue|u)llt|eingebaut|eingebracht|verarbeitet)\b",
+        t,
+    ):
+        return CanonicalActivity("fuellboden_verfuellt", "mit Füllboden verfüllt", 83.0, False)
+    if re.search(r"\bmit\s+boden\b", t) and re.search(r"\bverf(?:ü|ue|u)llt\b", t):
+        return CanonicalActivity("fuellboden_verfuellt", "mit Boden verfüllt", 82.5, False)
+    if re.search(r"\bhauswand\b", t) and re.search(r"\bfreigelegt\b", t):
+        return CanonicalActivity("hauswand_freigelegt", "Hauswand freigelegt", 85.0, False)
+    if re.search(r"\bhauswand\b", t) and re.search(r"\b(abgedichtet|abdichtet)\b", t):
+        return CanonicalActivity("hauswand_abgedichtet", "Hauswand abgedichtet", 85.5, False)
+    # Nach Split oft nur noch „abgedichtet“ — Kontext aus Rohtext übernehmen.
+    if re.fullmatch(r"\s*abgedichtet\s*", t) and re.search(
+        r"\bhauswand\b",
+        str(raw_text or ""),
+        flags=re.IGNORECASE,
+    ):
+        return CanonicalActivity("hauswand_abgedichtet", "Hauswand abgedichtet", 85.5, False)
     if re.search(r"\bgemulcht\b", t) and not re.search(r"\b(entfernt|weg|beseitigt)\b", t):
         qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
         label = "Rindenmulch eingedeckt" if "rindenmulch" in t or "rindenmulch" in raw_text.casefold() else "Fläche mit Mulch eingedeckt"
@@ -2832,6 +2924,9 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         text = f"{qty} m³ Kies eingebaut" if qty else "Kies eingebaut"
         return CanonicalActivity("kies_eingebaut", text, 81.5, bool(qty))
     if "splitt" in t or "split" in t or "splittschicht" in t:
+        # Drainagesplitt hat eigene Regel — hier nicht nochmal als generisches Splitt.
+        if re.search(r"\bdrainagesplitt\b", t):
+            return None
         # Liefer-/Mangelkontext ("Splitt zu spät geliefert", "Splitt fehlt") ist
         # KEINE Einbau-Taetigkeit. Nur ueberspringen, wenn kein Einbau-Verb vorliegt.
         _splitt_delivery = re.search(
@@ -2843,6 +2938,12 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             t,
         )
         if _splitt_delivery and not _splitt_install:
+            return None
+        # Nur Korngrößen-/Materialnennung ohne Einbauverb (z. B. „Splitt 16/22“) → Material, keine Tätigkeit.
+        if not _splitt_install and re.search(
+            r"^\s*(?:drainage)?splitt(?:\s+\d{1,2}\s*/\s*\d{1,2}(?:\s*mm)?|\s+\d{1,2}\s+\d{1,2})?\s*$",
+            t,
+        ):
             return None
         size = _extract_splitt_size(t)
         if size:
@@ -3815,13 +3916,19 @@ def _is_trockenbau_fuge_context(t: str, *, raw_text: str = "") -> bool:
 def _is_pflaster_fuge_context(t: str, *, raw_text: str = "") -> bool:
     if not re.search(r"\b(fuge|fugen|verfugt|verfüllt|verfuellt)\b", t):
         return False
+    # Verfüllen mit Boden/Füllboden ist KEINE Pflasterfuge.
+    if re.search(r"\b(füllboden|fuellboden|boden|erde|kies|sand)\b", t) and re.search(
+        r"\b(verfüllt|verfuellt|verfüllen|verfuellen)\b",
+        t,
+    ):
+        return False
     # Geplante Fugenarbeit (Infinitiv) ist keine erledigte Verfugung.
     if re.search(r"\bf(?:ü|ue|u)llen\b", t) and not re.search(
         r"\b(verfugt|verfüllt|verfuellt|gefüllt|gefuellt)\b",
         t,
     ):
         return False
-    if re.search(r"\b(graben|gräben|graeben|baugrube)\b", t) and re.search(
+    if re.search(r"\b(graben|gräben|graeben|baugrube|hauswand|drainage)\b", t) and re.search(
         r"\b(verfüllt|verfuellt|verfüllen|verfuellen)\b",
         t,
     ):
@@ -3837,7 +3944,12 @@ def _is_pflaster_fuge_context(t: str, *, raw_text: str = "") -> bool:
         ):
             if not re.search(r"\bverfugt\b|\bverfüllt\b|\bverfuellt\b", before):
                 return False
-    pflaster_cues = ("pflaster", "splitt", "fugensand")
+    pflaster_cues = ("pflaster", "fugensand")
+    # "splitt" allein reicht nicht mehr — sonst trifft Drainagesplitt+Bodenverfüllung falsch.
+    if "splitt" in t or "split" in t:
+        if re.search(r"\b(fuge|fugen|verfugt|fugensand)\b", t):
+            return True
+        return False
     return any(c in t for c in pflaster_cues) or any(c in raw for c in pflaster_cues)
 
 
@@ -3848,6 +3960,11 @@ def _compact_activity_items(items: list[str]) -> list[str]:
         if not t:
             continue
         low = t.casefold()
+        # Drainagesplitt deckt generisches Splitt bereits ab.
+        if low.startswith("splitt") and any(
+            str(x or "").casefold().startswith("drainagesplitt") for x in items
+        ):
+            continue
         if "abgehängte decke montiert" in low and any("decke abgehängt" in x.casefold() for x in out):
             continue
         if low.startswith("decke montiert") and any("decke abgehängt" in x.casefold() for x in out):
