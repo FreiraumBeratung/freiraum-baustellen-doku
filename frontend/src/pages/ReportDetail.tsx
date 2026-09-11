@@ -8,7 +8,7 @@ import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
 import { buildReportPreviewStateFromDoc } from '../utils/reportEditState'
-import { formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
+import { formatArbeitszeitField } from '../utils/formatArbeitszeit'
 import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
@@ -173,7 +173,13 @@ export function ReportDetailPage() {
       `Kunde: ${report.customerName}`,
       `Datum: ${report.date}`,
       `Mitarbeiter: ${report.employees.length ? report.employees.join(', ') : 'Keine Angabe'}`,
-      `Arbeitszeit: ${formatArbeitszeitWithHours(report.startTime, report.endTime)}`,
+      `Arbeitszeit: ${formatArbeitszeitField({
+        startTime: report.startTime,
+        endTime: report.endTime,
+        employees: report.employees,
+        employeeIds: report.employeeIds,
+        employeeTimes: report.employeeTimes,
+      })}`,
       `Format: ${report.exportFormat}`,
       '',
       'Zusammenfassung',
@@ -198,23 +204,16 @@ export function ReportDetailPage() {
         <Field k="Kunde" v={report.customerName} />
         <Field k="Datum" v={report.date} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
-        <Field k="Arbeitszeit" v={formatArbeitszeitWithHours(report.startTime, report.endTime)} />
-        {Array.isArray(report.employeeTimes) && report.employeeTimes.length > 0 ? (
-          <Field
-            k="Stunden je Mitarbeiter"
-            v={(() => {
-              const ids = Array.isArray(report.employeeIds) ? report.employeeIds : []
-              const names = report.employees || []
-              const nameById = new Map(ids.map((id, i) => [id, names[i] || id]))
-              return report.employeeTimes!
-                .map((row) => {
-                  const name = nameById.get(row.employeeId) || row.employeeId
-                  return `${name}: ${formatArbeitszeitWithHours(row.startTime, row.endTime)} (Pause ${row.breakMinutes} Min.)`
-                })
-                .join('\n')
-            })()}
-          />
-        ) : null}
+        <Field
+          k="Arbeitszeit"
+          v={formatArbeitszeitField({
+            startTime: report.startTime,
+            endTime: report.endTime,
+            employees: report.employees,
+            employeeIds: report.employeeIds,
+            employeeTimes: report.employeeTimes,
+          })}
+        />
         <Field k="Format" v={report.exportFormat} />
       </Card>
 

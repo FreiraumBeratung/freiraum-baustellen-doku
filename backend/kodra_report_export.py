@@ -30,7 +30,6 @@ from report_export import (
     TEXT_DARK_HEX,
     GREY_META_HEX,
     _append_pdf_signatures,
-    _employee_hours_lines_for_report,
     _format_date_de,
     _list_or_keine,
     _protocol_body_paragraphs,
@@ -38,7 +37,7 @@ from report_export import (
     _xml_para_text,
     _zeitraum_label,
     _fmt_hours,
-    format_arbeitszeit_with_hours,
+    format_arbeitszeit_field_for_report,
 )
 
 
@@ -268,7 +267,7 @@ def build_kodra_report_pdf_bytes(
     mitarbeiter = (
         ", ".join(str(e) for e in emps_raw) if isinstance(emps_raw, list) and emps_raw else "Keine Angabe"
     )
-    zeit = format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
+    zeit = format_arbeitszeit_field_for_report(report)
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
     mats = _list_or_keine(st.get("materials"))
@@ -293,13 +292,6 @@ def build_kodra_report_pdf_bytes(
     ]
     story.append(_meta_table(meta_rows, doc_tpl.width))
     story.append(Spacer(1, 10))
-
-    emp_hour_lines = _employee_hours_lines_for_report(report)
-    if emp_hour_lines:
-        story.append(Paragraph(_xml_para_text("Stunden je Mitarbeiter"), styles["section"]))
-        for line in emp_hour_lines:
-            story.append(Paragraph(f"\u2022 {_xml_para_text(line)}", styles["bullet"]))
-        story.append(Spacer(1, 8))
 
     def sec(title: str) -> None:
         story.append(Paragraph(_xml_para_text(title), styles["section"]))

@@ -10,7 +10,7 @@ import {
   loadReportPreviewPersist,
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
-import { formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
+import { formatArbeitszeitField, formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
 import {
   buildEmployeeTimesPayload,
   defaultEmployeeTimeSlot,
@@ -223,7 +223,13 @@ function buildPlainText(companyName: string, st: ReportPreviewState, structured:
   const s = structured
   const emps = st.employees.length ? st.employees.join(', ') : 'Keine Angabe'
   const empLine = `Mitarbeiter: ${emps}`
-  const timeLine = `Arbeitszeit: ${formatArbeitszeitWithHours(st.startTime, st.endTime)}`
+  const timeLine = `Arbeitszeit: ${formatArbeitszeitField({
+    startTime: st.startTime,
+    endTime: st.endTime,
+    employees: st.employees,
+    employeeIds: defaultEmployeeIds(st),
+    employeeTimes: st.employeeTimes,
+  })}`
   const lines = [
     'TAGESBERICHT',
     `Firma: ${companyName}`,
@@ -982,22 +988,21 @@ function ReportPreviewInner({
               </div>
             ) : (
               <span className="mt-1 block min-w-0 whitespace-pre-wrap text-right text-white">
-                {formatArbeitszeitWithHours(st.startTime, st.endTime)}
-                {`\nPause: ${defaultBreakMinutes(st)} Min.`}
-                {st.structured.workTime ? `\n${st.structured.workTime}` : ''}
                 {Array.isArray(st.employeeTimes) && st.employeeTimes.length > 0
-                  ? `\n\nStunden je Mitarbeiter:\n${(() => {
-                      const ids = defaultEmployeeIds(st)
-                      const names = st.employees || []
-                      const nameById = new Map(ids.map((id, i) => [id, names[i] || id]))
-                      return st.employeeTimes
-                        .map((row) => {
-                          const name = nameById.get(row.employeeId) || row.employeeId
-                          return `• ${name}: ${formatArbeitszeitWithHours(row.startTime, row.endTime)} (Pause ${row.breakMinutes} Min.)`
-                        })
-                        .join('\n')
-                    })()}`
-                  : ''}
+                  ? formatArbeitszeitField({
+                      startTime: st.startTime,
+                      endTime: st.endTime,
+                      employees: st.employees,
+                      employeeIds: defaultEmployeeIds(st),
+                      employeeTimes: st.employeeTimes,
+                    })
+                  : [
+                      formatArbeitszeitWithHours(st.startTime, st.endTime),
+                      `Pause: ${defaultBreakMinutes(st)} Min.`,
+                      st.structured.workTime || '',
+                    ]
+                      .filter(Boolean)
+                      .join('\n')}
               </span>
             )}
           </div>

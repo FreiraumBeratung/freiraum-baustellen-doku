@@ -490,7 +490,7 @@ def build_pdf_bytes(
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")
     mitarbeiter = ", ".join(str(e) for e in emps_raw) if isinstance(emps_raw, list) and emps_raw else "Keine Angabe"
-    zeit = format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
+    zeit = format_arbeitszeit_field_for_report(report)
 
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
@@ -572,13 +572,6 @@ def build_pdf_bytes(
     )
     story.append(tbl)
     story.append(Spacer(1, 10))
-
-    emp_hour_lines = _employee_hours_lines_for_report(report)
-    if emp_hour_lines:
-        story.append(Paragraph(_xml_para_text("Stunden je Mitarbeiter"), section_head))
-        for line in emp_hour_lines:
-            story.append(Paragraph(f"\u2022 {_xml_para_text(line)}", bullet_style))
-        story.append(Spacer(1, 8))
 
     def sec(title: str) -> Paragraph:
         return Paragraph(_xml_para_text(title), section_head)
@@ -716,7 +709,7 @@ def build_docx_bytes(
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")
     mitarbeiter = ", ".join(str(e) for e in emps_raw) if isinstance(emps_raw, list) and emps_raw else "Keine Angabe"
-    zeit = format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
+    zeit = format_arbeitszeit_field_for_report(report)
 
     info_tbl = d.add_table(rows=0, cols=2)
     info_tbl.style = "Table Grid"
@@ -735,15 +728,14 @@ def build_docx_bytes(
         r_l.font.size = Pt(10)
 
         p_v = row[1].paragraphs[0]
-        r_v = p_v.add_run(value)
-        r_v.font.size = Pt(10)
-        r_v.font.color.rgb = TEXT_DARK_DOCX
+        for i, line in enumerate(str(value).split("\n")):
+            if i:
+                p_v.add_run().add_break()
+            r_v = p_v.add_run(line)
+            r_v.font.size = Pt(10)
+            r_v.font.color.rgb = TEXT_DARK_DOCX
 
     d.add_paragraph()
-
-    emp_hour_lines = _employee_hours_lines_for_report(report)
-    if emp_hour_lines:
-        _section_list_docx(d, "Stunden je Mitarbeiter", emp_hour_lines)
 
     summary = str(st.get("summary") or "Keine Angabe")
     acts = _list_or_keine(st.get("activities"))
@@ -877,11 +869,20 @@ def _employee_hours_lines_for_report(report: dict[str, Any]) -> list[str]:
         start, end, br = work_time_for_employee(report, eid)
         net = compute_booked_hours(start, end, br)
         label = name_by_id.get(eid) or eid
+        pause = f" (Pause {int(br)} Min.)" if isinstance(br, (int, float)) and int(br) > 0 else ""
         if net is None:
-            lines.append(f"{label}: {start} – {end}")
+            lines.append(f"{label}: {start} – {end}{pause}")
         else:
-            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden")
+            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden{pause}")
     return lines
+
+
+def format_arbeitszeit_field_for_report(report: dict[str, Any]) -> str:
+    """Arbeitszeit-Feld: bei Einzelzeiten die Mitarbeiterzeilen, sonst die Sammelzeit."""
+    lines = _employee_hours_lines_for_report(report)
+    if lines:
+        return "\n".join(lines)
+    return format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
 
 
 def build_collective_pdf_bytes(
