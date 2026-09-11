@@ -38,6 +38,7 @@ type ReportDoc = {
   rawText: string
   notes?: string
   runId?: string | null
+  reportKind?: string
   structured: {
     summary: string
     activities: string[]
@@ -204,6 +205,9 @@ export function ReportDetailPage() {
         <Field k="Kunde" v={report.customerName} />
         <Field k="Datum" v={report.date} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
+        {String(report.reportKind || '').toLowerCase() === 'ortstermin' ? (
+          <Field k="Art" v="Ortstermin" />
+        ) : null}
         <Field
           k="Arbeitszeit"
           v={formatArbeitszeitField({

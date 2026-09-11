@@ -554,6 +554,11 @@ def build_pdf_bytes(
         [Paragraph("Mitarbeitende", info_label_style), Paragraph(_xml_para_text(mitarbeiter), info_value_style)],
         [Paragraph("Arbeitszeit", info_label_style), Paragraph(_xml_para_text(zeit), info_value_style)],
     ]
+    if str(report.get("reportKind") or "").strip().casefold() == "ortstermin":
+        meta_rows.insert(
+            3,
+            [Paragraph("Art", info_label_style), Paragraph(_xml_para_text("Ortstermin"), info_value_style)],
+        )
     tbl = Table(meta_rows, colWidths=[doc_tpl.width * 0.30, doc_tpl.width * 0.70])
     tbl.setStyle(
         TableStyle(
@@ -713,13 +718,16 @@ def build_docx_bytes(
 
     info_tbl = d.add_table(rows=0, cols=2)
     info_tbl.style = "Table Grid"
-    for label, value in [
+    info_pairs = [
         ("Baustelle", proj),
         ("Kunde", customer),
         ("Datum", datum),
         ("Mitarbeitende", mitarbeiter),
         ("Arbeitszeit", zeit),
-    ]:
+    ]
+    if str(report.get("reportKind") or "").strip().casefold() == "ortstermin":
+        info_pairs.insert(3, ("Art", "Ortstermin"))
+    for label, value in info_pairs:
         row = info_tbl.add_row().cells
         p_l = row[0].paragraphs[0]
         r_l = p_l.add_run(label)
@@ -869,11 +877,10 @@ def _employee_hours_lines_for_report(report: dict[str, Any]) -> list[str]:
         start, end, br = work_time_for_employee(report, eid)
         net = compute_booked_hours(start, end, br)
         label = name_by_id.get(eid) or eid
-        pause = f" (Pause {int(br)} Min.)" if isinstance(br, (int, float)) and int(br) > 0 else ""
         if net is None:
-            lines.append(f"{label}: {start} – {end}{pause}")
+            lines.append(f"{label}: {start} – {end}")
         else:
-            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden{pause}")
+            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden")
     return lines
 
 

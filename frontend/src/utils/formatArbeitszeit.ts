@@ -11,7 +11,7 @@ export function formatArbeitszeitWithHours(startTime: string, endTime: string): 
   return `${base} | ${hoursDe} Stunden`
 }
 
-/** Netto-Stunden (Brutto minus Pause), Anzeige wie Backend-PDF. */
+/** Netto-Stunden (Brutto minus Pause), Anzeige wie Backend-PDF — ohne Pausenklammer. */
 export function formatArbeitszeitNettoWithHours(
   startTime: string,
   endTime: string,
@@ -27,8 +27,7 @@ export function formatArbeitszeitNettoWithHours(
   const net = Math.round(((endMin - startMin - br) / 60) * 100) / 100
   if (net < 0) return base
   const hoursDe = net.toFixed(2).replace('.', ',')
-  const pause = br > 0 ? ` (Pause ${br} Min.)` : ''
-  return `${base} | ${hoursDe} Stunden${pause}`
+  return `${base} | ${hoursDe} Stunden`
 }
 
 export type EmployeeTimeDisplayRow = {

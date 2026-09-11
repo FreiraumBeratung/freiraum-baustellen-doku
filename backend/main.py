@@ -595,6 +595,8 @@ class StructureReportBody(BaseModel):
     endTime: str
     exportFormat: str = "PDF"
     rawText: str
+    # Additiv: "ortstermin" = Diktat nur glätten, keine Baustellen-Strukturierung.
+    reportKind: str = ""
 
 
 # --- Save report ---
@@ -642,6 +644,8 @@ class ReportCreateBody(BaseModel):
     # Bericht dem laufenden Durchlauf der Baustelle zu. notes = freie Besonderheiten.
     seriesMode: bool = False
     notes: str = Field(default="", max_length=5000)
+    # Additiv: z. B. "ortstermin" — Einzelbericht-Flow, ohne Folgebericht-Run.
+    reportKind: str = Field(default="", max_length=40)
 
 
 class ProtocolPolishBody(BaseModel):
@@ -1926,6 +1930,39 @@ def _ensure_clean_structured_final(structured: dict[str, Any]) -> dict[str, Any]
 def api_structure_report(body: StructureReportBody, store: TenantStore = Depends(get_tenant_store_write)):
     prof = store.read_json("company_profile.json", {})
     company_nm = str(prof.get("companyName") or "").strip()
+    report_kind = str(body.reportKind or "").strip().casefold()
+    is_ortstermin = report_kind in {"ortstermin", "begehung", "site_visit"}
+
+    # Ortstermin: nur Diktat glätten — kein Baustellen-Struktur-/Quality-Pfad.
+    if is_ortstermin:
+        raw = str(body.rawText or "").strip()
+        polished = polish_protocol_transcript_with_ai(raw) if raw else None
+        summary_text = (polished or raw or "Keine Angabe").strip() or "Keine Angabe"
+        structured_dict = {
+            "summary": summary_text,
+            "activities": [],
+            "materials": [],
+            "materialSuggestions": [],
+            "machineSuggestions": [],
+            "machineHours": [],
+            "problems": [],
+            "openItems": [],
+            "customerTalk": "Keine Angabe",
+            "workTime": f"{body.startTime} – {body.endTime} Uhr (erfasst)",
+            "participants": list(body.employeeNames or []),
+        }
+        structured_dict = _ensure_clean_structured_final(structured_dict)
+        return {
+            "projectId": body.projectId,
+            "projectName": body.projectName or "Keine Angabe",
+            "customerName": body.customerName or "Keine Angabe",
+            "date": body.date,
+            "exportFormat": body.exportFormat,
+            "structured": structured_dict,
+            "structuredBy": "openai" if polished else "local",
+            "reportKind": "ortstermin",
+        }
+
     normalized_raw = normalize_trade_language(body.rawText)
 
     local_structured = structure_report_fields(
@@ -2100,7 +2137,13 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
     # einen neuen Durchlauf an). Einzelbericht (Standard) bleibt ohne runId -> exakt
     # bisheriges Verhalten.
     run_id: str | None = None
-    if body.seriesMode and body.projectId:
+    report_kind = str(body.reportKind or "").strip().casefold()
+    if report_kind in {"ortstermin", "begehung", "site_visit"}:
+        report_kind = "ortstermin"
+    else:
+        report_kind = ""
+    # Ortstermin nie in Folgebericht-Run; series nur wenn kein Ortstermin.
+    if body.seriesMode and body.projectId and not report_kind:
         run_id = _assign_series_run(store, body.projectId)
     doc = {
         "id": rid,
@@ -2126,6 +2169,7 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "rawText": body.rawText,
         "structured": body.structured.model_dump(),
         "notes": str(body.notes or "").strip(),
+        "reportKind": report_kind,
         "runId": run_id,
         "photos": [],
         "signatures": {"customer": None, "employee": None},
@@ -2176,6 +2220,17 @@ def update_report(
     if body.companyLogoUrl:
         company_logo_url = body.companyLogoUrl
 
+    report_kind_in = str(body.reportKind or "").strip().casefold()
+    if report_kind_in in {"ortstermin", "begehung", "site_visit"}:
+        report_kind = "ortstermin"
+    elif body.reportKind is not None and str(body.reportKind).strip() == "":
+        # Leerer String vom Client: bestehenden Kind behalten (Edit ohne Kind-Feld).
+        existing_kind = str(existing.get("reportKind") or "").strip().casefold()
+        report_kind = "ortstermin" if existing_kind == "ortstermin" else ""
+    else:
+        existing_kind = str(existing.get("reportKind") or "").strip().casefold()
+        report_kind = "ortstermin" if existing_kind == "ortstermin" else ""
+
     existing.update(
         {
             "companyName": body.companyName,
@@ -2197,6 +2252,7 @@ def update_report(
             "rawText": body.rawText,
             "structured": body.structured.model_dump(),
             "notes": str(body.notes or "").strip(),
+            "reportKind": report_kind,
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }
     )

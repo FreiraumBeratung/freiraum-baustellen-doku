@@ -20,6 +20,7 @@ export type ReportDocForEdit = {
   rawText?: string
   notes?: string
   runId?: string | null
+  reportKind?: string
   structured?: Partial<StructuredPayload> & {
     materialSuggestions?: string[]
     machineSuggestions?: string[]
@@ -65,6 +66,7 @@ export function buildReportPreviewStateFromDoc(doc: ReportDocForEdit): ReportPre
     rawText: String(doc.rawText || ''),
     notes: String(doc.notes || ''),
     seriesMode: Boolean(doc.runId),
+    reportKind: String(doc.reportKind || '').toLowerCase() === 'ortstermin' ? 'ortstermin' : '',
     existingReportId: doc.id,
     structured: {
       summary: String(s.summary || ''),

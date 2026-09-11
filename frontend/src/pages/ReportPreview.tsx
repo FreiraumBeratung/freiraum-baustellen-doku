@@ -1010,7 +1010,12 @@ function ReportPreviewInner({
             <span className="text-zinc-500">Ausgabeformat</span>
             <span className="text-right text-white">{st.exportFormat}</span>
           </div>
-          {st.seriesMode ? (
+          {st.reportKind === 'ortstermin' ? (
+            <div className="flex justify-between gap-2 border-t border-zinc-800 pt-2">
+              <span className="text-zinc-500">Art</span>
+              <span className="text-right font-medium text-orange-300/95">Ortstermin</span>
+            </div>
+          ) : st.seriesMode ? (
             <div className="flex justify-between gap-2 border-t border-zinc-800 pt-2">
               <span className="text-zinc-500">Art</span>
               <span className="text-right font-medium text-orange-300/95">Folgebericht (zur laufenden Baustelle)</span>
@@ -1400,6 +1405,7 @@ export function ReportPreviewPage() {
         exportFormat: st.exportFormat,
         rawText: st.rawText,
         seriesMode: Boolean(st.seriesMode),
+        reportKind: st.reportKind === 'ortstermin' ? 'ortstermin' : '',
         notes: st.notes ?? '',
         structured: {
           summary: s.summary,

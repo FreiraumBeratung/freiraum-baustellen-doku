@@ -290,6 +290,11 @@ def build_kodra_report_pdf_bytes(
         [Paragraph("Mitarbeitende", styles["label"]), Paragraph(_xml_para_text(mitarbeiter), styles["value"])],
         [Paragraph("Arbeitszeit", styles["label"]), Paragraph(_xml_para_text(zeit), styles["value"])],
     ]
+    if str(report.get("reportKind") or "").strip().casefold() == "ortstermin":
+        meta_rows.insert(
+            3,
+            [Paragraph("Art", styles["label"]), Paragraph(_xml_para_text("Ortstermin"), styles["value"])],
+        )
     story.append(_meta_table(meta_rows, doc_tpl.width))
     story.append(Spacer(1, 10))
 

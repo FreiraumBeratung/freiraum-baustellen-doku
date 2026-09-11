@@ -1,4 +1,4 @@
-import { Check, ChevronDown, ChevronUp, FileText, Layers, Mic, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronUp, FileText, Layers, MapPin, Mic, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
@@ -41,6 +41,8 @@ export type ReportPreviewState = {
   structuredBy?: 'openai' | 'local'
   /** Folgebericht: Bericht wird dem laufenden Durchlauf der Baustelle zugeordnet */
   seriesMode?: boolean
+  /** Ortstermin: Diktat nur glätten, gleiche Speichern/Foto/Unterschrift-Flow */
+  reportKind?: 'ortstermin' | ''
   /** freie Besonderheiten/Notiz für diesen Tag (Folge- wie Einzelbericht) */
   notes?: string
   /** Edit-Modus: vorhandener Bericht wird per PUT aktualisiert (nicht neu angelegt) */
@@ -81,7 +83,7 @@ export function ReportNewPage() {
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
   const [notes, setNotes] = useState('')
-  const [reportMode, setReportMode] = useState<'single' | 'series'>('single')
+  const [reportMode, setReportMode] = useState<'single' | 'series' | 'ortstermin'>('single')
   const [showModeModal, setShowModeModal] = useState(true)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -107,7 +109,7 @@ export function ReportNewPage() {
       setEmployees(active)
       const sel: Record<string, boolean> = {}
       active.forEach((e) => {
-        sel[e.id] = true
+        sel[e.id] = false
       })
       setSelectedEmp(sel)
     })
@@ -239,6 +241,7 @@ export function ReportNewPage() {
           endTime,
           exportFormat,
           rawText,
+          reportKind: reportMode === 'ortstermin' ? 'ortstermin' : '',
         }),
       })
       const st = r.structured as StructuredPayload & {
@@ -282,6 +285,7 @@ export function ReportNewPage() {
         structured,
         structuredBy: r.structuredBy === 'openai' ? 'openai' : 'local',
         seriesMode: reportMode === 'series',
+        reportKind: reportMode === 'ortstermin' ? 'ortstermin' : '',
         notes: notes.trim(),
       }
       nav('/bericht/vorschau', { state })
@@ -373,6 +377,17 @@ export function ReportNewPage() {
                 <Layers strokeWidth={2} className="h-5 w-5 text-orange-400" aria-hidden />
                 Folgebericht
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setReportMode('ortstermin')
+                  setShowModeModal(false)
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-white/[0.1] bg-black/55 px-4 py-4 font-medium text-white ring-1 ring-transparent transition hover:border-orange-500/60 hover:ring-orange-500/30"
+              >
+                <MapPin strokeWidth={2} className="h-5 w-5 text-orange-400" aria-hidden />
+                Ortstermin
+              </button>
             </div>
           </div>
         </div>
@@ -388,17 +403,23 @@ export function ReportNewPage() {
               type="button"
               onClick={() => setShowModeModal(true)}
               className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-[0.22rem] text-[0.7rem] font-semibold tracking-wide transition ${
-                reportMode === 'series'
+                reportMode === 'series' || reportMode === 'ortstermin'
                   ? 'border border-orange-400/45 bg-orange-500/[0.1] text-orange-300/95'
                   : 'border border-white/[0.12] bg-black/40 text-zinc-400'
               }`}
             >
               {reportMode === 'series' ? (
                 <Layers strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
+              ) : reportMode === 'ortstermin' ? (
+                <MapPin strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
               ) : (
                 <FileText strokeWidth={2} className="h-3.5 w-3.5" aria-hidden />
               )}
-              {reportMode === 'series' ? 'Folgebericht' : 'Einzelbericht'}
+              {reportMode === 'series'
+                ? 'Folgebericht'
+                : reportMode === 'ortstermin'
+                  ? 'Ortstermin'
+                  : 'Einzelbericht'}
               <span className="text-[0.62rem] font-normal text-zinc-500">· ändern</span>
             </button>
           </div>
