@@ -18,10 +18,15 @@ export function AppShell() {
       setOpenTaskCount(0)
       return
     }
-    api<{ openCount: number }>('/api/tasks/badge')
-      .then((r) => setOpenTaskCount(Math.max(0, Number(r.openCount) || 0)))
+    api<{ openCount: number; doneUnseenCount?: number }>('/api/tasks/badge')
+      .then((r) => {
+        const n = isCompanyOwner
+          ? Number(r.doneUnseenCount) || 0
+          : Number(r.openCount) || 0
+        setOpenTaskCount(Math.max(0, n))
+      })
       .catch(() => setOpenTaskCount(0))
-  }, [token])
+  }, [token, isCompanyOwner])
 
   useEffect(() => {
     refreshBadge()
@@ -32,6 +37,12 @@ export function AppShell() {
   useEffect(() => {
     refreshBadge()
   }, [location.pathname, refreshBadge])
+
+  useEffect(() => {
+    const onChange = () => refreshBadge()
+    window.addEventListener('freiraum-tasks-changed', onChange)
+    return () => window.removeEventListener('freiraum-tasks-changed', onChange)
+  }, [refreshBadge])
 
   const navItems = useMemo(
     () =>

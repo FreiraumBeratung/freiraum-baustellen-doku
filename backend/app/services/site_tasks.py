@@ -20,6 +20,7 @@ TASK_STATUSES = frozenset({"open", "done"})
 MAX_TARGET_QUANTITY = 1_000_000.0
 MAX_PROGRESS_ENTRIES = 80
 MAX_PHOTOS_PER_TASK = 10
+MAX_TASKS_PER_BATCH = 20
 UNIT_ALIASES = {
     "m2": "m²",
     "qm": "m²",
@@ -255,6 +256,7 @@ def public_task(task: dict[str, Any]) -> dict[str, Any]:
         "progress": entries,
         "photoCount": len(task_photos_list(task)),
         "hasSignature": task_signature_doc(task) is not None,
+        "ownerSeen": bool(task.get("ownerSeen", True)),
     }
 
 
@@ -300,23 +302,59 @@ def open_task_count_for_user(
     )
 
 
-def create_task(
+def owner_unseen_done_count(store: TenantStore) -> int:
+    n = 0
+    for raw in read_tasks(store):
+        pub = public_task(raw)
+        if pub["status"] == "done" and not pub["ownerSeen"]:
+            n += 1
+    return n
+
+
+def badge_payload(
     store: TenantStore,
     *,
-    created_by: str,
+    is_owner: bool,
+    employee_id: str | None,
+) -> dict[str, int]:
+    if is_owner:
+        return {
+            "openCount": 0,
+            "doneUnseenCount": owner_unseen_done_count(store),
+        }
+    return {
+        "openCount": open_task_count_for_user(
+            store,
+            is_owner=False,
+            employee_id=employee_id,
+        ),
+        "doneUnseenCount": 0,
+    }
+
+
+def ack_done_for_owner(store: TenantStore) -> int:
+    tasks = read_tasks(store)
+    changed = 0
+    for item in tasks:
+        if str(item.get("status") or "") != "done":
+            continue
+        if item.get("ownerSeen", True):
+            continue
+        item["ownerSeen"] = True
+        changed += 1
+    if changed:
+        write_tasks(store, tasks)
+    return changed
+
+
+def _resolved_create_context(
+    store: TenantStore,
+    *,
     project_id: str,
     project_name: str,
-    title: str,
     due_date: str,
     assignee_ids: list[str],
-    target_quantity: float | None = None,
-    unit: str = "",
-) -> dict[str, Any]:
-    title_clean = str(title or "").strip()
-    if len(title_clean) < 3:
-        raise HTTPException(status_code=400, detail="Aufgaben-Text zu kurz (min. 3 Zeichen).")
-    if len(title_clean) > 2000:
-        raise HTTPException(status_code=400, detail="Aufgaben-Text zu lang.")
+) -> tuple[str, str, str, list[str], list[str]]:
     pid = str(project_id or "").strip()
     if not pid:
         raise HTTPException(status_code=400, detail="Baustelle fehlt.")
@@ -345,35 +383,128 @@ def create_task(
             break
     if not pname:
         pname = "Baustelle"
+    return pid, pname, due, ids, _assignee_names_for_ids(store, ids)
 
+
+def _normalize_task_item(title: str, target_quantity: float | None, unit: str) -> tuple[str, float | None, str]:
+    title_clean = str(title or "").strip()
+    if len(title_clean) < 3:
+        raise HTTPException(status_code=400, detail="Aufgaben-Text zu kurz (min. 3 Zeichen).")
+    if len(title_clean) > 2000:
+        raise HTTPException(status_code=400, detail="Aufgaben-Text zu lang.")
     target = _coerce_quantity(target_quantity)
     if target_quantity not in (None, "") and target is None:
         raise HTTPException(status_code=400, detail="Soll-Menge ungültig.")
     unit_clean = _normalize_unit(unit, has_target=target is not None)
+    return title_clean, target, unit_clean
 
-    task = {
+
+def _new_task_record(
+    *,
+    created_by: str,
+    project_id: str,
+    project_name: str,
+    title: str,
+    due_date: str,
+    assignee_ids: list[str],
+    assignee_names: list[str],
+    target_quantity: float | None,
+    unit: str,
+) -> dict[str, Any]:
+    return {
         "id": str(uuid.uuid4()),
-        "projectId": pid,
-        "projectName": pname,
-        "title": title_clean,
-        "dueDate": due,
-        "assigneeIds": ids,
-        "assigneeNames": _assignee_names_for_ids(store, ids),
+        "projectId": project_id,
+        "projectName": project_name,
+        "title": title,
+        "dueDate": due_date,
+        "assigneeIds": assignee_ids,
+        "assigneeNames": assignee_names,
         "status": "open",
         "createdBy": str(created_by or "").strip(),
         "createdAt": datetime.now(timezone.utc).isoformat(),
         "completedAt": None,
         "completedBy": None,
-        "targetQuantity": target,
-        "unit": unit_clean,
+        "ownerSeen": True,
+        "targetQuantity": target_quantity,
+        "unit": unit,
         "progress": [],
         "photos": [],
         "signature": None,
     }
+
+
+def create_task(
+    store: TenantStore,
+    *,
+    created_by: str,
+    project_id: str,
+    project_name: str,
+    title: str,
+    due_date: str,
+    assignee_ids: list[str],
+    target_quantity: float | None = None,
+    unit: str = "",
+) -> dict[str, Any]:
+    created = create_tasks_batch(
+        store,
+        created_by=created_by,
+        project_id=project_id,
+        project_name=project_name,
+        due_date=due_date,
+        assignee_ids=assignee_ids,
+        items=[{"title": title, "targetQuantity": target_quantity, "unit": unit}],
+    )
+    return created[0]
+
+
+def create_tasks_batch(
+    store: TenantStore,
+    *,
+    created_by: str,
+    project_id: str,
+    project_name: str,
+    due_date: str,
+    assignee_ids: list[str],
+    items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    if not isinstance(items, list) or not items:
+        raise HTTPException(status_code=400, detail="Mindestens eine Aufgabe angeben.")
+    if len(items) > MAX_TASKS_PER_BATCH:
+        raise HTTPException(status_code=400, detail=f"Maximal {MAX_TASKS_PER_BATCH} Aufgaben auf einmal.")
+
+    pid, pname, due, ids, names = _resolved_create_context(
+        store,
+        project_id=project_id,
+        project_name=project_name,
+        due_date=due_date,
+        assignee_ids=assignee_ids,
+    )
+    built: list[dict[str, Any]] = []
+    for raw in items:
+        if not isinstance(raw, dict):
+            raise HTTPException(status_code=400, detail="Ungültige Aufgabenzeile.")
+        title_clean, target, unit_clean = _normalize_task_item(
+            str(raw.get("title") or ""),
+            raw.get("targetQuantity"),
+            str(raw.get("unit") or ""),
+        )
+        built.append(
+            _new_task_record(
+                created_by=created_by,
+                project_id=pid,
+                project_name=pname,
+                title=title_clean,
+                due_date=due,
+                assignee_ids=ids,
+                assignee_names=names,
+                target_quantity=target,
+                unit=unit_clean,
+            )
+        )
     tasks = read_tasks(store)
-    tasks.append(task)
+    tasks.extend(built)
     write_tasks(store, tasks)
-    return public_task(task)
+    return [public_task(t) for t in built]
 
 
 def complete_task(
@@ -396,6 +527,7 @@ def complete_task(
     task["status"] = "done"
     task["completedAt"] = datetime.now(timezone.utc).isoformat()
     task["completedBy"] = str(user_id or "").strip()
+    task["ownerSeen"] = False
     tasks[idx] = task
     write_tasks(store, tasks)
     return public_task(task)
@@ -410,6 +542,7 @@ def reopen_task(store: TenantStore, task_id: str) -> dict[str, Any]:
     task["status"] = "open"
     task["completedAt"] = None
     task["completedBy"] = None
+    task["ownerSeen"] = True
     tasks[idx] = task
     write_tasks(store, tasks)
     return public_task(task)

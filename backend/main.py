@@ -677,6 +677,20 @@ class TaskCreateBody(BaseModel):
     unit: str = Field(default="", max_length=16)
 
 
+class TaskCreateItemBody(BaseModel):
+    title: str = Field(..., min_length=3, max_length=2000)
+    targetQuantity: float | None = None
+    unit: str = Field(default="", max_length=16)
+
+
+class TaskBatchCreateBody(BaseModel):
+    projectId: str = Field(..., min_length=1, max_length=200)
+    projectName: str = Field(default="", max_length=300)
+    dueDate: str = Field(..., min_length=8, max_length=32)
+    assigneeIds: list[str] = Field(default_factory=list)
+    items: list[TaskCreateItemBody] = Field(..., min_length=1, max_length=20)
+
+
 class TaskProgressBody(BaseModel):
     amount: float = Field(..., gt=0, le=1_000_000)
 
@@ -924,12 +938,39 @@ def tasks_badge(
     store: TenantStore = Depends(get_tenant_store),
 ):
     _user, owner, employee_id = _task_actor_context(user_id)
-    count = site_tasks.open_task_count_for_user(
+    return site_tasks.badge_payload(
         store,
         is_owner=owner,
         employee_id=employee_id,
     )
-    return {"openCount": count}
+
+
+@app.post("/api/tasks/ack-done")
+def ack_done_tasks(
+    user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    _ = user_id
+    acked = site_tasks.ack_done_for_owner(store)
+    return {"ok": True, "acked": acked}
+
+
+@app.post("/api/tasks/batch")
+def create_tasks_batch(
+    body: TaskBatchCreateBody,
+    user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    tasks = site_tasks.create_tasks_batch(
+        store,
+        created_by=user_id,
+        project_id=body.projectId,
+        project_name=body.projectName,
+        due_date=body.dueDate,
+        assignee_ids=body.assigneeIds,
+        items=[item.model_dump() for item in body.items],
+    )
+    return {"tasks": tasks}
 
 
 @app.post("/api/tasks")

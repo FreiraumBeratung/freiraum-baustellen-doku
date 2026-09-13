@@ -40,6 +40,22 @@ export type SiteTask = {
 
 const TASK_UNITS = ['m²', 'm³', 'm', 'Stk', 'lfm', 'Std'] as const
 
+type DraftLine = {
+  key: string
+  title: string
+  targetQty: string
+  unit: (typeof TASK_UNITS)[number]
+}
+
+function newDraftLine(): DraftLine {
+  return {
+    key: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    title: '',
+    targetQty: '',
+    unit: 'm²',
+  }
+}
+
 function formatDateDe(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '').trim())
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso
@@ -80,10 +96,8 @@ export function TasksPage() {
   const [employees, setEmployees] = useState<Employee[]>([])
   const [projectId, setProjectId] = useState('')
   const [dueDate, setDueDate] = useState(todayIso())
-  const [title, setTitle] = useState('')
   const [selectedEmp, setSelectedEmp] = useState<Record<string, boolean>>({})
-  const [targetQty, setTargetQty] = useState('')
-  const [unit, setUnit] = useState<(typeof TASK_UNITS)[number]>('m²')
+  const [draftLines, setDraftLines] = useState<DraftLine[]>(() => [newDraftLine()])
   const [progressDraft, setProgressDraft] = useState<Record<string, string>>({})
 
   const loadTasks = useCallback(async () => {
@@ -140,31 +154,49 @@ export function TasksPage() {
     [employees, selectedEmp],
   )
 
+  const validDrafts = useMemo(
+    () => draftLines.filter((line) => line.title.trim().length >= 3),
+    [draftLines],
+  )
+
+  useEffect(() => {
+    if (!isCompanyOwner || tab !== 'done') return
+    void api('/api/tasks/ack-done', { method: 'POST' })
+      .then(() => window.dispatchEvent(new Event('freiraum-tasks-changed')))
+      .catch(() => {})
+  }, [isCompanyOwner, tab])
+
   async function createTask() {
     if (writeBlocked || busy) return
+    if (!validDrafts.length) {
+      setErr('Mindestens eine Aufgabe mit Text angeben.')
+      return
+    }
     setErr('')
     setMsg('')
     setBusy(true)
     try {
       const proj = projects.find((p) => p.id === projectId)
-      await api('/api/tasks', {
+      const created = await api<{ tasks: SiteTask[] }>('/api/tasks/batch', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
           projectName: proj?.name || '',
-          title: title.trim(),
           dueDate,
           assigneeIds: selectedIds,
-          targetQuantity: parseQty(targetQty),
-          unit: parseQty(targetQty) ? unit : '',
+          items: validDrafts.map((line) => ({
+            title: line.title.trim(),
+            targetQuantity: parseQty(line.targetQty),
+            unit: parseQty(line.targetQty) ? line.unit : '',
+          })),
         }),
       })
-      setTitle('')
-      setTargetQty('')
-      setUnit('m²')
+      const n = Array.isArray(created.tasks) ? created.tasks.length : validDrafts.length
+      setDraftLines([newDraftLine()])
       setComposerOpen(false)
-      setMsg('Aufgabe angelegt.')
+      setMsg(n === 1 ? 'Aufgabe angelegt.' : `${n} Aufgaben angelegt.`)
       setTab('open')
+      window.dispatchEvent(new Event('freiraum-tasks-changed'))
       await loadTasks()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Anlegen fehlgeschlagen.')
@@ -204,6 +236,7 @@ export function TasksPage() {
     setErr('')
     try {
       await api(`/api/tasks/${encodeURIComponent(id)}/complete`, { method: 'POST' })
+      window.dispatchEvent(new Event('freiraum-tasks-changed'))
       await loadTasks()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Abschließen fehlgeschlagen.')
@@ -256,7 +289,7 @@ export function TasksPage() {
             </BigButton>
           ) : (
             <Card className="space-y-4">
-              <p className="text-sm font-medium text-zinc-200">Neue Aufgabe</p>
+              <p className="text-sm font-medium text-zinc-200">Neue Aufgaben</p>
               <label className="block text-left">
                 <span className="text-xs text-zinc-500">Baustelle</span>
                 <select
@@ -283,44 +316,98 @@ export function TasksPage() {
                   disabled={writeBlocked}
                 />
               </label>
-              <label className="block text-left">
-                <span className="text-xs text-zinc-500">Aufgabe</span>
-                <textarea
-                  className="mt-1 min-h-[5.5rem] w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="z. B. 50 m² Rasen mähen"
-                  disabled={writeBlocked}
-                />
-              </label>
-              <div className="grid grid-cols-[1fr_auto] gap-2">
-                <label className="block text-left">
-                  <span className="text-xs text-zinc-500">Soll-Menge (optional)</span>
-                  <input
-                    type="text"
-                    inputMode="decimal"
-                    className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
-                    value={targetQty}
-                    onChange={(e) => setTargetQty(e.target.value)}
-                    placeholder="z. B. 50"
-                    disabled={writeBlocked}
-                  />
-                </label>
-                <label className="block text-left">
-                  <span className="text-xs text-zinc-500">Einheit</span>
-                  <select
-                    className="mt-1 w-[5.5rem] rounded-2xl border border-white/[0.1] bg-black/55 px-2 py-2.5 text-white outline-none focus:border-orange-500/65"
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value as (typeof TASK_UNITS)[number])}
-                    disabled={writeBlocked}
+              <div className="space-y-3">
+                {draftLines.map((line, idx) => (
+                  <div
+                    key={line.key}
+                    className="space-y-3 rounded-2xl border border-white/[0.08] bg-black/30 p-3"
                   >
-                    {TASK_UNITS.map((u) => (
-                      <option key={u} value={u}>
-                        {u}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-zinc-500">Aufgabe {idx + 1}</span>
+                      {draftLines.length > 1 ? (
+                        <button
+                          type="button"
+                          disabled={writeBlocked}
+                          onClick={() =>
+                            setDraftLines((prev) => prev.filter((item) => item.key !== line.key))
+                          }
+                          className="text-xs text-zinc-400 hover:text-red-300"
+                        >
+                          Entfernen
+                        </button>
+                      ) : null}
+                    </div>
+                    <label className="block text-left">
+                      <span className="text-xs text-zinc-500">Text</span>
+                      <textarea
+                        className="mt-1 min-h-[4.5rem] w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                        value={line.title}
+                        onChange={(e) =>
+                          setDraftLines((prev) =>
+                            prev.map((item) =>
+                              item.key === line.key ? { ...item, title: e.target.value } : item,
+                            ),
+                          )
+                        }
+                        placeholder="z. B. 50 m² Rasen mähen"
+                        disabled={writeBlocked}
+                      />
+                    </label>
+                    <div className="grid grid-cols-[1fr_auto] gap-2">
+                      <label className="block text-left">
+                        <span className="text-xs text-zinc-500">Soll-Menge (optional)</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                          value={line.targetQty}
+                          onChange={(e) =>
+                            setDraftLines((prev) =>
+                              prev.map((item) =>
+                                item.key === line.key ? { ...item, targetQty: e.target.value } : item,
+                              ),
+                            )
+                          }
+                          placeholder="z. B. 50"
+                          disabled={writeBlocked}
+                        />
+                      </label>
+                      <label className="block text-left">
+                        <span className="text-xs text-zinc-500">Einheit</span>
+                        <select
+                          className="mt-1 w-[5.5rem] rounded-2xl border border-white/[0.1] bg-black/55 px-2 py-2.5 text-white outline-none focus:border-orange-500/65"
+                          value={line.unit}
+                          onChange={(e) =>
+                            setDraftLines((prev) =>
+                              prev.map((item) =>
+                                item.key === line.key
+                                  ? { ...item, unit: e.target.value as (typeof TASK_UNITS)[number] }
+                                  : item,
+                              ),
+                            )
+                          }
+                          disabled={writeBlocked}
+                        >
+                          {TASK_UNITS.map((u) => (
+                            <option key={u} value={u}>
+                              {u}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                  </div>
+                ))}
+                {draftLines.length < 20 ? (
+                  <button
+                    type="button"
+                    disabled={writeBlocked}
+                    onClick={() => setDraftLines((prev) => [...prev, newDraftLine()])}
+                    className="flex w-full items-center justify-center rounded-2xl border border-orange-400/35 bg-orange-500/10 px-3 py-2.5 text-sm font-semibold text-orange-200 disabled:opacity-50"
+                  >
+                    + Weitere Aufgabe
+                  </button>
+                ) : null}
               </div>
               <div className="text-left">
                 <span className="text-xs text-zinc-500">Mitarbeiter zuweisen</span>
@@ -355,7 +442,7 @@ export function TasksPage() {
                     writeBlocked ||
                     busy ||
                     !projectId ||
-                    title.trim().length < 3 ||
+                    validDrafts.length === 0 ||
                     selectedIds.length === 0
                   }
                   onClick={() => void createTask()}

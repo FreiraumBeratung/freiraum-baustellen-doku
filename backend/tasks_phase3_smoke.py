@@ -82,6 +82,33 @@ def main() -> int:
     assert sigs == ["sig_task_demo.png"]
     assert site_tasks.list_tasks_for_user(store, is_owner=True, employee_id=None) == []
 
+    batch = site_tasks.create_tasks_batch(
+        store,
+        created_by="owner1",
+        project_id="p1",
+        project_name="Schmitz Garten",
+        due_date="2026-09-16",
+        assignee_ids=["e1"],
+        items=[
+            {"title": "Rasen mähen", "targetQuantity": 50, "unit": "m²"},
+            {"title": "Hecke schneiden", "targetQuantity": None, "unit": ""},
+        ],
+    )
+    assert len(batch) == 2
+    assert batch[0]["targetQuantity"] == 50
+    assert batch[1]["targetQuantity"] is None
+
+    site_tasks.complete_task(store, batch[0]["id"], user_id="w1", is_owner=False, employee_id="e1")
+    badge_owner = site_tasks.badge_payload(store, is_owner=True, employee_id=None)
+    badge_worker = site_tasks.badge_payload(store, is_owner=False, employee_id="e1")
+    assert badge_owner["openCount"] == 0
+    assert badge_owner["doneUnseenCount"] == 1
+    assert badge_worker["openCount"] == 1
+    assert badge_worker["doneUnseenCount"] == 0
+
+    assert site_tasks.ack_done_for_owner(store) == 1
+    assert site_tasks.badge_payload(store, is_owner=True, employee_id=None)["doneUnseenCount"] == 0
+
     print("TASKS-PHASE3-SMOKE: OK")
     return 0
 
