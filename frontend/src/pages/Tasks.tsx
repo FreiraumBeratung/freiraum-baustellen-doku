@@ -354,11 +354,7 @@ export function TasksPage() {
     <div className="overflow-x-hidden pb-2">
       <PageTitle
         title={isCompanyOwner ? 'To-do' : 'Aufgaben'}
-        subtitle={
-          isCompanyOwner
-            ? 'Anlegen, zuweisen, Woche sehen — auch für spätere Tage'
-            : 'Deine Einsätze und Aufgaben'
-        }
+        subtitle={isCompanyOwner ? 'Aufgaben zuweisen' : 'Deine Einsätze'}
       />
 
       {isCompanyOwner ? (
@@ -394,10 +390,7 @@ export function TasksPage() {
                 </select>
               </label>
               <div className="text-left">
-                <span className="text-xs text-zinc-500">Einsatz-Datum</span>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Auch in der Zukunft — z. B. heute anlegen, Einsatz am 17.09.
-                </p>
+                <span className="text-xs text-zinc-500">Datum</span>
                 <div className="mt-2 flex flex-wrap gap-1.5">
                   {dateChips().map((chip) => (
                     <button
@@ -422,9 +415,6 @@ export function TasksPage() {
                   onChange={(e) => setDueDate(e.target.value)}
                   disabled={writeBlocked}
                 />
-                <p className="mt-1.5 text-xs text-zinc-500">
-                  Gewählt: {formatDateDe(dueDate)} — erscheint an diesem Tag im Kalender.
-                </p>
               </div>
               <div className="space-y-3">
                 {draftLines.map((line, idx) => (
@@ -450,7 +440,7 @@ export function TasksPage() {
                     <label className="block text-left">
                       <span className="text-xs text-zinc-500">Text</span>
                       <textarea
-                        className="mt-1 min-h-[4.5rem] w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                        className="mt-1 min-h-[4.5rem] w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none placeholder:text-zinc-600 focus:border-orange-500/65"
                         value={line.title}
                         onChange={(e) =>
                           setDraftLines((prev) =>
@@ -459,7 +449,6 @@ export function TasksPage() {
                             ),
                           )
                         }
-                        placeholder="z. B. 50 m² Rasen mähen"
                         disabled={writeBlocked}
                       />
                     </label>
@@ -469,7 +458,7 @@ export function TasksPage() {
                         <input
                           type="text"
                           inputMode="decimal"
-                          className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                          className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none placeholder:text-zinc-600 focus:border-orange-500/65"
                           value={line.targetQty}
                           onChange={(e) =>
                             setDraftLines((prev) =>
@@ -478,7 +467,6 @@ export function TasksPage() {
                               ),
                             )
                           }
-                          placeholder="z. B. 50"
                           disabled={writeBlocked}
                         />
                       </label>
@@ -574,32 +562,30 @@ export function TasksPage() {
       ) : null}
 
       {isCompanyOwner ? (
-        <div className="mb-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setViewMode('list')}
-            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-              viewMode === 'list'
-                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-            }`}
-          >
-            Liste
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setViewMode('week')
-              setDueDate(selectedDay)
-            }}
-            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-              viewMode === 'week'
-                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-            }`}
-          >
-            Woche
-          </button>
+        <div className="mb-3 flex justify-center">
+          <div className="inline-flex rounded-full border border-white/[0.08] bg-black/40 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('list')}
+              className={`rounded-full px-3.5 py-1 text-xs font-medium ${
+                viewMode === 'list' ? 'bg-white/[0.08] text-zinc-100' : 'text-zinc-500'
+              }`}
+            >
+              Liste
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setViewMode('week')
+                setDueDate(selectedDay)
+              }}
+              className={`rounded-full px-3.5 py-1 text-xs font-medium ${
+                viewMode === 'week' ? 'bg-white/[0.08] text-zinc-100' : 'text-zinc-500'
+              }`}
+            >
+              Woche
+            </button>
+          </div>
         </div>
       ) : null}
 
@@ -657,29 +643,27 @@ export function TasksPage() {
           }}
         />
       ) : (
-        <div className="mb-4 flex gap-2">
-          <button
-            type="button"
-            onClick={() => setTab('open')}
-            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-              tab === 'open'
-                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-            }`}
-          >
-            Offen
-          </button>
-          <button
-            type="button"
-            onClick={() => setTab('done')}
-            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-              tab === 'done'
-                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-            }`}
-          >
-            Erledigt
-          </button>
+        <div className="mb-4 flex justify-center">
+          <div className="inline-flex rounded-full border border-white/[0.08] bg-black/30 p-0.5">
+            <button
+              type="button"
+              onClick={() => setTab('open')}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                tab === 'open' ? 'bg-orange-500/15 text-orange-200' : 'text-zinc-500'
+              }`}
+            >
+              Offen
+            </button>
+            <button
+              type="button"
+              onClick={() => setTab('done')}
+              className={`rounded-full px-3 py-1 text-xs font-medium ${
+                tab === 'done' ? 'bg-orange-500/15 text-orange-200' : 'text-zinc-500'
+              }`}
+            >
+              Erledigt
+            </button>
+          </div>
         </div>
       )}
 
@@ -776,7 +760,6 @@ export function TasksPage() {
                         onChange={(e) =>
                           setProgressDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
                         }
-                        placeholder="z. B. 30"
                         disabled={writeBlocked || busy}
                       />
                       <button
