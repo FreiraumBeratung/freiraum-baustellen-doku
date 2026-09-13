@@ -4,9 +4,12 @@ import {
   deleteReportPhoto,
   listProtocolPhotos,
   listReportPhotos,
+  listTaskPhotos,
   resolveBackendPublicUrl,
   uploadProtocolPhoto,
   uploadReportPhoto,
+  uploadTaskPhoto,
+  deleteTaskPhoto,
   type ReportPhoto,
 } from '../api/client'
 import { useMobilePwaRepaint } from '../hooks/useMobilePwaRepaint'
@@ -25,9 +28,12 @@ import { BigButton } from './ui'
 
 type PhotoSource = 'gallery' | 'inline-camera'
 
+type PhotoEntityKind = 'report' | 'protocol' | 'task'
+
 type ReportPhotosSectionProps = {
   reportId: string | null
   protocolId?: string | null
+  taskId?: string | null
   /** Wenn false: Hinweis statt Upload (Bericht noch nicht gespeichert). */
   enabled: boolean
   /** Wird nach erfolgreichem Upload aufgerufen (Seite kurz „wecken“). */
@@ -45,6 +51,7 @@ type UploadPhase = 'idle' | 'preparing' | 'uploading'
 export function ReportPhotosSection({
   reportId,
   protocolId = null,
+  taskId = null,
   enabled,
   onUploadComplete,
   iosGalleryRedirect = false,
@@ -54,8 +61,8 @@ export function ReportPhotosSection({
   useMobilePwaRepaint()
   const { writeBlocked } = useWriteBlocked()
   const uploadsEnabled = enabled && !writeBlocked
-  const entityId = protocolId || reportId
-  const isProtocol = Boolean(protocolId)
+  const entityId = taskId || protocolId || reportId
+  const kind: PhotoEntityKind = taskId ? 'task' : protocolId ? 'protocol' : 'report'
 
   const [photos, setPhotos] = useState<ReportPhoto[]>([])
   const [maxPhotos, setMaxPhotos] = useState(10)
@@ -110,7 +117,7 @@ export function ReportPhotosSection({
           await yieldForPaint(180)
           forcePwaRepaint()
           await yieldForPaint(320)
-          mobileHardRedirectAfterPhotoUpload(entityId, isProtocol ? 'protocol' : 'report')
+          mobileHardRedirectAfterPhotoUpload(entityId, kind)
           return
         }
 
@@ -119,7 +126,7 @@ export function ReportPhotosSection({
         setOverlayMode('success')
         await yieldForPaint(600)
         setPhotoUploadBusy(false)
-        mobileHardRedirectAfterPhotoUpload(entityId, isProtocol ? 'protocol' : 'report')
+        mobileHardRedirectAfterPhotoUpload(entityId, kind)
         return
       }
 
@@ -141,7 +148,7 @@ export function ReportPhotosSection({
       }
       forcePwaRepaint()
     },
-    [iosGalleryRedirect, onUploadComplete, entityId, isProtocol],
+    [iosGalleryRedirect, onUploadComplete, entityId, kind],
   )
 
   const abortOverlay = useCallback(async () => {
@@ -156,10 +163,15 @@ export function ReportPhotosSection({
 
   const refresh = useCallback(async () => {
     if (!entityId || !enabled) return
-    const res = isProtocol ? await listProtocolPhotos(entityId) : await listReportPhotos(entityId)
+    const res =
+      kind === 'task'
+        ? await listTaskPhotos(entityId)
+        : kind === 'protocol'
+          ? await listProtocolPhotos(entityId)
+          : await listReportPhotos(entityId)
     setPhotos(res.photos)
     setMaxPhotos(res.maxPhotos)
-  }, [entityId, enabled, isProtocol])
+  }, [entityId, enabled, kind])
 
   useEffect(() => {
     if (initialOpen && enabled) setOpen(true)
@@ -253,9 +265,12 @@ export function ReportPhotosSection({
             : 'Foto wird hochgeladen…',
         )
 
-        const res = isProtocol
-          ? await uploadProtocolPhoto(entityId, prepared)
-          : await uploadReportPhoto(entityId, prepared)
+        const res =
+          kind === 'task'
+            ? await uploadTaskPhoto(entityId, prepared)
+            : kind === 'protocol'
+              ? await uploadProtocolPhoto(entityId, prepared)
+              : await uploadReportPhoto(entityId, prepared)
         setPhotos(res.photos)
         setMaxPhotos(res.maxPhotos)
         currentCount = res.count
@@ -296,9 +311,12 @@ export function ReportPhotosSection({
     beginOverlay('Foto wird entfernt…')
     setPhase('uploading')
     try {
-      const res = isProtocol
-        ? await deleteProtocolPhoto(entityId, photoId)
-        : await deleteReportPhoto(entityId, photoId)
+      const res =
+        kind === 'task'
+          ? await deleteTaskPhoto(entityId, photoId)
+          : kind === 'protocol'
+            ? await deleteProtocolPhoto(entityId, photoId)
+            : await deleteReportPhoto(entityId, photoId)
       setPhotos((prev) => prev.filter((p) => p.id !== photoId))
       if (res.count === 0) setOpen(false)
       await closeOverlaySoft({ success: true, message: 'Foto entfernt.', source: 'inline-camera' })
@@ -333,7 +351,7 @@ export function ReportPhotosSection({
           aria-expanded={open}
         >
           <span className="text-sm font-semibold uppercase tracking-wide text-orange-400">
-            Baustellenfotos
+            {kind === 'task' ? 'Fotos' : 'Baustellenfotos'}
             {enabled ? ` (${count}/${maxPhotos})` : ''}
           </span>
           {enabled ? (
@@ -343,7 +361,11 @@ export function ReportPhotosSection({
 
         {!enabled ? (
           <p className="mt-2 text-xs text-zinc-500">
-            {isProtocol ? 'Protokoll zuerst speichern, dann Fotos hinzufügen.' : 'Bericht zuerst speichern, dann Fotos hinzufügen.'}
+            {kind === 'task'
+              ? 'Aufgabe zuerst anlegen, dann Fotos hinzufügen.'
+              : kind === 'protocol'
+                ? 'Protokoll zuerst speichern, dann Fotos hinzufügen.'
+                : 'Bericht zuerst speichern, dann Fotos hinzufügen.'}
           </p>
         ) : null}
 

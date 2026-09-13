@@ -1004,8 +1004,196 @@ def delete_task(
     _user_id: str = Depends(require_company_owner),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
-    site_tasks.delete_task(store, task_id)
+    task = site_tasks.delete_task(store, task_id)
+    photo_fns, sig_fns = site_tasks.task_media_filenames(task)
+    for fn in photo_fns:
+        try:
+            _resolve_photo_path(store, fn).unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+    for fn in sig_fns:
+        _delete_signature_file(store, fn)
     return {"ok": True}
+
+
+def _task_with_access(
+    store: TenantStore,
+    task_id: str,
+    user_id: str,
+) -> dict[str, Any]:
+    _user, owner, employee_id = _task_actor_context(user_id)
+    return site_tasks.require_task_access(
+        store,
+        task_id,
+        is_owner=owner,
+        employee_id=employee_id,
+    )
+
+
+@app.get("/api/tasks/{task_id}/photos")
+def list_task_photos(
+    task_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    task = _task_with_access(store, task_id, user_id)
+    photos = [_photo_api_item(store, p) for p in site_tasks.task_photos_list(task)]
+    return {
+        "photos": photos,
+        "count": len(photos),
+        "maxPhotos": site_tasks.MAX_PHOTOS_PER_TASK,
+    }
+
+
+@app.post("/api/tasks/{task_id}/photos")
+async def upload_task_photo(
+    task_id: str,
+    file: UploadFile = File(...),
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = _task_with_access(store, task_id, user_id)
+    photos = site_tasks.task_photos_list(task)
+    if len(photos) >= site_tasks.MAX_PHOTOS_PER_TASK:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximal {site_tasks.MAX_PHOTOS_PER_TASK} Fotos pro Aufgabe erlaubt.",
+        )
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+    ext = Path(file.filename).suffix.lower()
+    if ext == ".jpeg":
+        ext = ".jpg"
+    if ext not in {".jpg", ".png", ".webp"}:
+        raise HTTPException(status_code=400, detail="Nur JPEG-, PNG- oder WebP-Bilder erlaubt")
+    content = await file.read()
+    n = len(content)
+    if n == 0:
+        raise HTTPException(status_code=400, detail="Leere Bilddatei")
+    if n > MAX_PHOTO_UPLOAD_BYTES:
+        raise HTTPException(status_code=400, detail="Datei zu groß (max. 5 MB)")
+
+    photo_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    file_ext = _guess_photo_extension(file.content_type, file.filename or "")
+    safe_name = f"task_{ts}_{photo_id}.{file_ext}"
+    dest = store.uploads_dir("photos") / safe_name
+    dest.write_bytes(content)
+    entry: dict[str, Any] = {
+        "id": photo_id,
+        "filename": safe_name,
+        "originalFilename": file.filename if file.filename else "",
+        "contentType": file.content_type if file.content_type else "application/octet-stream",
+        "sizeBytes": n,
+        "uploadedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    photos.append(entry)
+    site_tasks.save_task_photos(store, task_id, photos)
+    items = [_photo_api_item(store, p) for p in photos]
+    return {
+        "ok": True,
+        "photo": _photo_api_item(store, entry),
+        "photos": items,
+        "count": len(photos),
+        "maxPhotos": site_tasks.MAX_PHOTOS_PER_TASK,
+    }
+
+
+@app.delete("/api/tasks/{task_id}/photos/{photo_id}")
+def delete_task_photo(
+    task_id: str,
+    photo_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = _task_with_access(store, task_id, user_id)
+    photos = site_tasks.task_photos_list(task)
+    kept: list[dict[str, Any]] = []
+    removed: dict[str, Any] | None = None
+    for item in photos:
+        if str(item.get("id") or "") == str(photo_id) and removed is None:
+            removed = item
+            continue
+        kept.append(item)
+    if removed is None:
+        raise HTTPException(status_code=404, detail="Foto nicht gefunden")
+    fn = removed.get("filename")
+    if isinstance(fn, str) and fn:
+        try:
+            _resolve_photo_path(store, fn).unlink(missing_ok=True)
+        except HTTPException:
+            pass
+        except OSError:
+            pass
+    site_tasks.save_task_photos(store, task_id, kept)
+    return {
+        "ok": True,
+        "count": len(kept),
+        "maxPhotos": site_tasks.MAX_PHOTOS_PER_TASK,
+    }
+
+
+@app.get("/api/tasks/{task_id}/signature")
+def get_task_signature(
+    task_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    task = _task_with_access(store, task_id, user_id)
+    sig = site_tasks.task_signature_doc(task)
+    return {"signature": _signature_api_item(store, "employee", sig) if sig else None}
+
+
+@app.post("/api/tasks/{task_id}/signature")
+async def upload_task_signature(
+    task_id: str,
+    file: UploadFile = File(...),
+    signedByLabel: str | None = Form(None),
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = _task_with_access(store, task_id, user_id)
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="Keine Datei")
+    content = await file.read()
+    _validate_signature_png(content)
+    previous = site_tasks.task_signature_doc(task)
+    if previous:
+        _delete_signature_file(store, previous.get("filename"))
+    sig_id = str(uuid.uuid4())
+    ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    safe_name = f"sig_{ts}_task_{sig_id}.png"
+    dest = store.uploads_dir("signatures") / safe_name
+    dest.write_bytes(content)
+    label = str(signedByLabel or "").strip()[:120] or None
+    entry: dict[str, Any] = {
+        "id": sig_id,
+        "role": "employee",
+        "filename": safe_name,
+        "contentType": "image/png",
+        "sizeBytes": len(content),
+        "signedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    if label:
+        entry["signedByLabel"] = label
+    site_tasks.save_task_signature(store, task_id, entry)
+    return {"ok": True, "signature": _signature_api_item(store, "employee", entry)}
+
+
+@app.delete("/api/tasks/{task_id}/signature")
+def delete_task_signature(
+    task_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = _task_with_access(store, task_id, user_id)
+    previous = site_tasks.task_signature_doc(task)
+    if previous:
+        _delete_signature_file(store, previous.get("filename"))
+    site_tasks.save_task_signature(store, task_id, None)
+    return {"ok": True, "signature": None}
 
 
 @app.post("/api/auth/register")

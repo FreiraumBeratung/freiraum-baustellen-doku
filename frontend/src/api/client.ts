@@ -692,6 +692,105 @@ export async function deleteProtocolPhoto(
   )
 }
 
+export async function listTaskPhotos(taskId: string): Promise<ReportPhotosResponse> {
+  return api<ReportPhotosResponse>(`/api/tasks/${encodeURIComponent(taskId)}/photos`)
+}
+
+export async function uploadTaskPhoto(
+  taskId: string,
+  file: File,
+): Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'photo.jpg')
+
+  const url = resolveApiUrl(`/api/tasks/${encodeURIComponent(taskId)}/photos`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    const detail = parseApiDetail(err, res.statusText || 'Foto konnte nicht hochgeladen werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
+  }
+
+  notifyLicenseReactivated()
+  return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
+}
+
+export async function deleteTaskPhoto(
+  taskId: string,
+  photoId: string,
+): Promise<{ ok: boolean; count: number; maxPhotos: number }> {
+  return api<{ ok: boolean; count: number; maxPhotos: number }>(
+    `/api/tasks/${encodeURIComponent(taskId)}/photos/${encodeURIComponent(photoId)}`,
+    { method: 'DELETE' },
+  )
+}
+
+export async function listTaskSignature(taskId: string): Promise<{ signature: ReportSignature | null }> {
+  return api<{ signature: ReportSignature | null }>(`/api/tasks/${encodeURIComponent(taskId)}/signature`)
+}
+
+export async function uploadTaskSignature(
+  taskId: string,
+  file: File,
+  signedByLabel?: string,
+): Promise<{ ok: boolean; signature: ReportSignature | null }> {
+  const fd = new FormData()
+  fd.append('file', file, file.name || 'signature.png')
+  if (signedByLabel?.trim()) {
+    fd.append('signedByLabel', signedByLabel.trim())
+  }
+
+  const url = resolveApiUrl(`/api/tasks/${encodeURIComponent(taskId)}/signature`)
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers['Authorization'] = `Bearer ${token}`
+
+  let res: Response
+  try {
+    res = await fetch(url, { method: 'POST', body: fd, headers })
+  } catch {
+    throw new Error(unreachableBackendDevMessage())
+  }
+
+  if (res.status === 401) {
+    clearToken()
+    window.location.assign('/login')
+    throw new Error('Nicht angemeldet')
+  }
+
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as ApiError
+    const detail = parseApiDetail(err, res.statusText || 'Unterschrift konnte nicht gespeichert werden')
+    if (res.status === 403) notifyLicenseSuspendedIfNeeded(detail)
+    throw new Error(detail)
+  }
+
+  return res.json() as Promise<{ ok: boolean; signature: ReportSignature | null }>
+}
+
+export async function deleteTaskSignature(taskId: string): Promise<{ ok: boolean; signature: null }> {
+  return api<{ ok: boolean; signature: null }>(`/api/tasks/${encodeURIComponent(taskId)}/signature`, {
+    method: 'DELETE',
+  })
+}
+
 export type DeliveryNote = {
   id: string
   projectId: string

@@ -1,8 +1,9 @@
-"""To-do / Aufgaben (Phase 1+2) — rein additiv.
+"""To-do / Aufgaben (Phase 1–3) — rein additiv.
 
 GF legt Aufgaben an und weist Mitarbeiter zu.
 Mitarbeiter sehen nur eigene offenen/erledigten Aufgaben und können abhaken.
 Phase 2: optionale Soll-Menge, Ist-Meldung, Rest und gemeinsame Historie.
+Phase 3: Fotos und optionale Unterschrift an der Aufgabe.
 """
 
 from __future__ import annotations
@@ -18,6 +19,7 @@ from app.services.tenant_storage import TenantStore
 TASK_STATUSES = frozenset({"open", "done"})
 MAX_TARGET_QUANTITY = 1_000_000.0
 MAX_PROGRESS_ENTRIES = 80
+MAX_PHOTOS_PER_TASK = 10
 UNIT_ALIASES = {
     "m2": "m²",
     "qm": "m²",
@@ -154,6 +156,72 @@ def _can_mutate_task(
     return bool(is_owner or (eid and eid in assignees))
 
 
+def require_task_access(
+    store: TenantStore,
+    task_id: str,
+    *,
+    is_owner: bool,
+    employee_id: str | None,
+) -> dict[str, Any]:
+    task = find_task(store, task_id)
+    if not _can_mutate_task(task, is_owner=is_owner, employee_id=employee_id):
+        raise HTTPException(status_code=403, detail="Keine Berechtigung für diese Aufgabe.")
+    return task
+
+
+def task_photos_list(task: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = task.get("photos")
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, dict) and p.get("filename")]
+
+
+def task_signature_doc(task: dict[str, Any]) -> dict[str, Any] | None:
+    raw = task.get("signature")
+    if isinstance(raw, dict) and raw.get("filename"):
+        return raw
+    return None
+
+
+def save_task_photos(store: TenantStore, task_id: str, photos: list[dict[str, Any]]) -> dict[str, Any]:
+    tasks = read_tasks(store)
+    for item in tasks:
+        if str(item.get("id") or "") == str(task_id):
+            item["photos"] = photos
+            write_tasks(store, tasks)
+            return item
+    raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+
+
+def save_task_signature(
+    store: TenantStore,
+    task_id: str,
+    signature: dict[str, Any] | None,
+) -> dict[str, Any]:
+    tasks = read_tasks(store)
+    for item in tasks:
+        if str(item.get("id") or "") == str(task_id):
+            item["signature"] = signature
+            write_tasks(store, tasks)
+            return item
+    raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+
+
+def task_media_filenames(task: dict[str, Any]) -> tuple[list[str], list[str]]:
+    photos: list[str] = []
+    for entry in task_photos_list(task):
+        fn = str(entry.get("filename") or "").strip()
+        if fn:
+            photos.append(fn)
+    signatures: list[str] = []
+    sig = task_signature_doc(task)
+    if sig:
+        fn = str(sig.get("filename") or "").strip()
+        if fn:
+            signatures.append(fn)
+    return photos, signatures
+
+
 def public_task(task: dict[str, Any]) -> dict[str, Any]:
     status = str(task.get("status") or "open").strip().lower()
     if status not in TASK_STATUSES:
@@ -185,6 +253,8 @@ def public_task(task: dict[str, Any]) -> dict[str, Any]:
         "remainingQuantity": remaining,
         "unit": unit,
         "progress": entries,
+        "photoCount": len(task_photos_list(task)),
+        "hasSignature": task_signature_doc(task) is not None,
     }
 
 
@@ -297,6 +367,8 @@ def create_task(
         "targetQuantity": target,
         "unit": unit_clean,
         "progress": [],
+        "photos": [],
+        "signature": None,
     }
     tasks = read_tasks(store)
     tasks.append(task)
@@ -389,9 +461,10 @@ def add_progress(
     return public_task(task)
 
 
-def delete_task(store: TenantStore, task_id: str) -> None:
+def delete_task(store: TenantStore, task_id: str) -> dict[str, Any]:
     tasks = read_tasks(store)
-    next_tasks = [t for t in tasks if str(t.get("id") or "") != str(task_id)]
-    if len(next_tasks) == len(tasks):
+    target = next((t for t in tasks if str(t.get("id") or "") == str(task_id)), None)
+    if target is None:
         raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
-    write_tasks(store, next_tasks)
+    write_tasks(store, [t for t in tasks if str(t.get("id") or "") != str(task_id)])
+    return target

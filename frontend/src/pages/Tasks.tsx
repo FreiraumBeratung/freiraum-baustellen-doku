@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
+import { ReportPhotosSection } from '../components/ReportPhotosSection'
+import { TaskSignatureSection } from '../components/TaskSignatureSection'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
@@ -31,6 +34,8 @@ export type SiteTask = {
   remainingQuantity?: number | null
   unit?: string
   progress?: TaskProgress[]
+  photoCount?: number
+  hasSignature?: boolean
 }
 
 const TASK_UNITS = ['m²', 'm³', 'm', 'Stk', 'lfm', 'Std'] as const
@@ -61,7 +66,10 @@ function parseQty(raw: string): number | null {
 export function TasksPage() {
   const { isCompanyOwner } = useAuth()
   const { writeBlocked } = useWriteBlocked()
+  const [searchParams] = useSearchParams()
+  const queryTaskId = searchParams.get('task') || ''
   const [tab, setTab] = useState<'open' | 'done'>('open')
+  const [mediaOpenId, setMediaOpenId] = useState<string | null>(queryTaskId || null)
   const [tasks, setTasks] = useState<SiteTask[]>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -91,6 +99,12 @@ export function TasksPage() {
   useEffect(() => {
     void loadTasks()
   }, [loadTasks])
+
+  useEffect(() => {
+    if (searchParams.get('photos') === '1' && queryTaskId) {
+      setMediaOpenId(queryTaskId)
+    }
+  }, [searchParams, queryTaskId])
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -506,7 +520,32 @@ export function TasksPage() {
                     Löschen
                   </button>
                 ) : null}
+                {t.status === 'done' ? (
+                  <button
+                    type="button"
+                    onClick={() => setMediaOpenId((cur) => (cur === t.id ? null : t.id))}
+                    className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-200 disabled:opacity-50"
+                  >
+                    {mediaOpenId === t.id
+                      ? 'Fotos schließen'
+                      : `Fotos ansehen${t.photoCount ? ` (${t.photoCount})` : ''}`}
+                  </button>
+                ) : null}
               </div>
+              {t.status === 'open' || mediaOpenId === t.id ? (
+                <div className="space-y-3 border-t border-white/[0.06] pt-3">
+                  <ReportPhotosSection
+                    reportId={null}
+                    taskId={t.id}
+                    enabled
+                    embedded
+                    iosGalleryRedirect
+                    initialOpen={mediaOpenId === t.id}
+                    onUploadComplete={() => void loadTasks()}
+                  />
+                  <TaskSignatureSection taskId={t.id} onChanged={() => void loadTasks()} />
+                </div>
+              ) : null}
             </Card>
           ))
         )}

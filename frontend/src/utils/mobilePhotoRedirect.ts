@@ -5,13 +5,15 @@ import { isTabletDevice } from './isTabletDevice'
 /** iOS/Android-PWA: voller Seitenwechsel nach Foto-Upload (wie manueller Reload). */
 export function mobileHardRedirectAfterPhotoUpload(
   entityId: string,
-  kind: 'report' | 'protocol' = 'report',
+  kind: 'report' | 'protocol' | 'task' = 'report',
 ): void {
   const id = encodeURIComponent(entityId)
   const base =
     kind === 'protocol'
       ? `/protokolle/${id}?photos=1&uploaded=1`
-      : `/berichte/${id}?photos=1&uploaded=1`
+      : kind === 'task'
+        ? `/aufgaben?photos=1&uploaded=1&task=${id}`
+        : `/berichte/${id}?photos=1&uploaded=1`
 
   // Tablet: replace + Cache-Bust (Samsung-Tabs hängen sonst oft am alten Screen).
   // Handy-Pfad unverändert: location.assign ohne Extra-Parameter.
