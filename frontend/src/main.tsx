@@ -5,7 +5,7 @@ import { AuthProvider } from './context/AuthContext'
 import './index.css'
 import App from './App.tsx'
 
-// PWA Service Worker (vite-plugin-pwa, dev: nur nach build aktiv)
+// PWA Service Worker (HTTP-Dev: aus. HTTPS-Dev / Build: an, für Push)
 import { registerSW } from 'virtual:pwa-register'
 
 registerSW({

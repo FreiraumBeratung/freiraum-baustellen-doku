@@ -86,6 +86,11 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         importScripts: ['/push-handler.js'],
       },
+      // Nur HTTPS-Dev: SW für Handy-Push. Normales HTTP-Dev bleibt ohne SW-Cache.
+      devOptions: {
+        enabled: Boolean(devHttps),
+        type: 'module',
+      },
     }),
   ],
   server: {

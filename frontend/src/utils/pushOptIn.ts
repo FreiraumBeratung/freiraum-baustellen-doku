@@ -17,11 +17,32 @@ export function pushSupported(): boolean {
   )
 }
 
+async function serviceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
+  const existing = await navigator.serviceWorker.getRegistration()
+  if (existing) return existing
+  return await Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<ServiceWorkerRegistration>((_, reject) => {
+      window.setTimeout(() => {
+        reject(
+          new Error(
+            'App-Hintergrunddienst fehlt. Seite neu laden oder die App auf den Bildschirm legen.',
+          ),
+        )
+      }, 4000)
+    }),
+  ])
+}
+
 export async function currentPushEndpoint(): Promise<string | null> {
   if (!pushSupported()) return null
-  const reg = await navigator.serviceWorker.ready
-  const sub = await reg.pushManager.getSubscription()
-  return sub?.endpoint || null
+  try {
+    const reg = await serviceWorkerRegistration()
+    const sub = await reg.pushManager.getSubscription()
+    return sub?.endpoint || null
+  } catch {
+    return null
+  }
 }
 
 export async function enablePushOnDevice(): Promise<void> {
@@ -32,7 +53,7 @@ export async function enablePushOnDevice(): Promise<void> {
   }
   const perm = await Notification.requestPermission()
   if (perm !== 'granted') throw new Error('Hinweise wurden nicht erlaubt.')
-  const reg = await navigator.serviceWorker.ready
+  const reg = await serviceWorkerRegistration()
   const sub = await reg.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(cfg.publicKey) as BufferSource,
@@ -48,7 +69,12 @@ export async function enablePushOnDevice(): Promise<void> {
 
 export async function disablePushOnDevice(): Promise<void> {
   if (!pushSupported()) return
-  const reg = await navigator.serviceWorker.ready
+  let reg: ServiceWorkerRegistration
+  try {
+    reg = await serviceWorkerRegistration()
+  } catch {
+    return
+  }
   const sub = await reg.pushManager.getSubscription()
   if (sub?.endpoint) {
     await unsubscribePush(sub.endpoint).catch(() => {})

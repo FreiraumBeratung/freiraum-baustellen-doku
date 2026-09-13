@@ -1,4 +1,4 @@
-/* Phase 5: Push-Handler. Ohne Payload keine Meldung (5.1 sendet noch nichts). */
+/* Phase 5: Push-Handler. Ohne title/body keine Meldung. */
 self.addEventListener('push', (event) => {
   let data = {}
   try {

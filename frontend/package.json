@@ -9,7 +9,8 @@
     "dev:https": "cross-env VITE_DEV_HTTPS=1 vite --host 0.0.0.0 --port 51710",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "preview:https": "cross-env VITE_DEV_HTTPS=1 vite preview --host 0.0.0.0 --port 51710"
   },
   "dependencies": {
     "lucide-react": "^1.16.0",

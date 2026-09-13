@@ -24,9 +24,16 @@ def vapid_public_key() -> str:
     return str(os.environ.get("FREIRAUM_VAPID_PUBLIC_KEY") or "").strip()
 
 
+def _vapid_private_key_present() -> bool:
+    return bool(str(os.environ.get("FREIRAUM_VAPID_PRIVATE_KEY") or "").strip())
+
+
 def push_public_config() -> dict[str, Any]:
+    """Nur Public Key an den Client — Schalter nur wenn Versand möglich ist."""
     pub = vapid_public_key()
-    return {"enabled": bool(pub), "publicKey": pub or None}
+    if not pub or not _vapid_private_key_present():
+        return {"enabled": False, "publicKey": None}
+    return {"enabled": True, "publicKey": pub}
 
 
 def _read(store: TenantStore) -> list[dict[str, Any]]:
@@ -134,6 +141,32 @@ def disable_subscription(store: TenantStore, *, user_id: str, endpoint: str) -> 
 def user_has_subscription(store: TenantStore, user_id: str) -> bool:
     uid = str(user_id or "").strip()
     return any(str(r.get("userId") or "") == uid and r.get("enabled", True) for r in _read(store))
+
+
+def subscriptions_for_users(store: TenantStore, user_ids: list[str]) -> list[dict[str, Any]]:
+    want = {str(x).strip() for x in user_ids if str(x).strip()}
+    if not want:
+        return []
+    out: list[dict[str, Any]] = []
+    for row in _read(store):
+        if not row.get("enabled", True):
+            continue
+        if str(row.get("userId") or "") not in want:
+            continue
+        keys = row.get("keys") if isinstance(row.get("keys"), dict) else {}
+        endpoint = str(row.get("endpoint") or "").strip()
+        if not endpoint or not keys.get("p256dh") or not keys.get("auth"):
+            continue
+        out.append(row)
+    return out
+
+
+def drop_endpoint(store: TenantStore, endpoint: str) -> None:
+    ep = str(endpoint or "").strip()
+    if not ep:
+        return
+    rows = [r for r in _read(store) if str(r.get("endpoint") or "") != ep]
+    _write(store, rows)
 
 
 def public_subscription(row: dict[str, Any]) -> dict[str, Any]:

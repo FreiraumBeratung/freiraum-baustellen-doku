@@ -67,6 +67,7 @@ from app.services.site_protocol import (
     save_protocol_signatures,
     write_protocols,
 )
+from app.services import push_send
 from app.services import push_subscriptions
 from app.services import site_tasks
 from app.services.quality_filter import apply_quality_filter
@@ -927,6 +928,36 @@ def _task_actor_name(
     ).strip() or "Geschäftsführer"
 
 
+def _notify_new_tasks(store: TenantStore, tasks: list[dict[str, Any]], *, actor_id: str) -> None:
+    try:
+        users = get_users()
+        ids: list[str] = []
+        seen: set[str] = set()
+        for task in tasks:
+            for eid in task.get("assigneeIds") or []:
+                worker = find_worker_for_employee(users, store.tenant_id, str(eid))
+                uid = str((worker or {}).get("id") or "").strip()
+                if not uid or uid == actor_id or uid in seen:
+                    continue
+                seen.add(uid)
+                ids.append(uid)
+        if ids:
+            push_send.notify_users_best_effort(store, ids, push_send.payload_new_tasks(tasks))
+    except Exception:
+        pass
+
+
+def _notify_task_done(store: TenantStore, task: dict[str, Any], *, actor_id: str) -> None:
+    try:
+        owner = find_tenant_owner(get_users(), store.tenant_id)
+        uid = str((owner or {}).get("id") or "").strip()
+        if not uid or uid == actor_id:
+            return
+        push_send.notify_users_best_effort(store, [uid], push_send.payload_task_done(task))
+    except Exception:
+        pass
+
+
 @app.get("/api/tasks")
 def list_tasks(
     status: str | None = None,
@@ -1035,6 +1066,7 @@ def create_tasks_batch(
         assignee_ids=body.assigneeIds,
         items=[item.model_dump() for item in body.items],
     )
+    _notify_new_tasks(store, tasks, actor_id=user_id)
     return {"tasks": tasks}
 
 
@@ -1055,6 +1087,7 @@ def create_task(
         target_quantity=body.targetQuantity,
         unit=body.unit,
     )
+    _notify_new_tasks(store, [task], actor_id=user_id)
     return {"task": task}
 
 
@@ -1091,6 +1124,7 @@ def complete_task(
         is_owner=owner,
         employee_id=employee_id,
     )
+    _notify_task_done(store, task, actor_id=user_id)
     return {"task": task}
 
 
