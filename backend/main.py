@@ -673,6 +673,12 @@ class TaskCreateBody(BaseModel):
     title: str = Field(..., min_length=3, max_length=2000)
     dueDate: str = Field(..., min_length=8, max_length=32)
     assigneeIds: list[str] = Field(default_factory=list)
+    targetQuantity: float | None = None
+    unit: str = Field(default="", max_length=16)
+
+
+class TaskProgressBody(BaseModel):
+    amount: float = Field(..., gt=0, le=1_000_000)
 
 
 class DeliveryNoteCreateBody(BaseModel):
@@ -882,6 +888,20 @@ def _task_actor_context(user_id: str) -> tuple[dict[str, Any], bool, str | None]
     return user, owner, employee_id
 
 
+def _task_actor_name(
+    user: dict[str, Any],
+    *,
+    employee_id: str | None,
+    store: TenantStore,
+) -> str:
+    emp_name = site_tasks.employee_name_for_id(store, employee_id)
+    if emp_name:
+        return emp_name
+    return str(
+        user.get("entrepreneurName") or user.get("username") or "Geschäftsführer"
+    ).strip() or "Geschäftsführer"
+
+
 @app.get("/api/tasks")
 def list_tasks(
     status: str | None = None,
@@ -926,6 +946,27 @@ def create_task(
         title=body.title,
         due_date=body.dueDate,
         assignee_ids=body.assigneeIds,
+        target_quantity=body.targetQuantity,
+        unit=body.unit,
+    )
+    return {"task": task}
+
+
+@app.post("/api/tasks/{task_id}/progress")
+def add_task_progress(
+    task_id: str,
+    body: TaskProgressBody,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    user, owner, employee_id = _task_actor_context(user_id)
+    task = site_tasks.add_progress(
+        store,
+        task_id,
+        amount=body.amount,
+        actor_name=_task_actor_name(user, employee_id=employee_id, store=store),
+        is_owner=owner,
+        employee_id=employee_id,
     )
     return {"task": task}
 

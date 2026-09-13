@@ -7,6 +7,14 @@ import { useWriteBlocked } from '../hooks/useWriteBlocked'
 type Project = { id: string; name: string; customer?: string; status?: string }
 type Employee = { id: string; name: string; active: boolean }
 
+type TaskProgress = {
+  id: string
+  employeeId?: string
+  actorName: string
+  amount: number
+  createdAt: string
+}
+
 export type SiteTask = {
   id: string
   projectId: string
@@ -18,7 +26,14 @@ export type SiteTask = {
   status: 'open' | 'done'
   createdAt: string
   completedAt?: string | null
+  targetQuantity?: number | null
+  actualQuantity?: number | null
+  remainingQuantity?: number | null
+  unit?: string
+  progress?: TaskProgress[]
 }
+
+const TASK_UNITS = ['m²', 'm³', 'm', 'Stk', 'lfm', 'Std'] as const
 
 function formatDateDe(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(iso || '').trim())
@@ -27,6 +42,20 @@ function formatDateDe(iso: string): string {
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10)
+}
+
+function formatQty(value: number | null | undefined): string {
+  const n = Number(value)
+  if (!Number.isFinite(n)) return '0'
+  return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(n)
+}
+
+function parseQty(raw: string): number | null {
+  const cleaned = String(raw || '').trim().replace(',', '.')
+  if (!cleaned) return null
+  const n = Number(cleaned)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return n
 }
 
 export function TasksPage() {
@@ -45,6 +74,9 @@ export function TasksPage() {
   const [dueDate, setDueDate] = useState(todayIso())
   const [title, setTitle] = useState('')
   const [selectedEmp, setSelectedEmp] = useState<Record<string, boolean>>({})
+  const [targetQty, setTargetQty] = useState('')
+  const [unit, setUnit] = useState<(typeof TASK_UNITS)[number]>('m²')
+  const [progressDraft, setProgressDraft] = useState<Record<string, string>>({})
 
   const loadTasks = useCallback(async () => {
     setErr('')
@@ -58,6 +90,13 @@ export function TasksPage() {
 
   useEffect(() => {
     void loadTasks()
+  }, [loadTasks])
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void loadTasks()
+    }, 15000)
+    return () => window.clearInterval(id)
   }, [loadTasks])
 
   useEffect(() => {
@@ -102,15 +141,44 @@ export function TasksPage() {
           title: title.trim(),
           dueDate,
           assigneeIds: selectedIds,
+          targetQuantity: parseQty(targetQty),
+          unit: parseQty(targetQty) ? unit : '',
         }),
       })
       setTitle('')
+      setTargetQty('')
+      setUnit('m²')
       setComposerOpen(false)
       setMsg('Aufgabe angelegt.')
       setTab('open')
       await loadTasks()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Anlegen fehlgeschlagen.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function addProgress(id: string) {
+    if (writeBlocked || busy) return
+    const amount = parseQty(progressDraft[id] || '')
+    if (amount == null) {
+      setErr('Bitte eine Menge größer als 0 eingeben.')
+      return
+    }
+    setBusy(true)
+    setErr('')
+    setMsg('')
+    try {
+      await api(`/api/tasks/${encodeURIComponent(id)}/progress`, {
+        method: 'POST',
+        body: JSON.stringify({ amount }),
+      })
+      setProgressDraft((prev) => ({ ...prev, [id]: '' }))
+      setMsg('Fortschritt gemeldet.')
+      await loadTasks()
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Fortschritt fehlgeschlagen.')
     } finally {
       setBusy(false)
     }
@@ -211,6 +279,35 @@ export function TasksPage() {
                   disabled={writeBlocked}
                 />
               </label>
+              <div className="grid grid-cols-[1fr_auto] gap-2">
+                <label className="block text-left">
+                  <span className="text-xs text-zinc-500">Soll-Menge (optional)</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                    value={targetQty}
+                    onChange={(e) => setTargetQty(e.target.value)}
+                    placeholder="z. B. 50"
+                    disabled={writeBlocked}
+                  />
+                </label>
+                <label className="block text-left">
+                  <span className="text-xs text-zinc-500">Einheit</span>
+                  <select
+                    className="mt-1 w-[5.5rem] rounded-2xl border border-white/[0.1] bg-black/55 px-2 py-2.5 text-white outline-none focus:border-orange-500/65"
+                    value={unit}
+                    onChange={(e) => setUnit(e.target.value as (typeof TASK_UNITS)[number])}
+                    disabled={writeBlocked}
+                  >
+                    {TASK_UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
               <div className="text-left">
                 <span className="text-xs text-zinc-500">Mitarbeiter zuweisen</span>
                 <div className="mt-2 space-y-2">
@@ -317,6 +414,66 @@ export function TasksPage() {
                   </p>
                 </div>
               </div>
+              {t.targetQuantity != null ? (
+                <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-sm font-medium text-zinc-100">
+                      {formatQty(t.actualQuantity)} / {formatQty(t.targetQuantity)} {t.unit || 'm²'}
+                    </p>
+                    <p className="text-xs text-zinc-400">
+                      Rest {formatQty(t.remainingQuantity)} {t.unit || 'm²'}
+                    </p>
+                  </div>
+                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+                    <div
+                      className="h-full rounded-full bg-orange-500"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            0,
+                            ((Number(t.actualQuantity) || 0) / (Number(t.targetQuantity) || 1)) * 100,
+                          ),
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                  {t.progress?.length ? (
+                    <ul className="space-y-1">
+                      {t.progress.map((p) => (
+                        <li key={p.id || `${p.actorName}-${p.createdAt}`} className="text-xs text-zinc-400">
+                          {p.actorName}: {formatQty(p.amount)} {t.unit || 'm²'}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="text-xs text-zinc-500">Noch kein Fortschritt gemeldet.</p>
+                  )}
+                  {t.status === 'open' ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        className="min-w-0 flex-1 rounded-xl border border-white/[0.1] bg-black/55 px-3 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+                        value={progressDraft[t.id] || ''}
+                        onChange={(e) =>
+                          setProgressDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
+                        }
+                        placeholder="z. B. 30"
+                        disabled={writeBlocked || busy}
+                      />
+                      <button
+                        type="button"
+                        disabled={writeBlocked || busy || !parseQty(progressDraft[t.id] || '')}
+                        onClick={() => void addProgress(t.id)}
+                        className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
+                      >
+                        Melden
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="flex flex-wrap gap-2">
                 {t.status === 'open' ? (
                   <button
