@@ -13,6 +13,7 @@ type Tile = { to: string; title: string; emoji: string; primary?: boolean }
 
 const allTiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
+  { to: '/aufgaben', title: 'To-do / Aufgaben', emoji: '✅' },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
   { to: '/lieferschein', title: 'Lieferschein scannen', emoji: '📦' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
@@ -29,12 +30,18 @@ export function DashboardPage() {
 
   const tiles = useMemo(
     () =>
-      allTiles.filter((t) => {
-        const need = tilePermission(t.to)
-        if (!need) return true
-        return can(need)
-      }),
-    [can],
+      allTiles
+        .filter((t) => {
+          const need = tilePermission(t.to)
+          if (!need) return true
+          return can(need)
+        })
+        .map((t) =>
+          t.to === '/aufgaben'
+            ? { ...t, title: isCompanyOwner ? 'To-do' : 'Aufgaben' }
+            : t,
+        ),
+    [can, isCompanyOwner],
   )
 
   useEffect(() => {

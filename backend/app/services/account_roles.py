@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Any
 
-# Extra-Rechte, die der Chef per Haken vergeben kann (Basis report+protocol immer).
+# Extra-Rechte, die der Chef per Haken vergeben kann (Basis report+protocol+tasks immer).
 EXTRA_PERMISSIONS = frozenset(
     {
         "projects",  # Baustellen
@@ -19,7 +19,7 @@ EXTRA_PERMISSIONS = frozenset(
     }
 )
 
-BASE_WORKER_PERMISSIONS = frozenset({"report", "protocol"})
+BASE_WORKER_PERMISSIONS = frozenset({"report", "protocol", "tasks"})
 
 
 def is_company_owner(user: dict[str, Any] | None) -> bool:

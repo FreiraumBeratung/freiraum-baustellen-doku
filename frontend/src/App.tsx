@@ -25,6 +25,7 @@ import { ProtocolSeriesPage } from './pages/ProtocolSeries'
 import { AdminRoute } from './components/AdminRoute'
 import { FeedbackPage } from './pages/Feedback'
 import { DeliveryNoteScanPage } from './pages/DeliveryNoteScan'
+import { TasksPage } from './pages/Tasks'
 
 function ProtectedOutlet() {
   const { token, ready } = useRequireAuth()
@@ -88,6 +89,14 @@ export default function App() {
             />
             <Route path="/bericht" element={<ReportNewPage />} />
             <Route path="/bericht/vorschau" element={<ReportPreviewPage />} />
+            <Route
+              path="/aufgaben"
+              element={
+                <RequirePermission permission="tasks">
+                  <TasksPage />
+                </RequirePermission>
+              }
+            />
             <Route path="/protokoll" element={<ProtocolModePage />} />
             <Route path="/protokoll/neu" element={<ProtocolNewPage />} />
             <Route path="/protokoll/vorschau" element={<ProtocolPreviewPage />} />

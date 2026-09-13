@@ -67,6 +67,7 @@ from app.services.site_protocol import (
     save_protocol_signatures,
     write_protocols,
 )
+from app.services import site_tasks
 from app.services.quality_filter import apply_quality_filter
 from app.services.mail_autodiscover import (
     provider_hint_for,
@@ -666,6 +667,14 @@ class ProtocolCreateBody(BaseModel):
     exportFormat: str = "PDF"
 
 
+class TaskCreateBody(BaseModel):
+    projectId: str = Field(..., min_length=1, max_length=200)
+    projectName: str = Field(default="", max_length=300)
+    title: str = Field(..., min_length=3, max_length=2000)
+    dueDate: str = Field(..., min_length=8, max_length=32)
+    assigneeIds: list[str] = Field(default_factory=list)
+
+
 class DeliveryNoteCreateBody(BaseModel):
     projectId: str = Field(..., min_length=1, max_length=200)
     projectName: str = Field(default="", max_length=300)
@@ -862,6 +871,100 @@ async def create_feedback(
             "message": f"Danke! Feedback mit {len(attachments)} Anhang/Anhängen wurde gesendet.",
         }
     return {"ok": True, "message": "Danke! Feedback wurde gesendet."}
+
+
+def _task_actor_context(user_id: str) -> tuple[dict[str, Any], bool, str | None]:
+    user = find_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    owner = is_company_owner(user)
+    employee_id = str(user.get("employeeId") or "").strip() or None
+    return user, owner, employee_id
+
+
+@app.get("/api/tasks")
+def list_tasks(
+    status: str | None = None,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    _user, owner, employee_id = _task_actor_context(user_id)
+    tasks = site_tasks.list_tasks_for_user(
+        store,
+        is_owner=owner,
+        employee_id=employee_id,
+        status=status,
+    )
+    return {"tasks": tasks}
+
+
+@app.get("/api/tasks/badge")
+def tasks_badge(
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    _user, owner, employee_id = _task_actor_context(user_id)
+    count = site_tasks.open_task_count_for_user(
+        store,
+        is_owner=owner,
+        employee_id=employee_id,
+    )
+    return {"openCount": count}
+
+
+@app.post("/api/tasks")
+def create_task(
+    body: TaskCreateBody,
+    user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = site_tasks.create_task(
+        store,
+        created_by=user_id,
+        project_id=body.projectId,
+        project_name=body.projectName,
+        title=body.title,
+        due_date=body.dueDate,
+        assignee_ids=body.assigneeIds,
+    )
+    return {"task": task}
+
+
+@app.post("/api/tasks/{task_id}/complete")
+def complete_task(
+    task_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    _user, owner, employee_id = _task_actor_context(user_id)
+    task = site_tasks.complete_task(
+        store,
+        task_id,
+        user_id=user_id,
+        is_owner=owner,
+        employee_id=employee_id,
+    )
+    return {"task": task}
+
+
+@app.post("/api/tasks/{task_id}/reopen")
+def reopen_task(
+    task_id: str,
+    _user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    task = site_tasks.reopen_task(store, task_id)
+    return {"task": task}
+
+
+@app.delete("/api/tasks/{task_id}")
+def delete_task(
+    task_id: str,
+    _user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    site_tasks.delete_task(store, task_id)
+    return {"ok": True}
 
 
 @app.post("/api/auth/register")

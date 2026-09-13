@@ -291,7 +291,7 @@ export function EmployeesPage() {
                   Zugang {emp.access?.hasAccess ? 'bearbeiten' : 'erstellen'} — {emp.name}
                 </p>
                 <p className="text-xs text-zinc-500">
-                  Basis immer: Tagesbericht + Protokoll (+ Ans Büro senden). Extra-Rechte per Haken.
+                  Basis immer: Tagesbericht + Protokoll + Aufgaben (+ Ans Büro senden). Extra-Rechte per Haken.
                 </p>
                 <label className="block min-w-0">
                   <span className="text-xs text-zinc-400">Benutzername</span>
