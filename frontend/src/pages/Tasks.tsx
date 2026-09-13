@@ -7,7 +7,13 @@ import { TasksWeekView } from '../components/TasksWeekView'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
-import { addDaysIso, startOfWeekMonday, todayIsoLocal, weekDates } from '../utils/taskWeek'
+import {
+  addDaysIso,
+  formatDayMonth,
+  startOfWeekMonday,
+  todayIsoLocal,
+  weekDates,
+} from '../utils/taskWeek'
 
 type Project = { id: string; name: string; customer?: string; status?: string }
 type Employee = { id: string; name: string; active: boolean }
@@ -63,8 +69,14 @@ function formatDateDe(iso: string): string {
   return m ? `${m[3]}.${m[2]}.${m[1]}` : iso
 }
 
-function todayIso(): string {
-  return new Date().toISOString().slice(0, 10)
+function dateChips(): { label: string; iso: string }[] {
+  const today = todayIsoLocal()
+  return [
+    { label: 'Heute', iso: today },
+    { label: 'Morgen', iso: addDaysIso(today, 1) },
+    { label: formatDayMonth(addDaysIso(today, 2)), iso: addDaysIso(today, 2) },
+    { label: formatDayMonth(addDaysIso(today, 3)), iso: addDaysIso(today, 3) },
+  ]
 }
 
 function formatQty(value: number | null | undefined): string {
@@ -102,7 +114,7 @@ export function TasksPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [projectId, setProjectId] = useState('')
-  const [dueDate, setDueDate] = useState(todayIso())
+  const [dueDate, setDueDate] = useState(() => todayIsoLocal())
   const [selectedEmp, setSelectedEmp] = useState<Record<string, boolean>>({})
   const [draftLines, setDraftLines] = useState<DraftLine[]>(() => [newDraftLine()])
   const [progressDraft, setProgressDraft] = useState<Record<string, string>>({})
@@ -180,8 +192,41 @@ export function TasksPage() {
     if (isCompanyOwner && viewMode === 'week') {
       return tasks.filter((t) => t.dueDate === selectedDay)
     }
+    if (!isCompanyOwner && tab === 'open') {
+      const today = todayIsoLocal()
+      return [...tasks].sort((a, b) => {
+        const ad = a.dueDate || ''
+        const bd = b.dueDate || ''
+        if (ad === bd) return (a.createdAt || '').localeCompare(b.createdAt || '')
+        if (ad === today) return -1
+        if (bd === today) return 1
+        if (ad < today && bd >= today) return -1
+        if (bd < today && ad >= today) return 1
+        return ad.localeCompare(bd)
+      })
+    }
     return tasks
-  }, [isCompanyOwner, viewMode, tasks, selectedDay])
+  }, [isCompanyOwner, viewMode, tasks, selectedDay, tab])
+
+  const plannedNotices = useMemo(() => {
+    if (isCompanyOwner || tab !== 'open') return []
+    const today = todayIsoLocal()
+    const map = new Map<string, { date: string; project: string; titles: string[] }>()
+    for (const t of tasks) {
+      if (t.status !== 'open') continue
+      const due = String(t.dueDate || '')
+      if (!due || due <= today) continue
+      const key = `${due}|${t.projectId || t.projectName}`
+      const cur = map.get(key) || {
+        date: due,
+        project: t.projectName || 'Baustelle',
+        titles: [],
+      }
+      cur.titles.push(t.title)
+      map.set(key, cur)
+    }
+    return [...map.values()].sort((a, b) => a.date.localeCompare(b.date))
+  }, [isCompanyOwner, tab, tasks])
 
   useEffect(() => {
     if (!isCompanyOwner || tab !== 'done') return
@@ -216,12 +261,19 @@ export function TasksPage() {
         }),
       })
       const n = Array.isArray(created.tasks) ? created.tasks.length : validDrafts.length
+      const planDate = dueDate
       setDraftLines([newDraftLine()])
       setComposerOpen(false)
-      setMsg(n === 1 ? 'Aufgabe angelegt.' : `${n} Aufgaben angelegt.`)
-      if (viewMode !== 'week') setTab('open')
+      setViewMode('week')
+      setWeekStart(startOfWeekMonday(planDate))
+      setSelectedDay(planDate)
+      setDueDate(planDate)
+      setMsg(
+        n === 1
+          ? `Aufgabe für ${formatDateDe(planDate)} angelegt — steht im Kalender.`
+          : `${n} Aufgaben für ${formatDateDe(planDate)} angelegt — stehen im Kalender.`,
+      )
       window.dispatchEvent(new Event('freiraum-tasks-changed'))
-      await loadTasks()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Anlegen fehlgeschlagen.')
     } finally {
@@ -302,7 +354,11 @@ export function TasksPage() {
     <div className="overflow-x-hidden pb-2">
       <PageTitle
         title={isCompanyOwner ? 'To-do' : 'Aufgaben'}
-        subtitle={isCompanyOwner ? 'Aufgaben anlegen und zuweisen' : 'Deine zugewiesenen Aufgaben'}
+        subtitle={
+          isCompanyOwner
+            ? 'Anlegen, zuweisen, Woche sehen — auch für spätere Tage'
+            : 'Deine Einsätze und Aufgaben'
+        }
       />
 
       {isCompanyOwner ? (
@@ -337,16 +393,39 @@ export function TasksPage() {
                   ))}
                 </select>
               </label>
-              <label className="block text-left">
-                <span className="text-xs text-zinc-500">Datum</span>
+              <div className="text-left">
+                <span className="text-xs text-zinc-500">Einsatz-Datum</span>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Auch in der Zukunft — z. B. heute anlegen, Einsatz am 17.09.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {dateChips().map((chip) => (
+                    <button
+                      key={chip.iso}
+                      type="button"
+                      disabled={writeBlocked}
+                      onClick={() => setDueDate(chip.iso)}
+                      className={`rounded-xl px-2.5 py-1.5 text-xs font-semibold ${
+                        dueDate === chip.iso
+                          ? 'border border-orange-400/45 bg-orange-500/15 text-orange-200'
+                          : 'border border-white/[0.08] bg-black/40 text-zinc-400'
+                      }`}
+                    >
+                      {chip.label}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
+                  className="mt-2 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                   disabled={writeBlocked}
                 />
-              </label>
+                <p className="mt-1.5 text-xs text-zinc-500">
+                  Gewählt: {formatDateDe(dueDate)} — erscheint an diesem Tag im Kalender.
+                </p>
+              </div>
               <div className="space-y-3">
                 {draftLines.map((line, idx) => (
                   <div
@@ -607,8 +686,25 @@ export function TasksPage() {
       {err ? <p className="mb-3 text-sm text-red-400">{err}</p> : null}
       {msg ? <p className="mb-3 text-sm text-emerald-400/90">{msg}</p> : null}
 
+      {!isCompanyOwner && tab === 'open' && plannedNotices.length ? (
+        <div className="mb-4 space-y-2">
+          {plannedNotices.map((g) => (
+            <Card key={`${g.date}-${g.project}`} className="border-orange-400/25 !py-4">
+              <p className="text-sm font-medium text-orange-100">
+                Du bist am {formatDateDe(g.date)} auf {g.project} eingeplant
+              </p>
+              <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-zinc-300">
+                {g.titles.map((title, i) => (
+                  <li key={`${g.date}-${title}-${i}`}>{title}</li>
+                ))}
+              </ul>
+            </Card>
+          ))}
+        </div>
+      ) : null}
+
       <div className="space-y-3">
-        {visibleTasks.length === 0 ? (
+        {visibleTasks.length === 0 && plannedNotices.length === 0 ? (
           <Card>
             <p className="text-center text-sm text-zinc-500">
               {isCompanyOwner && viewMode === 'week'
