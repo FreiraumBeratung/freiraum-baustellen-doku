@@ -4,6 +4,7 @@ GF legt Aufgaben an und weist Mitarbeiter zu.
 Mitarbeiter sehen nur eigene offenen/erledigten Aufgaben und können abhaken.
 Phase 2: optionale Soll-Menge, Ist-Meldung, Rest und gemeinsame Historie.
 Phase 3: Fotos und optionale Unterschrift an der Aufgabe.
+Phase 4: optionale Filter für Wochen-/Tagesansicht (Datum, Baustelle, Mitarbeiter).
 """
 
 from __future__ import annotations
@@ -260,22 +261,46 @@ def public_task(task: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _clean_iso_date(raw: Any) -> str:
+    s = str(raw or "").strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    return ""
+
+
 def list_tasks_for_user(
     store: TenantStore,
     *,
     is_owner: bool,
     employee_id: str | None,
     status: str | None = None,
+    from_date: str | None = None,
+    to_date: str | None = None,
+    project_id: str | None = None,
+    assignee_id: str | None = None,
 ) -> list[dict[str, Any]]:
     want_status = str(status or "").strip().lower()
     if want_status and want_status not in TASK_STATUSES:
         want_status = ""
+    from_d = _clean_iso_date(from_date)
+    to_d = _clean_iso_date(to_date)
+    pid = str(project_id or "").strip()
+    aid = str(assignee_id or "").strip()
 
     out: list[dict[str, Any]] = []
     eid = str(employee_id or "").strip()
     for raw in read_tasks(store):
         task = public_task(raw)
         if want_status and task["status"] != want_status:
+            continue
+        due = str(task.get("dueDate") or "")
+        if from_d and due and due < from_d:
+            continue
+        if to_d and due and due > to_d:
+            continue
+        if pid and str(task.get("projectId") or "") != pid:
+            continue
+        if aid and aid not in (task.get("assigneeIds") or []):
             continue
         if is_owner:
             out.append(task)

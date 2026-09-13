@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { TaskSignatureSection } from '../components/TaskSignatureSection'
+import { TasksWeekView } from '../components/TasksWeekView'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { addDaysIso, startOfWeekMonday, todayIsoLocal, weekDates } from '../utils/taskWeek'
 
 type Project = { id: string; name: string; customer?: string; status?: string }
 type Employee = { id: string; name: string; active: boolean }
@@ -85,6 +87,11 @@ export function TasksPage() {
   const [searchParams] = useSearchParams()
   const queryTaskId = searchParams.get('task') || ''
   const [tab, setTab] = useState<'open' | 'done'>('open')
+  const [viewMode, setViewMode] = useState<'list' | 'week'>('list')
+  const [weekStart, setWeekStart] = useState(() => startOfWeekMonday(todayIsoLocal()))
+  const [selectedDay, setSelectedDay] = useState(() => todayIsoLocal())
+  const [filterProjectId, setFilterProjectId] = useState('')
+  const [filterEmployeeId, setFilterEmployeeId] = useState('')
   const [mediaOpenId, setMediaOpenId] = useState<string | null>(queryTaskId || null)
   const [tasks, setTasks] = useState<SiteTask[]>([])
   const [busy, setBusy] = useState(false)
@@ -103,12 +110,21 @@ export function TasksPage() {
   const loadTasks = useCallback(async () => {
     setErr('')
     try {
-      const r = await api<{ tasks: SiteTask[] }>(`/api/tasks?status=${tab}`)
+      const q = new URLSearchParams()
+      if (isCompanyOwner && viewMode === 'week') {
+        q.set('fromDate', weekStart)
+        q.set('toDate', addDaysIso(weekStart, 6))
+        if (filterProjectId) q.set('projectId', filterProjectId)
+        if (filterEmployeeId) q.set('employeeId', filterEmployeeId)
+      } else {
+        q.set('status', tab)
+      }
+      const r = await api<{ tasks: SiteTask[] }>(`/api/tasks?${q.toString()}`)
       setTasks(Array.isArray(r.tasks) ? r.tasks : [])
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Aufgaben konnten nicht geladen werden.')
     }
-  }, [tab])
+  }, [tab, isCompanyOwner, viewMode, weekStart, filterProjectId, filterEmployeeId])
 
   useEffect(() => {
     void loadTasks()
@@ -117,6 +133,7 @@ export function TasksPage() {
   useEffect(() => {
     if (searchParams.get('photos') === '1' && queryTaskId) {
       setMediaOpenId(queryTaskId)
+      setViewMode('list')
     }
   }, [searchParams, queryTaskId])
 
@@ -159,6 +176,13 @@ export function TasksPage() {
     [draftLines],
   )
 
+  const visibleTasks = useMemo(() => {
+    if (isCompanyOwner && viewMode === 'week') {
+      return tasks.filter((t) => t.dueDate === selectedDay)
+    }
+    return tasks
+  }, [isCompanyOwner, viewMode, tasks, selectedDay])
+
   useEffect(() => {
     if (!isCompanyOwner || tab !== 'done') return
     void api('/api/tasks/ack-done', { method: 'POST' })
@@ -195,7 +219,7 @@ export function TasksPage() {
       setDraftLines([newDraftLine()])
       setComposerOpen(false)
       setMsg(n === 1 ? 'Aufgabe angelegt.' : `${n} Aufgaben angelegt.`)
-      setTab('open')
+      if (viewMode !== 'week') setTab('open')
       window.dispatchEvent(new Event('freiraum-tasks-changed'))
       await loadTasks()
     } catch (e) {
@@ -284,7 +308,14 @@ export function TasksPage() {
       {isCompanyOwner ? (
         <div className="mb-4">
           {!composerOpen ? (
-            <BigButton type="button" disabled={writeBlocked} onClick={() => setComposerOpen(true)}>
+            <BigButton
+              type="button"
+              disabled={writeBlocked}
+              onClick={() => {
+                if (viewMode === 'week') setDueDate(selectedDay)
+                setComposerOpen(true)
+              }}
+            >
               + Aufgabe anlegen
             </BigButton>
           ) : (
@@ -463,43 +494,132 @@ export function TasksPage() {
         </div>
       ) : null}
 
-      <div className="mb-4 flex gap-2">
-        <button
-          type="button"
-          onClick={() => setTab('open')}
-          className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-            tab === 'open'
-              ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-              : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-          }`}
-        >
-          Offen
-        </button>
-        <button
-          type="button"
-          onClick={() => setTab('done')}
-          className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
-            tab === 'done'
-              ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
-              : 'border border-white/[0.08] bg-black/40 text-zinc-400'
-          }`}
-        >
-          Erledigt
-        </button>
-      </div>
+      {isCompanyOwner ? (
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode('list')}
+            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+              viewMode === 'list'
+                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
+                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
+            }`}
+          >
+            Liste
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('week')
+              setDueDate(selectedDay)
+            }}
+            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+              viewMode === 'week'
+                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
+                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
+            }`}
+          >
+            Woche
+          </button>
+        </div>
+      ) : null}
+
+      {isCompanyOwner && viewMode === 'week' ? (
+        <div className="mb-4 grid grid-cols-2 gap-2">
+          <label className="block text-left">
+            <span className="text-xs text-zinc-500">Baustelle</span>
+            <select
+              className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500/65"
+              value={filterProjectId}
+              onChange={(e) => setFilterProjectId(e.target.value)}
+            >
+              <option value="">Alle</option>
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-left">
+            <span className="text-xs text-zinc-500">Mitarbeiter</span>
+            <select
+              className="mt-1 w-full rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-sm text-white outline-none focus:border-orange-500/65"
+              value={filterEmployeeId}
+              onChange={(e) => setFilterEmployeeId(e.target.value)}
+            >
+              <option value="">Alle</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
+
+      {isCompanyOwner && viewMode === 'week' ? (
+        <TasksWeekView
+          weekStart={weekStart}
+          selectedDay={selectedDay}
+          days={weekDates(weekStart).map((date) => ({
+            date,
+            tasks: tasks.filter((t) => t.dueDate === date),
+          }))}
+          onWeekChange={(next) => {
+            setWeekStart(next)
+            const inWeek = selectedDay >= next && selectedDay <= addDaysIso(next, 6)
+            if (!inWeek) setSelectedDay(next)
+          }}
+          onSelectDay={(iso) => {
+            setSelectedDay(iso)
+            setDueDate(iso)
+          }}
+        />
+      ) : (
+        <div className="mb-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setTab('open')}
+            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+              tab === 'open'
+                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
+                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
+            }`}
+          >
+            Offen
+          </button>
+          <button
+            type="button"
+            onClick={() => setTab('done')}
+            className={`flex-1 rounded-2xl px-3 py-2.5 text-sm font-semibold transition ${
+              tab === 'done'
+                ? 'border border-orange-400/45 bg-orange-500/[0.12] text-orange-200'
+                : 'border border-white/[0.08] bg-black/40 text-zinc-400'
+            }`}
+          >
+            Erledigt
+          </button>
+        </div>
+      )}
 
       {err ? <p className="mb-3 text-sm text-red-400">{err}</p> : null}
       {msg ? <p className="mb-3 text-sm text-emerald-400/90">{msg}</p> : null}
 
       <div className="space-y-3">
-        {tasks.length === 0 ? (
+        {visibleTasks.length === 0 ? (
           <Card>
             <p className="text-center text-sm text-zinc-500">
-              {tab === 'open' ? 'Keine offenen Aufgaben.' : 'Noch keine erledigten Aufgaben.'}
+              {isCompanyOwner && viewMode === 'week'
+                ? 'Keine Aufgaben an diesem Tag.'
+                : tab === 'open'
+                  ? 'Keine offenen Aufgaben.'
+                  : 'Noch keine erledigten Aufgaben.'}
             </p>
           </Card>
         ) : (
-          tasks.map((t) => (
+          visibleTasks.map((t) => (
             <Card key={t.id} className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">

@@ -109,6 +109,39 @@ def main() -> int:
     assert site_tasks.ack_done_for_owner(store) == 1
     assert site_tasks.badge_payload(store, is_owner=True, employee_id=None)["doneUnseenCount"] == 0
 
+    week = site_tasks.list_tasks_for_user(
+        store,
+        is_owner=True,
+        employee_id=None,
+        from_date="2026-09-16",
+        to_date="2026-09-16",
+    )
+    assert len(week) == 2
+    only_max = site_tasks.list_tasks_for_user(
+        store,
+        is_owner=True,
+        employee_id=None,
+        assignee_id="e1",
+        from_date="2026-09-16",
+        to_date="2026-09-16",
+    )
+    assert len(only_max) == 2
+    none = site_tasks.list_tasks_for_user(
+        store,
+        is_owner=True,
+        employee_id=None,
+        project_id="p-missing",
+    )
+    assert none == []
+    stranger_week = site_tasks.list_tasks_for_user(
+        store,
+        is_owner=False,
+        employee_id="e2",
+        from_date="2026-09-16",
+        to_date="2026-09-16",
+    )
+    assert stranger_week == []
+
     print("TASKS-PHASE3-SMOKE: OK")
     return 0
 

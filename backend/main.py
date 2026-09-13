@@ -919,6 +919,10 @@ def _task_actor_name(
 @app.get("/api/tasks")
 def list_tasks(
     status: str | None = None,
+    fromDate: str | None = None,
+    toDate: str | None = None,
+    projectId: str | None = None,
+    employeeId: str | None = None,
     user_id: str = Depends(require_active_license),
     store: TenantStore = Depends(get_tenant_store),
 ):
@@ -928,6 +932,10 @@ def list_tasks(
         is_owner=owner,
         employee_id=employee_id,
         status=status,
+        from_date=fromDate,
+        to_date=toDate,
+        project_id=projectId,
+        assignee_id=employeeId,
     )
     return {"tasks": tasks}
 
