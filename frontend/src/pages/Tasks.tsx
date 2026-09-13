@@ -86,6 +86,30 @@ function formatQty(value: number | null | undefined): string {
   return new Intl.NumberFormat('de-DE', { maximumFractionDigits: 2 }).format(n)
 }
 
+function joinNamesDe(names: string[]): string {
+  const clean = names.map((n) => n.trim()).filter(Boolean)
+  if (clean.length === 0) return 'Mitarbeiter'
+  if (clean.length === 1) return clean[0] as string
+  if (clean.length === 2) return `${clean[0]} und ${clean[1]}`
+  return `${clean.slice(0, -1).join(', ')} und ${clean[clean.length - 1]}`
+}
+
+function createdTaskMessage(
+  titles: string[],
+  site: string,
+  names: string[],
+  dateIso: string,
+): string {
+  const who = joinNamesDe(names)
+  const verb = names.length > 1 ? 'wurden' : 'wurde'
+  const siteName = site.trim() || 'Baustelle'
+  const when = formatDateDe(dateIso)
+  if (titles.length === 1) {
+    return `${who} ${verb} zum ${titles[0]} bei ${siteName} für den ${when} eingeplant.`
+  }
+  return `${who} ${verb} zu ${titles.join(', ')} bei ${siteName} für den ${when} eingeplant.`
+}
+
 function parseQty(raw: string): number | null {
   const cleaned = String(raw || '').trim().replace(',', '.')
   if (!cleaned) return null
@@ -247,7 +271,7 @@ export function TasksPage() {
     setBusy(true)
     try {
       const proj = projects.find((p) => p.id === projectId)
-      const created = await api<{ tasks: SiteTask[] }>('/api/tasks/batch', {
+      await api<{ tasks: SiteTask[] }>('/api/tasks/batch', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
@@ -261,20 +285,17 @@ export function TasksPage() {
           })),
         }),
       })
-      const n = Array.isArray(created.tasks) ? created.tasks.length : validDrafts.length
       const planDate = dueDate
+      const siteName = proj?.name || ''
+      const who = employees.filter((e) => selectedEmp[e.id]).map((e) => e.name)
+      const titles = validDrafts.map((line) => line.title.trim())
       setDraftLines([newDraftLine()])
       setComposerOpen(false)
-      setViewMode('week')
-      setWeekStart(startOfWeekMonday(planDate))
-      setSelectedDay(planDate)
-      setDueDate(planDate)
-      setMsg(
-        n === 1
-          ? `Aufgabe für ${formatDateDe(planDate)} angelegt — steht im Kalender.`
-          : `${n} Aufgaben für ${formatDateDe(planDate)} angelegt — stehen im Kalender.`,
-      )
+      setViewMode('list')
+      setTab('open')
+      setMsg(createdTaskMessage(titles, siteName, who, planDate))
       window.dispatchEvent(new Event('freiraum-tasks-changed'))
+      await loadTasks()
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Anlegen fehlgeschlagen.')
     } finally {
@@ -584,7 +605,7 @@ export function TasksPage() {
                 viewMode === 'week' ? 'bg-white/[0.08] text-zinc-100' : 'text-zinc-500'
               }`}
             >
-              Woche
+              Kalender
             </button>
           </div>
         </div>
