@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import quote
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
@@ -67,6 +67,7 @@ from app.services.site_protocol import (
     save_protocol_signatures,
     write_protocols,
 )
+from app.services import push_subscriptions
 from app.services import site_tasks
 from app.services.quality_filter import apply_quality_filter
 from app.services.mail_autodiscover import (
@@ -695,6 +696,16 @@ class TaskProgressBody(BaseModel):
     amount: float = Field(..., gt=0, le=1_000_000)
 
 
+class PushSubscribeBody(BaseModel):
+    endpoint: str = Field(..., min_length=8, max_length=2048)
+    p256dh: str = Field(..., min_length=8, max_length=255)
+    auth: str = Field(..., min_length=4, max_length=255)
+
+
+class PushUnsubscribeBody(BaseModel):
+    endpoint: str = Field(..., min_length=8, max_length=2048)
+
+
 class DeliveryNoteCreateBody(BaseModel):
     projectId: str = Field(..., min_length=1, max_length=200)
     projectName: str = Field(default="", max_length=300)
@@ -951,6 +962,52 @@ def tasks_badge(
         is_owner=owner,
         employee_id=employee_id,
     )
+
+
+@app.get("/api/push/config")
+def get_push_config(user_id: str = Depends(require_active_license)):
+    _ = user_id
+    return push_subscriptions.push_public_config()
+
+
+@app.get("/api/push/status")
+def get_push_status(
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    return {"subscribed": push_subscriptions.user_has_subscription(store, user_id)}
+
+
+@app.post("/api/push/subscribe")
+def subscribe_push(
+    body: PushSubscribeBody,
+    request: Request,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    user, owner, employee_id = _task_actor_context(user_id)
+    _ = owner
+    saved = push_subscriptions.upsert_subscription(
+        store,
+        user_id=user_id,
+        account_role=str(user.get("accountRole") or "owner"),
+        employee_id=employee_id,
+        endpoint=body.endpoint,
+        p256dh=body.p256dh,
+        auth=body.auth,
+        user_agent=str(request.headers.get("user-agent") or ""),
+    )
+    return {"ok": True, "subscription": saved}
+
+
+@app.post("/api/push/unsubscribe")
+def unsubscribe_push(
+    body: PushUnsubscribeBody,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    push_subscriptions.disable_subscription(store, user_id=user_id, endpoint=body.endpoint)
+    return {"ok": True}
 
 
 @app.post("/api/tasks/ack-done")

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { TaskSignatureSection } from '../components/TaskSignatureSection'
+import { TaskPushOptIn } from '../components/TaskPushOptIn'
 import { TasksWeekView } from '../components/TasksWeekView'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
@@ -836,6 +837,7 @@ export function TasksPage() {
           ))
         )}
       </div>
+      <TaskPushOptIn isOwner={isCompanyOwner} />
     </div>
   )
 }

@@ -855,6 +855,32 @@ export async function uploadDeliveryNotePhoto(
   return res.json() as Promise<ReportPhotosResponse & { ok: boolean; photo: ReportPhoto }>
 }
 
+export async function getPushConfig(): Promise<{ enabled: boolean; publicKey: string | null }> {
+  return api<{ enabled: boolean; publicKey: string | null }>('/api/push/config')
+}
+
+export async function getPushStatus(): Promise<{ subscribed: boolean }> {
+  return api<{ subscribed: boolean }>('/api/push/status')
+}
+
+export async function subscribePush(body: {
+  endpoint: string
+  p256dh: string
+  auth: string
+}): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>('/api/push/subscribe', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+
+export async function unsubscribePush(endpoint: string): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>('/api/push/unsubscribe', {
+    method: 'POST',
+    body: JSON.stringify({ endpoint }),
+  })
+}
+
 export async function deleteDeliveryNotePhoto(
   noteId: string,
   photoId: string,
