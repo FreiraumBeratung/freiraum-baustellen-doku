@@ -131,6 +131,7 @@ export function TasksPage() {
   const [filterEmployeeId, setFilterEmployeeId] = useState('')
   const [mediaOpenId, setMediaOpenId] = useState<string | null>(queryTaskId || null)
   const [tasks, setTasks] = useState<SiteTask[]>([])
+  const [doneUnseen, setDoneUnseen] = useState(0)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [msg, setMsg] = useState('')
@@ -158,6 +159,12 @@ export function TasksPage() {
       }
       const r = await api<{ tasks: SiteTask[] }>(`/api/tasks?${q.toString()}`)
       setTasks(Array.isArray(r.tasks) ? r.tasks : [])
+      if (isCompanyOwner) {
+        const badge = await api<{ doneUnseenCount?: number }>('/api/tasks/badge')
+        setDoneUnseen(Math.max(0, Number(badge.doneUnseenCount) || 0))
+      } else {
+        setDoneUnseen(0)
+      }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Aufgaben konnten nicht geladen werden.')
     }
@@ -256,7 +263,10 @@ export function TasksPage() {
   useEffect(() => {
     if (!isCompanyOwner || tab !== 'done') return
     void api('/api/tasks/ack-done', { method: 'POST' })
-      .then(() => window.dispatchEvent(new Event('freiraum-tasks-changed')))
+      .then(() => {
+        setDoneUnseen(0)
+        window.dispatchEvent(new Event('freiraum-tasks-changed'))
+      })
       .catch(() => {})
   }, [isCompanyOwner, tab])
 
@@ -679,11 +689,16 @@ export function TasksPage() {
             <button
               type="button"
               onClick={() => setTab('done')}
-              className={`rounded-full px-3 py-1 text-xs font-medium ${
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${
                 tab === 'done' ? 'bg-orange-500/15 text-orange-200' : 'text-zinc-500'
               }`}
             >
               Erledigt
+              {isCompanyOwner && tab !== 'done' && doneUnseen > 0 ? (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-orange-500 px-1 text-[0.62rem] font-bold leading-none text-zinc-950">
+                  {doneUnseen > 9 ? '9+' : doneUnseen}
+                </span>
+              ) : null}
             </button>
           </div>
         </div>
