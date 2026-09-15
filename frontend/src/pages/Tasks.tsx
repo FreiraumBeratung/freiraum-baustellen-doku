@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { MapPin } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
@@ -125,6 +126,39 @@ function formatProjectLocation(address?: string, city?: string): string {
   return [address, city].map((s) => String(s || '').trim()).filter(Boolean).join(', ')
 }
 
+function mapsUrlForLocation(query: string): string {
+  const q = query.trim()
+  if (!q) return ''
+  const enc = encodeURIComponent(q)
+  if (typeof navigator === 'undefined') {
+    return `https://www.google.com/maps/search/?api=1&query=${enc}`
+  }
+  const ua = navigator.userAgent || ''
+  const iOS =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  if (iOS) return `https://maps.apple.com/?q=${enc}`
+  return `https://www.google.com/maps/search/?api=1&query=${enc}`
+}
+
+function TaskAddressLink({ loc }: { loc: string }) {
+  const href = mapsUrlForLocation(loc)
+  if (!href) return null
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={(e) => e.stopPropagation()}
+      className="mt-1 inline-flex max-w-full items-center gap-1 text-xs text-zinc-500 underline decoration-white/15 underline-offset-2 transition hover:text-orange-300/85"
+      aria-label={`Adresse in Karten öffnen: ${loc}`}
+    >
+      <MapPin className="h-3 w-3 shrink-0 opacity-70" strokeWidth={1.75} aria-hidden />
+      <span className="min-w-0 truncate">{loc}</span>
+    </a>
+  )
+}
+
 function taskGroupKey(t: Pick<SiteTask, 'projectId' | 'projectName' | 'dueDate'>): string {
   return `${t.projectId || t.projectName || ''}|${t.dueDate || ''}`
 }
@@ -219,40 +253,44 @@ function TaskCard({
 
   if (!expanded) {
     return (
-      <button type="button" onClick={onToggle} className="block w-full text-left">
-        <Card className="space-y-1 !px-4 !py-3.5">
-          {showSite ? (
-            <>
-              <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
-                {t.projectName || 'Baustelle'}
-              </p>
-              {loc ? <p className="text-xs text-zinc-500">{loc}</p> : null}
-            </>
-          ) : null}
+      <Card className="space-y-1 !px-4 !py-3.5">
+        {showSite ? (
+          <button type="button" onClick={onToggle} className="block w-full text-left">
+            <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
+              {t.projectName || 'Baustelle'}
+            </p>
+          </button>
+        ) : null}
+        {showSite && loc ? <TaskAddressLink loc={loc} /> : null}
+        <button type="button" onClick={onToggle} className="block w-full text-left">
           <p className="text-sm font-medium text-white">{t.title}</p>
-          <p className="text-xs text-zinc-500">
+          <p className="mt-1 text-xs text-zinc-500">
             Datum: {formatDateDe(t.dueDate)}
             {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
           </p>
           <MiniQtyBar t={t} />
-        </Card>
-      </button>
+        </button>
+      </Card>
     )
   }
 
   return (
     <Card className="space-y-3">
-      <button type="button" onClick={onToggle} className="block w-full text-left">
-        <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
-          {t.projectName || 'Baustelle'}
-        </p>
-        {loc ? <p className="mt-1 text-xs text-zinc-400">{loc}</p> : null}
-        <p className="mt-1 text-sm font-medium text-white">{t.title}</p>
-        <p className="mt-2 text-xs text-zinc-500">
-          Datum: {formatDateDe(t.dueDate)}
-          {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
-        </p>
-      </button>
+      <div>
+        <button type="button" onClick={onToggle} className="block w-full text-left">
+          <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
+            {t.projectName || 'Baustelle'}
+          </p>
+        </button>
+        {loc ? <TaskAddressLink loc={loc} /> : null}
+        <button type="button" onClick={onToggle} className="mt-1 block w-full text-left">
+          <p className="text-sm font-medium text-white">{t.title}</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Datum: {formatDateDe(t.dueDate)}
+            {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+          </p>
+        </button>
+      </div>
       {t.targetQuantity != null ? (
         <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
           <div className="flex items-baseline justify-between gap-3">
@@ -1039,24 +1077,22 @@ export function TasksPage() {
             const open = expandedGroupKey === g.key
             return (
               <div key={g.key} className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => setExpandedGroupKey((cur) => (cur === g.key ? null : g.key))}
-                  className="block w-full text-left"
-                >
-                  <Card className="!px-4 !py-3.5">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-white">{g.projectName}</p>
-                        {loc ? <p className="mt-1 text-xs text-zinc-500">{loc}</p> : null}
-                        <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
-                      </div>
-                      <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
-                        {g.tasks.length}
-                      </span>
+                <Card className="!px-4 !py-3.5">
+                  <button
+                    type="button"
+                    onClick={() => setExpandedGroupKey((cur) => (cur === g.key ? null : g.key))}
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white">{g.projectName}</p>
+                      <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
                     </div>
-                  </Card>
-                </button>
+                    <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
+                      {g.tasks.length}
+                    </span>
+                  </button>
+                  {loc ? <TaskAddressLink loc={loc} /> : null}
+                </Card>
                 {open ? g.tasks.map((t) => renderTaskCard(t, false)) : null}
               </div>
             )
