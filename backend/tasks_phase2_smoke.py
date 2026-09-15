@@ -29,7 +29,17 @@ def main() -> int:
     )
     store.write_json(
         "projects.json",
-        {"projects": [{"id": "p1", "name": "Schmitz Garten", "status": "aktiv"}]},
+        {
+            "projects": [
+                {
+                    "id": "p1",
+                    "name": "Schmitz Garten",
+                    "status": "aktiv",
+                    "address": "Gartenweg 4",
+                    "city": "12345 Musterstadt",
+                }
+            ]
+        },
     )
 
     # Phase-1-Aufgabe ohne Menge bleibt möglich.
@@ -121,9 +131,46 @@ def main() -> int:
         user_id="worker-lisa",
         is_owner=False,
         employee_id="e2",
+        actor_name="Lisa",
     )
     assert done["status"] == "done"
     assert done["remainingQuantity"] == 0
+    assert done["projectAddress"] == "Gartenweg 4"
+    assert done["projectCity"] == "12345 Musterstadt"
+    assert all(p.get("source") != "complete" for p in done["progress"])
+
+    rest_task = site_tasks.create_task(
+        store,
+        created_by="owner1",
+        project_id="p1",
+        project_name="Schmitz Garten",
+        title="30 m² Hecke schneiden",
+        due_date="2026-09-16",
+        assignee_ids=["e1"],
+        target_quantity=30,
+        unit="m2",
+    )
+    site_tasks.add_progress(
+        store,
+        rest_task["id"],
+        amount=10,
+        actor_name="Max",
+        is_owner=False,
+        employee_id="e1",
+    )
+    filled = site_tasks.complete_task(
+        store,
+        rest_task["id"],
+        user_id="worker-max",
+        is_owner=False,
+        employee_id="e1",
+        actor_name="Max",
+    )
+    assert filled["status"] == "done"
+    assert filled["actualQuantity"] == 30
+    assert filled["remainingQuantity"] == 0
+    assert filled["progress"][-1]["source"] == "complete"
+    assert filled["progress"][-1]["amount"] == 20
 
     print("TASKS-PHASE2-SMOKE: OK")
     return 0

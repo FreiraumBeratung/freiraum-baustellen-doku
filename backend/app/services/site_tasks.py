@@ -131,16 +131,32 @@ def _progress_entries(task: dict[str, Any]) -> list[dict[str, Any]]:
         actor = str(item.get("actorName") or "").strip()
         if not actor:
             continue
-        out.append(
-            {
-                "id": str(item.get("id") or ""),
-                "employeeId": str(item.get("employeeId") or ""),
-                "actorName": actor,
-                "amount": amount,
-                "createdAt": str(item.get("createdAt") or ""),
-            }
-        )
+        entry = {
+            "id": str(item.get("id") or ""),
+            "employeeId": str(item.get("employeeId") or ""),
+            "actorName": actor,
+            "amount": amount,
+            "createdAt": str(item.get("createdAt") or ""),
+        }
+        source = str(item.get("source") or "").strip()[:32]
+        if source:
+            entry["source"] = source
+        out.append(entry)
     return out
+
+
+def _project_location(store: TenantStore, project_id: str) -> tuple[str, str]:
+    pid = str(project_id or "").strip()
+    if not pid:
+        return "", ""
+    data = store.read_json("projects.json", {"projects": []})
+    for proj in list(data.get("projects") or []):
+        if not isinstance(proj, dict):
+            continue
+        if str(proj.get("id") or "").strip() != pid:
+            continue
+        return str(proj.get("address") or "").strip(), str(proj.get("city") or "").strip()
+    return "", ""
 
 
 def _actual_quantity(entries: list[dict[str, Any]]) -> float:
@@ -224,7 +240,7 @@ def task_media_filenames(task: dict[str, Any]) -> tuple[list[str], list[str]]:
     return photos, signatures
 
 
-def public_task(task: dict[str, Any]) -> dict[str, Any]:
+def public_task(task: dict[str, Any], store: TenantStore | None = None) -> dict[str, Any]:
     status = str(task.get("status") or "open").strip().lower()
     if status not in TASK_STATUSES:
         status = "open"
@@ -237,10 +253,18 @@ def public_task(task: dict[str, Any]) -> dict[str, Any]:
         unit = "m²"
     if target is None:
         unit = ""
+    addr = str(task.get("projectAddress") or "").strip()
+    city = str(task.get("projectCity") or "").strip()
+    if store is not None:
+        live_addr, live_city = _project_location(store, str(task.get("projectId") or ""))
+        addr = live_addr or addr
+        city = live_city or city
     return {
         "id": str(task.get("id") or ""),
         "projectId": str(task.get("projectId") or ""),
         "projectName": str(task.get("projectName") or ""),
+        "projectAddress": addr,
+        "projectCity": city,
         "title": str(task.get("title") or ""),
         "dueDate": str(task.get("dueDate") or ""),
         "assigneeIds": _normalize_assignee_ids(task.get("assigneeIds")),
@@ -290,7 +314,7 @@ def list_tasks_for_user(
     out: list[dict[str, Any]] = []
     eid = str(employee_id or "").strip()
     for raw in read_tasks(store):
-        task = public_task(raw)
+        task = public_task(raw, store)
         if want_status and task["status"] != want_status:
             continue
         due = str(task.get("dueDate") or "")
@@ -529,7 +553,7 @@ def create_tasks_batch(
     tasks = read_tasks(store)
     tasks.extend(built)
     write_tasks(store, tasks)
-    return [public_task(t) for t in built]
+    return [public_task(t, store) for t in built]
 
 
 def complete_task(
@@ -539,6 +563,7 @@ def complete_task(
     user_id: str,
     is_owner: bool,
     employee_id: str | None,
+    actor_name: str = "",
 ) -> dict[str, Any]:
     tasks = read_tasks(store)
     idx = next((i for i, t in enumerate(tasks) if str(t.get("id") or "") == str(task_id)), None)
@@ -548,14 +573,33 @@ def complete_task(
     if not _can_mutate_task(task, is_owner=is_owner, employee_id=employee_id):
         raise HTTPException(status_code=403, detail="Keine Berechtigung für diese Aufgabe.")
     if str(task.get("status") or "") == "done":
-        return public_task(task)
+        return public_task(task, store)
+    target = _coerce_quantity(task.get("targetQuantity"))
+    if target is not None:
+        entries = _progress_entries(task)
+        rest = round(max(0.0, target - _actual_quantity(entries)), 3)
+        if rest > 0:
+            name = str(actor_name or "").strip() or employee_name_for_id(store, employee_id) or "Mitarbeiter"
+            if len(name) > 120:
+                name = name[:120]
+            entries.append(
+                {
+                    "id": str(uuid.uuid4()),
+                    "employeeId": str(employee_id or "").strip(),
+                    "actorName": name,
+                    "amount": rest,
+                    "createdAt": datetime.now(timezone.utc).isoformat(),
+                    "source": "complete",
+                }
+            )
+            task["progress"] = entries
     task["status"] = "done"
     task["completedAt"] = datetime.now(timezone.utc).isoformat()
     task["completedBy"] = str(user_id or "").strip()
     task["ownerSeen"] = False
     tasks[idx] = task
     write_tasks(store, tasks)
-    return public_task(task)
+    return public_task(task, store)
 
 
 def reopen_task(store: TenantStore, task_id: str) -> dict[str, Any]:
@@ -570,7 +614,7 @@ def reopen_task(store: TenantStore, task_id: str) -> dict[str, Any]:
     task["ownerSeen"] = True
     tasks[idx] = task
     write_tasks(store, tasks)
-    return public_task(task)
+    return public_task(task, store)
 
 
 def add_progress(
@@ -616,7 +660,7 @@ def add_progress(
     task["progress"] = entries
     tasks[idx] = task
     write_tasks(store, tasks)
-    return public_task(task)
+    return public_task(task, store)
 
 
 def delete_task(store: TenantStore, task_id: str) -> dict[str, Any]:

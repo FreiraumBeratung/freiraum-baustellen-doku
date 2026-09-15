@@ -1116,13 +1116,14 @@ def complete_task(
     user_id: str = Depends(require_active_license),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
-    _user, owner, employee_id = _task_actor_context(user_id)
+    user, owner, employee_id = _task_actor_context(user_id)
     task = site_tasks.complete_task(
         store,
         task_id,
         user_id=user_id,
         is_owner=owner,
         employee_id=employee_id,
+        actor_name=_task_actor_name(user, employee_id=employee_id, store=store),
     )
     _notify_task_done(store, task, actor_id=user_id)
     return {"task": task}

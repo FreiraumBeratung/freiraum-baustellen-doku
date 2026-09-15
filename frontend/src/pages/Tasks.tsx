@@ -25,12 +25,15 @@ type TaskProgress = {
   actorName: string
   amount: number
   createdAt: string
+  source?: string
 }
 
 export type SiteTask = {
   id: string
   projectId: string
   projectName: string
+  projectAddress?: string
+  projectCity?: string
   title: string
   dueDate: string
   assigneeIds: string[]
@@ -118,6 +121,259 @@ function parseQty(raw: string): number | null {
   return n
 }
 
+function formatProjectLocation(address?: string, city?: string): string {
+  return [address, city].map((s) => String(s || '').trim()).filter(Boolean).join(', ')
+}
+
+function taskGroupKey(t: Pick<SiteTask, 'projectId' | 'projectName' | 'dueDate'>): string {
+  return `${t.projectId || t.projectName || ''}|${t.dueDate || ''}`
+}
+
+type TaskGroup = {
+  key: string
+  projectName: string
+  projectAddress?: string
+  projectCity?: string
+  dueDate: string
+  tasks: SiteTask[]
+}
+
+function groupTasksBySiteDay(list: SiteTask[]): TaskGroup[] {
+  const map = new Map<string, TaskGroup>()
+  const order: string[] = []
+  for (const t of list) {
+    const key = taskGroupKey(t)
+    let group = map.get(key)
+    if (!group) {
+      group = {
+        key,
+        projectName: t.projectName || 'Baustelle',
+        projectAddress: t.projectAddress,
+        projectCity: t.projectCity,
+        dueDate: t.dueDate,
+        tasks: [],
+      }
+      map.set(key, group)
+      order.push(key)
+    }
+    group.tasks.push(t)
+  }
+  return order.map((key) => map.get(key) as TaskGroup)
+}
+
+function MiniQtyBar({ t }: { t: SiteTask }) {
+  if (t.targetQuantity == null) return null
+  const pct = Math.min(
+    100,
+    Math.max(0, ((Number(t.actualQuantity) || 0) / (Number(t.targetQuantity) || 1)) * 100),
+  )
+  return (
+    <div className="mt-2">
+      <p className="text-[0.7rem] text-zinc-400">
+        {formatQty(t.actualQuantity)} / {formatQty(t.targetQuantity)} {t.unit || 'm²'}
+      </p>
+      <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-full rounded-full bg-orange-500" style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function TaskCard({
+  t,
+  expanded,
+  showSite,
+  onToggle,
+  isCompanyOwner,
+  writeBlocked,
+  busy,
+  progressDraft,
+  onProgressDraft,
+  onAddProgress,
+  onComplete,
+  onReopen,
+  onDelete,
+  mediaOpenId,
+  onToggleMedia,
+  onMediaChanged,
+}: {
+  t: SiteTask
+  expanded: boolean
+  showSite: boolean
+  onToggle: () => void
+  isCompanyOwner: boolean
+  writeBlocked: boolean
+  busy: boolean
+  progressDraft: string
+  onProgressDraft: (value: string) => void
+  onAddProgress: () => void
+  onComplete: () => void
+  onReopen: () => void
+  onDelete: () => void
+  mediaOpenId: string | null
+  onToggleMedia: () => void
+  onMediaChanged: () => void
+}) {
+  const loc = formatProjectLocation(t.projectAddress, t.projectCity)
+  const unit = t.unit || 'm²'
+
+  if (!expanded) {
+    return (
+      <button type="button" onClick={onToggle} className="block w-full text-left">
+        <Card className="space-y-1 !px-4 !py-3.5">
+          {showSite ? (
+            <>
+              <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
+                {t.projectName || 'Baustelle'}
+              </p>
+              {loc ? <p className="text-xs text-zinc-500">{loc}</p> : null}
+            </>
+          ) : null}
+          <p className="text-sm font-medium text-white">{t.title}</p>
+          <p className="text-xs text-zinc-500">
+            Datum: {formatDateDe(t.dueDate)}
+            {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+          </p>
+          <MiniQtyBar t={t} />
+        </Card>
+      </button>
+    )
+  }
+
+  return (
+    <Card className="space-y-3">
+      <button type="button" onClick={onToggle} className="block w-full text-left">
+        <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
+          {t.projectName || 'Baustelle'}
+        </p>
+        {loc ? <p className="mt-1 text-xs text-zinc-400">{loc}</p> : null}
+        <p className="mt-1 text-sm font-medium text-white">{t.title}</p>
+        <p className="mt-2 text-xs text-zinc-500">
+          Datum: {formatDateDe(t.dueDate)}
+          {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+        </p>
+      </button>
+      {t.targetQuantity != null ? (
+        <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-sm font-medium text-zinc-100">
+              {formatQty(t.actualQuantity)} / {formatQty(t.targetQuantity)} {unit}
+            </p>
+            <p className="text-xs text-zinc-400">
+              Rest {formatQty(t.remainingQuantity)} {unit}
+            </p>
+          </div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full rounded-full bg-orange-500"
+              style={{
+                width: `${Math.min(
+                  100,
+                  Math.max(
+                    0,
+                    ((Number(t.actualQuantity) || 0) / (Number(t.targetQuantity) || 1)) * 100,
+                  ),
+                )}%`,
+              }}
+            />
+          </div>
+          {t.progress?.length ? (
+            <ul className="space-y-1">
+              {t.progress.map((p) => (
+                <li key={p.id || `${p.actorName}-${p.createdAt}`} className="text-xs text-zinc-400">
+                  {p.source === 'complete'
+                    ? `${p.actorName}: Rest ${formatQty(p.amount)} ${unit} (erledigt)`
+                    : `${p.actorName}: ${formatQty(p.amount)} ${unit}`}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-xs text-zinc-500">Noch kein Fortschritt gemeldet.</p>
+          )}
+          {t.status === 'open' ? (
+            <div className="flex items-center gap-2 pt-1">
+              <input
+                type="text"
+                inputMode="decimal"
+                className="min-w-0 flex-1 rounded-xl border border-white/[0.1] bg-black/55 px-3 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+                value={progressDraft}
+                onChange={(e) => onProgressDraft(e.target.value)}
+                disabled={writeBlocked || busy}
+              />
+              <button
+                type="button"
+                disabled={writeBlocked || busy || !parseQty(progressDraft)}
+                onClick={() => onAddProgress()}
+                className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
+              >
+                Melden
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {t.status === 'open' ? (
+          <button
+            type="button"
+            disabled={writeBlocked || busy}
+            onClick={() => onComplete()}
+            className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
+          >
+            Erledigt ✓
+          </button>
+        ) : isCompanyOwner ? (
+          <button
+            type="button"
+            disabled={writeBlocked || busy}
+            onClick={() => onReopen()}
+            className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-300 disabled:opacity-50"
+          >
+            Wieder öffnen
+          </button>
+        ) : (
+          <span className="text-sm text-emerald-400/90">Erledigt</span>
+        )}
+        {isCompanyOwner ? (
+          <button
+            type="button"
+            disabled={writeBlocked || busy}
+            onClick={() => onDelete()}
+            className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300/90 disabled:opacity-50"
+          >
+            Löschen
+          </button>
+        ) : null}
+        {t.status === 'done' ? (
+          <button
+            type="button"
+            onClick={() => onToggleMedia()}
+            className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-200 disabled:opacity-50"
+          >
+            {mediaOpenId === t.id
+              ? 'Fotos schließen'
+              : `Fotos ansehen${t.photoCount ? ` (${t.photoCount})` : ''}`}
+          </button>
+        ) : null}
+      </div>
+      {t.status === 'open' || mediaOpenId === t.id ? (
+        <div className="space-y-3 border-t border-white/[0.06] pt-3">
+          <ReportPhotosSection
+            reportId={null}
+            taskId={t.id}
+            enabled
+            embedded
+            iosGalleryRedirect
+            initialOpen={mediaOpenId === t.id}
+            onUploadComplete={onMediaChanged}
+          />
+          <TaskSignatureSection taskId={t.id} onChanged={onMediaChanged} />
+        </div>
+      ) : null}
+    </Card>
+  )
+}
+
 export function TasksPage() {
   const { isCompanyOwner } = useAuth()
   const { writeBlocked } = useWriteBlocked()
@@ -130,6 +386,8 @@ export function TasksPage() {
   const [filterProjectId, setFilterProjectId] = useState('')
   const [filterEmployeeId, setFilterEmployeeId] = useState('')
   const [mediaOpenId, setMediaOpenId] = useState<string | null>(queryTaskId || null)
+  const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null)
+  const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<SiteTask[]>([])
   const [doneUnseen, setDoneUnseen] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -178,8 +436,15 @@ export function TasksPage() {
     if (searchParams.get('photos') === '1' && queryTaskId) {
       setMediaOpenId(queryTaskId)
       setViewMode('list')
+      setExpandedTaskId(queryTaskId)
     }
   }, [searchParams, queryTaskId])
+
+  useEffect(() => {
+    if (!queryTaskId) return
+    const found = tasks.find((t) => t.id === queryTaskId)
+    if (found) setExpandedGroupKey(taskGroupKey(found))
+  }, [queryTaskId, tasks])
 
   useEffect(() => {
     const id = window.setInterval(() => {
@@ -239,6 +504,8 @@ export function TasksPage() {
     }
     return tasks
   }, [isCompanyOwner, viewMode, tasks, selectedDay, tab])
+
+  const groupedTasks = useMemo(() => groupTasksBySiteDay(visibleTasks), [visibleTasks])
 
   const plannedNotices = useMemo(() => {
     if (isCompanyOwner || tab !== 'open') return []
@@ -303,6 +570,8 @@ export function TasksPage() {
       setComposerOpen(false)
       setViewMode('list')
       setTab('open')
+      setExpandedTaskId(null)
+      setExpandedGroupKey(`${projectId}|${planDate}`)
       setMsg(createdTaskMessage(titles, siteName, who, planDate))
       window.dispatchEvent(new Event('freiraum-tasks-changed'))
       await loadTasks()
@@ -380,6 +649,30 @@ export function TasksPage() {
     } finally {
       setBusy(false)
     }
+  }
+
+  function renderTaskCard(t: SiteTask, showSite: boolean) {
+    return (
+      <TaskCard
+        key={t.id}
+        t={t}
+        expanded={expandedTaskId === t.id}
+        showSite={showSite}
+        onToggle={() => setExpandedTaskId((cur) => (cur === t.id ? null : t.id))}
+        isCompanyOwner={isCompanyOwner}
+        writeBlocked={writeBlocked}
+        busy={busy}
+        progressDraft={progressDraft[t.id] || ''}
+        onProgressDraft={(value) => setProgressDraft((prev) => ({ ...prev, [t.id]: value }))}
+        onAddProgress={() => void addProgress(t.id)}
+        onComplete={() => void completeTask(t.id)}
+        onReopen={() => void reopenTask(t.id)}
+        onDelete={() => void deleteTask(t.id)}
+        mediaOpenId={mediaOpenId}
+        onToggleMedia={() => setMediaOpenId((cur) => (cur === t.id ? null : t.id))}
+        onMediaChanged={() => void loadTasks()}
+      />
+    )
   }
 
   return (
@@ -735,142 +1028,39 @@ export function TasksPage() {
                   : 'Noch keine erledigten Aufgaben.'}
             </p>
           </Card>
+        ) : isCompanyOwner && viewMode === 'week' ? (
+          visibleTasks.map((t) => renderTaskCard(t, true))
         ) : (
-          visibleTasks.map((t) => (
-            <Card key={t.id} className="space-y-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
-                    {t.projectName || 'Baustelle'}
-                  </p>
-                  <p className="mt-1 text-sm font-medium text-white">{t.title}</p>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    Datum: {formatDateDe(t.dueDate)}
-                    {t.assigneeNames?.length
-                      ? ` · ${t.assigneeNames.join(', ')}`
-                      : ''}
-                  </p>
-                </div>
-              </div>
-              {t.targetQuantity != null ? (
-                <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
-                  <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-sm font-medium text-zinc-100">
-                      {formatQty(t.actualQuantity)} / {formatQty(t.targetQuantity)} {t.unit || 'm²'}
-                    </p>
-                    <p className="text-xs text-zinc-400">
-                      Rest {formatQty(t.remainingQuantity)} {t.unit || 'm²'}
-                    </p>
-                  </div>
-                  <div className="h-1.5 overflow-hidden rounded-full bg-zinc-800">
-                    <div
-                      className="h-full rounded-full bg-orange-500"
-                      style={{
-                        width: `${Math.min(
-                          100,
-                          Math.max(
-                            0,
-                            ((Number(t.actualQuantity) || 0) / (Number(t.targetQuantity) || 1)) * 100,
-                          ),
-                        )}%`,
-                      }}
-                    />
-                  </div>
-                  {t.progress?.length ? (
-                    <ul className="space-y-1">
-                      {t.progress.map((p) => (
-                        <li key={p.id || `${p.actorName}-${p.createdAt}`} className="text-xs text-zinc-400">
-                          {p.actorName}: {formatQty(p.amount)} {t.unit || 'm²'}
-                        </li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="text-xs text-zinc-500">Noch kein Fortschritt gemeldet.</p>
-                  )}
-                  {t.status === 'open' ? (
-                    <div className="flex items-center gap-2 pt-1">
-                      <input
-                        type="text"
-                        inputMode="decimal"
-                        className="min-w-0 flex-1 rounded-xl border border-white/[0.1] bg-black/55 px-3 py-2 text-sm text-white outline-none focus:border-orange-500/65"
-                        value={progressDraft[t.id] || ''}
-                        onChange={(e) =>
-                          setProgressDraft((prev) => ({ ...prev, [t.id]: e.target.value }))
-                        }
-                        disabled={writeBlocked || busy}
-                      />
-                      <button
-                        type="button"
-                        disabled={writeBlocked || busy || !parseQty(progressDraft[t.id] || '')}
-                        onClick={() => void addProgress(t.id)}
-                        className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
-                      >
-                        Melden
-                      </button>
+          groupedTasks.map((g) => {
+            const loc = formatProjectLocation(g.projectAddress, g.projectCity)
+            if (g.tasks.length === 1) {
+              return renderTaskCard(g.tasks[0] as SiteTask, true)
+            }
+            const open = expandedGroupKey === g.key
+            return (
+              <div key={g.key} className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => setExpandedGroupKey((cur) => (cur === g.key ? null : g.key))}
+                  className="block w-full text-left"
+                >
+                  <Card className="!px-4 !py-3.5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white">{g.projectName}</p>
+                        {loc ? <p className="mt-1 text-xs text-zinc-500">{loc}</p> : null}
+                        <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
+                      </div>
+                      <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
+                        {g.tasks.length}
+                      </span>
                     </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <div className="flex flex-wrap gap-2">
-                {t.status === 'open' ? (
-                  <button
-                    type="button"
-                    disabled={writeBlocked || busy}
-                    onClick={() => void completeTask(t.id)}
-                    className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
-                  >
-                    Erledigt ✓
-                  </button>
-                ) : isCompanyOwner ? (
-                  <button
-                    type="button"
-                    disabled={writeBlocked || busy}
-                    onClick={() => void reopenTask(t.id)}
-                    className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-300 disabled:opacity-50"
-                  >
-                    Wieder öffnen
-                  </button>
-                ) : (
-                  <span className="text-sm text-emerald-400/90">Erledigt</span>
-                )}
-                {isCompanyOwner ? (
-                  <button
-                    type="button"
-                    disabled={writeBlocked || busy}
-                    onClick={() => void deleteTask(t.id)}
-                    className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300/90 disabled:opacity-50"
-                  >
-                    Löschen
-                  </button>
-                ) : null}
-                {t.status === 'done' ? (
-                  <button
-                    type="button"
-                    onClick={() => setMediaOpenId((cur) => (cur === t.id ? null : t.id))}
-                    className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-200 disabled:opacity-50"
-                  >
-                    {mediaOpenId === t.id
-                      ? 'Fotos schließen'
-                      : `Fotos ansehen${t.photoCount ? ` (${t.photoCount})` : ''}`}
-                  </button>
-                ) : null}
+                  </Card>
+                </button>
+                {open ? g.tasks.map((t) => renderTaskCard(t, false)) : null}
               </div>
-              {t.status === 'open' || mediaOpenId === t.id ? (
-                <div className="space-y-3 border-t border-white/[0.06] pt-3">
-                  <ReportPhotosSection
-                    reportId={null}
-                    taskId={t.id}
-                    enabled
-                    embedded
-                    iosGalleryRedirect
-                    initialOpen={mediaOpenId === t.id}
-                    onUploadComplete={() => void loadTasks()}
-                  />
-                  <TaskSignatureSection taskId={t.id} onChanged={() => void loadTasks()} />
-                </div>
-              ) : null}
-            </Card>
-          ))
+            )
+          })
         )}
       </div>
       <TaskPushOptIn isOwner={isCompanyOwner} />
