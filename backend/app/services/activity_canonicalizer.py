@@ -3551,6 +3551,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("abdichtung", "Abdichtung eingebaut", 76.0, False)
+    if re.search(r"\bhandschacht(?:ung|en|altung)?\b", t) and re.search(
+        r"\b(ausgeführt|ausgefuehrt|gemacht|ausgehoben|ausgeschachtet)\b",
+        t,
+    ):
+        return CanonicalActivity("handschachtung", "Handschachtung ausgeführt", 78.5, False)
     if ("aushub" in t or "erdarbeiten" in t) and (
         re.search(
             r"\b(ausgeführt|ausgefuehrt|durchgeführt|durchgefuehrt|durch\s+gemacht|gemacht|erstellt)\b",

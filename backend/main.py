@@ -125,6 +125,7 @@ from services.ai_report_service import (
     structure_report_with_ai,
 )
 from app.services.activity_canonicalizer import collect_unmatched_chunks
+from app.services.note_translator import expand_notes_if_guarded
 from app.services.speech_telemetry import record_unmatched_speech
 from app.services import collective_report as collective
 from app.services import collective_protocol as collective_proto
@@ -2436,7 +2437,7 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
             "reportKind": "ortstermin",
         }
 
-    normalized_raw = normalize_trade_language(body.rawText)
+    normalized_raw = normalize_trade_language(expand_notes_if_guarded(body.rawText))
 
     local_structured = structure_report_fields(
         normalized_raw,
@@ -2447,6 +2448,9 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
         project_name=body.projectName,
         customer_name=body.customerName,
     )
+    original_raw = str(body.rawText or "").strip()
+    if original_raw:
+        local_structured["rawText"] = original_raw
 
     structured_by: str = "local"
     structured_dict: dict[str, Any] = local_structured
@@ -2547,6 +2551,9 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
         pass
 
     structured_dict = _ensure_clean_structured_final(structured_dict)
+    original_raw = str(body.rawText or "").strip()
+    if original_raw:
+        structured_dict["rawText"] = original_raw
 
     # Hebel 2: nicht erkannte Saetze mandantenspezifisch protokollieren (best-effort,
     # beeinflusst die Ausgabe nicht).
