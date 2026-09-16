@@ -10,6 +10,7 @@ from typing import Any, Callable
 from urllib.parse import urlparse
 
 from logo_image_utils import logo_bytes_for_export
+from app.services.site_spot import format_baustelle_display
 
 from docx import Document
 from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
@@ -485,7 +486,7 @@ def build_pdf_bytes(
     emails = str(report.get("officeEmail") or company_profile.get("officeEmail") or "")
     phone = str(company_profile.get("phone") or "")
     company_name = str(report.get("companyName") or company_profile.get("companyName") or "Firma")
-    proj = str(report.get("projectName") or "—")
+    proj = format_baustelle_display(report)
     customer = str(report.get("customerName") or "—")
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")
@@ -709,7 +710,7 @@ def build_docx_bytes(
         r.font.color.rgb = LINE_GREY_DOCX
         r.font.size = Pt(8)
 
-    proj = str(report.get("projectName") or "—")
+    proj = format_baustelle_display(report)
     customer = str(report.get("customerName") or "—")
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")

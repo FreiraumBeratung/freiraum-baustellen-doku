@@ -11,6 +11,8 @@ import {
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
 import { formatArbeitszeitField, formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
+import { formatBaustelleLabel, hasSiteSpotField, SITE_SPOT_MAX_LEN } from '../utils/siteSpot'
+import { useAuth } from '../context/AuthContext'
 import {
   buildEmployeeTimesPayload,
   defaultEmployeeTimeSlot,
@@ -233,7 +235,7 @@ function buildPlainText(companyName: string, st: ReportPreviewState, structured:
   const lines = [
     'TAGESBERICHT',
     `Firma: ${companyName}`,
-    `Baustelle: ${st.projectName}`,
+    `Baustelle: ${formatBaustelleLabel(st.projectName, st.siteSpot)}`,
     `Kunde: ${st.customerName}`,
     `Datum: ${st.date}`,
     empLine,
@@ -512,6 +514,8 @@ function ReportPreviewInner({
   timeBookingMsg,
   timeBookingWarn,
   dirty,
+  siteSpot,
+  onSiteSpotChange,
 }: {
   st: ReportPreviewState
   draftStructured: StructuredPayload
@@ -528,9 +532,13 @@ function ReportPreviewInner({
   timeBookingMsg: string
   timeBookingWarn: string
   dirty: boolean
+  siteSpot: string
+  onSiteSpotChange: (value: string) => void
 }) {
   const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
+  const { tenantId } = useAuth()
+  const showSiteSpot = hasSiteSpotField(tenantId) || Boolean(String(siteSpot || '').trim())
   const isEditMode = Boolean(st.existingReportId)
   const metaEditable = isEditMode && !savedReportId
   const [companyName, setCompanyName] = useState('')
@@ -715,8 +723,22 @@ function ReportPreviewInner({
           </div>
           <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
             <span className="text-zinc-500">Baustelle</span>
-            <span className="text-right text-white">{st.projectName}</span>
+            <span className="text-right text-white">{formatBaustelleLabel(st.projectName, siteSpot)}</span>
           </div>
+          {showSiteSpot && !(savedReportId && !st.existingReportId) ? (
+            <label className="block border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Ort / Laterne</span>
+              <input
+                type="text"
+                maxLength={SITE_SPOT_MAX_LEN}
+                className="mt-1 w-full min-w-0 rounded-xl border border-zinc-700 bg-zinc-950 px-3 py-2 text-right text-white outline-none placeholder:text-zinc-600 focus:border-orange-500"
+                value={siteSpot}
+                onChange={(e) => onSiteSpotChange(e.target.value)}
+                placeholder="z. B. Laterne 1"
+                autoComplete="off"
+              />
+            </label>
+          ) : null}
           <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
             <span className="text-zinc-500">Kunde</span>
             <span className="text-right text-white">{st.customerName}</span>
@@ -1323,6 +1345,7 @@ export function ReportPreviewPage() {
   const [saveMsg, setSaveMsg] = useState('')
   const [timeBookingMsg, setTimeBookingMsg] = useState('')
   const [timeBookingWarn, setTimeBookingWarn] = useState('')
+  const [siteSpot, setSiteSpot] = useState(() => String(st?.siteSpot || ''))
 
   useLayoutEffect(() => {
     if (!st || !reportSyncKey) return
@@ -1334,6 +1357,7 @@ export function ReportPreviewPage() {
     const m = metaFromState(st)
     setDraftMeta(m)
     setMetaBaseline(m)
+    setSiteSpot(String(st.siteSpot || ''))
     setSaveMsg('')
     setSaveErr('')
 
@@ -1357,9 +1381,10 @@ export function ReportPreviewPage() {
 
   const dirty = useMemo(() => {
     const structDirty = !structuredEqual(draftStructured, savedBaseline)
-    if (!st?.existingReportId) return structDirty
-    return structDirty || !metaEqual(draftMeta, metaBaseline)
-  }, [draftStructured, savedBaseline, draftMeta, metaBaseline, st?.existingReportId])
+    const spotDirty = String(siteSpot || '').trim() !== String(st?.siteSpot || '').trim()
+    if (!st?.existingReportId) return structDirty || spotDirty
+    return structDirty || !metaEqual(draftMeta, metaBaseline) || spotDirty
+  }, [draftStructured, savedBaseline, draftMeta, metaBaseline, st?.existingReportId, st?.siteSpot, siteSpot])
 
   async function saveReport(logoUrl: string | null, companyName: string, officeEmail: string) {
     if (!st) return
@@ -1407,6 +1432,7 @@ export function ReportPreviewPage() {
         seriesMode: Boolean(st.seriesMode),
         reportKind: st.reportKind === 'ortstermin' ? 'ortstermin' : '',
         notes: st.notes ?? '',
+        siteSpot: siteSpot.trim(),
         structured: {
           summary: s.summary,
           activities: s.activities,
@@ -1470,7 +1496,7 @@ export function ReportPreviewPage() {
 
   function copyText(companyName: string, structured: StructuredPayload) {
     if (!st) return
-    const t = buildPlainText(companyName, st, structured)
+    const t = buildPlainText(companyName, { ...st, siteSpot }, structured)
     void navigator.clipboard.writeText(t)
   }
 
@@ -1504,6 +1530,8 @@ export function ReportPreviewPage() {
       timeBookingMsg={timeBookingMsg}
       timeBookingWarn={timeBookingWarn}
       dirty={dirty}
+      siteSpot={siteSpot}
+      onSiteSpotChange={setSiteSpot}
     />
   )
 }

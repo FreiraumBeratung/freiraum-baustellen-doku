@@ -4,6 +4,8 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { useAuth } from '../context/AuthContext'
+import { hasSiteSpotField, SITE_SPOT_MAX_LEN } from '../utils/siteSpot'
 import type { BrowserSpeechRecognition } from '../utils/speechRecognition'
 import {
   configureDictationSession,
@@ -45,6 +47,8 @@ export type ReportPreviewState = {
   reportKind?: 'ortstermin' | ''
   /** freie Besonderheiten/Notiz für diesen Tag (Folge- wie Einzelbericht) */
   notes?: string
+  /** tenant-gated: Ort/Laterne unter der Baustelle, nicht notes */
+  siteSpot?: string
   /** Edit-Modus: vorhandener Bericht wird per PUT aktualisiert (nicht neu angelegt) */
   existingReportId?: string
 }
@@ -68,6 +72,8 @@ export type StructuredPayload = {
 export function ReportNewPage() {
   const nav = useNavigate()
   const { writeBlocked } = useWriteBlocked()
+  const { tenantId } = useAuth()
+  const showSiteSpot = hasSiteSpotField(tenantId)
   const [projects, setProjects] = useState<Project[]>([])
   const [employees, setEmployees] = useState<Employee[]>([])
   const [projectId, setProjectId] = useState('')
@@ -83,6 +89,7 @@ export function ReportNewPage() {
   const [exportFormat, setExportFormat] = useState('PDF')
   const [rawText, setRawText] = useState('')
   const [notes, setNotes] = useState('')
+  const [siteSpot, setSiteSpot] = useState('')
   const [reportMode, setReportMode] = useState<'single' | 'series' | 'ortstermin'>('single')
   const [showModeModal, setShowModeModal] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -287,6 +294,7 @@ export function ReportNewPage() {
         seriesMode: reportMode === 'series',
         reportKind: reportMode === 'ortstermin' ? 'ortstermin' : '',
         notes: notes.trim(),
+        siteSpot: showSiteSpot ? siteSpot.trim() : '',
       }
       nav('/bericht/vorschau', { state })
     } catch (e) {
@@ -446,6 +454,24 @@ export function ReportNewPage() {
               </p>
             ) : null}
           </label>
+
+          {showSiteSpot ? (
+            <label className="block min-w-0">
+              <span className="text-[0.875rem] text-zinc-500">Ort / Laterne</span>
+              <input
+                type="text"
+                maxLength={SITE_SPOT_MAX_LEN}
+                className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none placeholder:text-zinc-600 focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
+                value={siteSpot}
+                onChange={(e) => setSiteSpot(e.target.value)}
+                placeholder="z. B. Laterne 1"
+                autoComplete="off"
+              />
+              <span className="mt-1.5 block text-[0.72rem] leading-snug text-zinc-600">
+                Optional — erscheint bei der Baustelle in Liste und PDF. Bleibt getrennt vom Berichtstext.
+              </span>
+            </label>
+          ) : null}
 
         </Card>
 

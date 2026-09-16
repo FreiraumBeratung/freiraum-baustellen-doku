@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { buildReportPreviewStateFromDoc, type ReportDocForEdit } from '../utils/reportEditState'
+import { formatBaustelleLabel } from '../utils/siteSpot'
 
 type ReportRow = {
   id: string
@@ -14,6 +15,7 @@ type ReportRow = {
   exportFormat: string
   structured: { summary?: string }
   projectId: string
+  siteSpot?: string
 }
 
 type Project = { id: string; name: string }
@@ -144,7 +146,9 @@ export function ReportsListPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
                   Datum <span className="text-orange-400/95">{rep.date}</span>
                 </p>
-                <h3 className="mt-3 text-[1.12rem] font-semibold tracking-tight text-white">{rep.projectName}</h3>
+                <h3 className="mt-3 text-[1.12rem] font-semibold tracking-tight text-white">
+                  {formatBaustelleLabel(rep.projectName, rep.siteSpot)}
+                </h3>
                 <p className="mt-2 text-sm">
                   <span className="text-zinc-500">Mitwirkende</span>{' '}
                   {rep.employees.length ? (

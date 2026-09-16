@@ -23,6 +23,7 @@ from kodra_letterhead import (
     draw_kodra_letterhead,
     recipient_address_lines,
 )
+from app.services.site_spot import format_baustelle_display
 from report_export import (
     LINE_HEX,
     SECTION_HEX,
@@ -260,7 +261,7 @@ def build_kodra_report_pdf_bytes(
     doc_tpl = _new_doc(buf, "Tagesbericht")
     styles = _styles()
     st = _structured(report)
-    proj = str(report.get("projectName") or "—")
+    proj = format_baustelle_display(report)
     customer = str(report.get("customerName") or "—")
     datum = _format_date_de(str(report.get("date") or "—"))
     emps_raw = report.get("employees")

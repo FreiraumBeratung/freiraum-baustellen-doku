@@ -7,12 +7,14 @@ import {
   getIsAdmin,
   getLicenseActive,
   getPermissions,
+  getTenantId,
   getToken,
   postAuthLogin,
   setAccountRole,
   setIsAdmin,
   setLicenseActive,
   setPermissions,
+  setTenantId,
   setToken,
 } from '../api/client'
 import { LICENSE_REACTIVATED_EVENT, LICENSE_SUSPENDED_EVENT } from '../constants/license'
@@ -29,6 +31,7 @@ type AuthState = {
   isAdmin: boolean
   accountRole: AccountRole
   permissions: string[]
+  tenantId: string
   ready: boolean
   can: (permission: AppPermission) => boolean
   isCompanyOwner: boolean
@@ -49,17 +52,22 @@ function applySessionFields(r: {
   isAdmin?: boolean
   accountRole?: string
   permissions?: string[]
+  tenantId?: string
 }) {
   const active = r.licenseActive !== false
   setLicenseActive(active)
   setIsAdmin(r.isAdmin === true)
   setAccountRole(r.accountRole)
   setPermissions(r.permissions)
+  if (typeof r.tenantId === 'string' && r.tenantId.trim()) {
+    setTenantId(r.tenantId)
+  }
   return {
     active,
     admin: r.isAdmin === true,
     role: (r.accountRole === 'worker' ? 'worker' : 'owner') as AccountRole,
     perms: Array.isArray(r.permissions) ? r.permissions.map(String) : [],
+    tenantId: (typeof r.tenantId === 'string' && r.tenantId.trim() ? r.tenantId.trim() : getTenantId()),
   }
 }
 
@@ -69,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdminState] = useState(false)
   const [accountRole, setAccountRoleState] = useState<AccountRole>('owner')
   const [permissions, setPermissionsState] = useState<string[]>([])
+  const [tenantId, setTenantIdState] = useState('')
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -77,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(getIsAdmin())
     setAccountRoleState(getAccountRole())
     setPermissionsState(getPermissions())
+    setTenantIdState(getTenantId())
     setReady(true)
 
     const onSuspended = () => setLicenseActiveState(false)
@@ -85,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdminState(getIsAdmin())
       setAccountRoleState(getAccountRole())
       setPermissionsState(getPermissions())
+      setTenantIdState(getTenantId())
     }
     window.addEventListener(LICENSE_SUSPENDED_EVENT, onSuspended)
     window.addEventListener(LICENSE_REACTIVATED_EVENT, onReactivated)
@@ -97,6 +108,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdminState(applied.admin)
         setAccountRoleState(applied.role)
         setPermissionsState(applied.perms)
+        setTenantIdState(applied.tenantId)
       })
     }
 
@@ -109,6 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdminState(applied.admin)
         setAccountRoleState(applied.role)
         setPermissionsState(applied.perms)
+        setTenantIdState(applied.tenantId)
       })
     }
     window.addEventListener('focus', onFocus)
@@ -131,6 +144,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(applied.admin)
     setAccountRoleState(applied.role)
     setPermissionsState(applied.perms)
+    setTenantIdState(applied.tenantId)
   }, [])
 
   const register = useCallback(
@@ -146,6 +160,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin?: boolean
         accountRole?: string
         permissions?: string[]
+        tenantId?: string
       }>('/api/auth/register', {
         method: 'POST',
         body: JSON.stringify({
@@ -160,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdminState(applied.admin)
       setAccountRoleState(applied.role)
       setPermissionsState(applied.perms)
+      setTenantIdState(applied.tenantId)
     },
     [],
   )
@@ -171,6 +187,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(false)
     setAccountRoleState('owner')
     setPermissionsState([])
+    setTenantIdState('')
   }, [])
 
   const can = useCallback(
@@ -187,6 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       accountRole,
       permissions,
+      tenantId,
       ready,
       can,
       isCompanyOwner,
@@ -200,6 +218,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       accountRole,
       permissions,
+      tenantId,
       ready,
       can,
       isCompanyOwner,

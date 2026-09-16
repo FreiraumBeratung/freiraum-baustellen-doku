@@ -20,6 +20,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
+from app.services.site_spot import format_baustelle_display
 from report_export import (
     LogoPathResolver,
     PhotoPathResolver,
@@ -77,7 +78,7 @@ def _company_signoff_name(profile: dict[str, Any]) -> str:
 
 
 def _build_mail_body(report: dict[str, Any], profile: dict[str, Any], *, photo_count: int = 0) -> str:
-    site = report.get("projectName") or "—"
+    site = format_baustelle_display(report)
     day = _format_date_de(report.get("date"))
     company = _company_signoff_name(profile)
     employees = report.get("employees")
@@ -232,7 +233,7 @@ def send_report_to_office(
         return False, False, MSG_NOT_CONFIGURED
 
     subject_day = _format_date_de(report.get("date"))
-    subject = f"Tagesbericht: {report.get('projectName') or '—'} vom {subject_day}"
+    subject = f"Tagesbericht: {format_baustelle_display(report)} vom {subject_day}"
 
     fmt = str(report.get("exportFormat") or "PDF").strip().lower()
     try:

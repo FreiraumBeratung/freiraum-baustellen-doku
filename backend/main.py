@@ -126,6 +126,12 @@ from services.ai_report_service import (
 )
 from app.services.activity_canonicalizer import collect_unmatched_chunks
 from app.services.note_translator import expand_notes_if_guarded
+from app.services.site_spot import (
+    format_baustelle_display,
+    site_spot_enabled_for_tenant,
+    site_spot_for_create,
+    site_spot_for_update,
+)
 from app.services.speech_telemetry import record_unmatched_speech
 from app.services import collective_report as collective
 from app.services import collective_protocol as collective_proto
@@ -396,6 +402,7 @@ def _auth_session_fields(user: dict[str, Any]) -> dict[str, Any]:
         "isAdmin": is_user_admin(user),
         "accountRole": "owner" if owner else "worker",
         "permissions": sorted(effective_permissions(user)),
+        "tenantId": str(user.get("tenantId") or user.get("id") or "").strip(),
         "displayName": (
             str(user.get("entrepreneurName") or user.get("companyName") or user.get("email") or "")
             if owner
@@ -648,6 +655,8 @@ class ReportCreateBody(BaseModel):
     # Bericht dem laufenden Durchlauf der Baustelle zu. notes = freie Besonderheiten.
     seriesMode: bool = False
     notes: str = Field(default="", max_length=5000)
+    # Additiv, tenant-gated: Ort/Laterne unter der Baustelle (nicht notes, nicht Rohtext).
+    siteSpot: str | None = Field(default=None, max_length=80)
     # Additiv: z. B. "ortstermin" — Einzelbericht-Flow, ohne Folgebericht-Run.
     reportKind: str = Field(default="", max_length=40)
 
@@ -879,8 +888,8 @@ async def create_feedback(
                 f"Bericht-ID: {report_meta.get('id') or report_id}",
             ]
         )
-        if report_meta.get("projectName"):
-            lines.append(f"Baustelle: {report_meta['projectName']}")
+        if report_meta.get("projectName") or report_meta.get("siteSpot"):
+            lines.append(f"Baustelle: {format_baustelle_display(report_meta)}")
         if report_meta.get("customerName"):
             lines.append(f"Kunde: {report_meta['customerName']}")
         if report_meta.get("date"):
@@ -2655,6 +2664,8 @@ def create_report(body: ReportCreateBody, store: TenantStore = Depends(get_tenan
         "signatures": {"customer": None, "employee": None},
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
+    if site_spot_enabled_for_tenant(store.tenant_id):
+        doc["siteSpot"] = site_spot_for_create(store.tenant_id, body.siteSpot)
     doc = _enrich_project_address_fields(
         store,
         doc,
@@ -2736,6 +2747,10 @@ def update_report(
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }
     )
+    if site_spot_enabled_for_tenant(store.tenant_id):
+        existing["siteSpot"] = site_spot_for_update(
+            store.tenant_id, body.siteSpot, existing.get("siteSpot")
+        )
     existing = _enrich_project_address_fields(
         store,
         existing,

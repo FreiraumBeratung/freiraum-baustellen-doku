@@ -9,6 +9,7 @@ const LICENSE_ACTIVE_KEY = 'freiraum_baustellen_license_active'
 const IS_ADMIN_KEY = 'freiraum_baustellen_is_admin'
 const ACCOUNT_ROLE_KEY = 'freiraum_baustellen_account_role'
 const PERMISSIONS_KEY = 'freiraum_baustellen_permissions'
+const TENANT_ID_KEY = 'freiraum_baustellen_tenant_id'
 
 function viteApiBaseOverride(): string | undefined {
   const t = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/$/, '')
@@ -80,6 +81,7 @@ export function clearToken() {
   clearIsAdmin()
   clearAccountRole()
   clearPermissions()
+  clearTenantId()
 }
 
 export function getIsAdmin(): boolean {
@@ -127,6 +129,20 @@ export function clearPermissions() {
   localStorage.removeItem(PERMISSIONS_KEY)
 }
 
+export function getTenantId(): string {
+  return (localStorage.getItem(TENANT_ID_KEY) || '').trim()
+}
+
+export function setTenantId(tenantId: string | null | undefined) {
+  const v = String(tenantId || '').trim()
+  if (v) localStorage.setItem(TENANT_ID_KEY, v)
+  else localStorage.removeItem(TENANT_ID_KEY)
+}
+
+export function clearTenantId() {
+  localStorage.removeItem(TENANT_ID_KEY)
+}
+
 /** true = aktiv; fehlender Eintrag gilt als aktiv (bestehende Sessions). */
 export function getLicenseActive(): boolean {
   const raw = localStorage.getItem(LICENSE_ACTIVE_KEY)
@@ -161,6 +177,7 @@ export type AuthSessionResponse = {
   isAdmin: boolean
   accountRole?: 'owner' | 'worker'
   permissions?: string[]
+  tenantId?: string
 }
 
 /** Lizenzstatus vom Server holen (z. B. nach Admin-Reaktivierung). */
@@ -174,6 +191,9 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
     setIsAdmin(data.isAdmin === true)
     setAccountRole(data.accountRole)
     setPermissions(data.permissions)
+    if (typeof data.tenantId === 'string' && data.tenantId.trim()) {
+      setTenantId(data.tenantId)
+    }
     if (active) notifyLicenseReactivated()
     return data
   } catch {
@@ -223,6 +243,7 @@ export type AuthLoginResponse = {
   isAdmin?: boolean
   accountRole?: 'owner' | 'worker'
   permissions?: string[]
+  tenantId?: string
 }
 
 export type AdminUserRow = {

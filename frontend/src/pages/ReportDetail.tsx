@@ -9,6 +9,7 @@ import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
 import { buildReportPreviewStateFromDoc } from '../utils/reportEditState'
 import { formatArbeitszeitField } from '../utils/formatArbeitszeit'
+import { formatBaustelleLabel } from '../utils/siteSpot'
 import type { FeedbackNavState } from './Feedback'
 
 type ReportDetailNavState = {
@@ -37,6 +38,7 @@ type ReportDoc = {
   exportFormat: string
   rawText: string
   notes?: string
+  siteSpot?: string
   runId?: string | null
   reportKind?: string
   structured: {
@@ -170,7 +172,7 @@ export function ReportDetailPage() {
     const lines: string[] = [
       'TAGESBERICHT',
       `Firma: ${report.companyName}`,
-      `Baustelle: ${report.projectName}`,
+      `Baustelle: ${formatBaustelleLabel(report.projectName, report.siteSpot)}`,
       `Kunde: ${report.customerName}`,
       `Datum: ${report.date}`,
       `Mitarbeiter: ${report.employees.length ? report.employees.join(', ') : 'Keine Angabe'}`,
@@ -201,7 +203,7 @@ export function ReportDetailPage() {
 
       <Card className="mb-4 space-y-4">
         <Field k="Firma" v={report.companyName} />
-        <Field k="Baustelle" v={report.projectName} />
+        <Field k="Baustelle" v={formatBaustelleLabel(report.projectName, report.siteSpot)} />
         <Field k="Kunde" v={report.customerName} />
         <Field k="Datum" v={report.date} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
