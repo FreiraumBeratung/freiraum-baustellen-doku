@@ -78,6 +78,45 @@ def main() -> int:
     raw = site_tasks.find_task(store, task["id"])
     assert "completionSummary" not in raw
 
+    other = site_tasks.create_task(
+        store,
+        created_by="owner1",
+        project_id="p1",
+        project_name="Zu Hause",
+        title="Hecke schneiden",
+        due_date="2026-09-15",
+        assignee_ids=["e1"],
+        target_quantity=20,
+        unit="m2",
+    )
+    site_tasks.complete_task(
+        store,
+        task["id"],
+        user_id="worker-max",
+        is_owner=False,
+        employee_id="e1",
+        actor_name="Max",
+    )
+    site_tasks.complete_task(
+        store,
+        other["id"],
+        user_id="worker-max",
+        is_owner=False,
+        employee_id="e1",
+        actor_name="Max",
+    )
+    bundled_list = site_tasks.done_tasks_for_site_day(
+        store, project_id="p1", due_date="2026-09-15", is_owner=True, employee_id=None
+    )
+    grouped = site_tasks.build_group_completion_summary(bundled_list)
+    assert "Mähen" in grouped and "Hecke schneiden" in grouped, grouped
+    assert "Zu Hause" in grouped
+    bundle = site_tasks.bundle_completion_task(bundled_list)
+    pdf2 = build_task_completion_pdf_bytes(bundle, {"companyName": "Testfirma"})
+    assert pdf2.startswith(b"%PDF")
+    reports_final = store.read_json("reports.json", {"reports": []})
+    assert reports_final == reports_before
+
     print("task_completion_smoke OK")
     return 0
 

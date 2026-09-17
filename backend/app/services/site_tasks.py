@@ -349,6 +349,107 @@ def completion_summary_for(task: dict[str, Any]) -> str:
     return build_completion_summary(task)
 
 
+def _task_qty_suffix(task: dict[str, Any]) -> str:
+    target = _coerce_quantity(task.get("targetQuantity"))
+    if target is None:
+        return ""
+    actual_raw = task.get("actualQuantity")
+    try:
+        actual = float(actual_raw) if actual_raw is not None and actual_raw != "" else None
+    except (TypeError, ValueError):
+        actual = None
+    if actual is None:
+        actual = _actual_quantity(_progress_entries(task))
+    qty = actual if actual > 0 else target
+    unit = str(task.get("unit") or "").strip() or "m²"
+    if len(unit) > 16:
+        unit = unit[:16]
+    return f" ({_fmt_qty_de(qty)} {unit})"
+
+
+def build_group_completion_summary(tasks: list[dict[str, Any]]) -> str:
+    """Ein Abschluss für alle erledigten Tätigkeiten einer Baustelle/eines Tags — keine KI."""
+    done = [t for t in tasks if isinstance(t, dict) and str(t.get("status") or "").strip().lower() == "done"]
+    if not done:
+        return ""
+    if len(done) == 1:
+        return completion_summary_for(done[0])
+    first = done[0]
+    site = str(first.get("projectName") or "").strip() or "Baustelle"
+    if len(site) > 120:
+        site = site[:120].rstrip()
+    labels: list[str] = []
+    names: list[str] = []
+    seen_names: set[str] = set()
+    for item in done:
+        title = str(item.get("title") or "").strip() or "Aufgabe"
+        if len(title) > 200:
+            title = title[:200].rstrip()
+        labels.append(f"„{title}“{_task_qty_suffix(item)}")
+        for raw_name in item.get("assigneeNames") or []:
+            name = str(raw_name or "").strip()
+            if name and name not in seen_names:
+                seen_names.add(name)
+                names.append(name)
+    listed = _join_names_de(labels) or "Tätigkeiten"
+    who = _join_names_de(names) or "Mitarbeiter"
+    text = (
+        f"Am {_date_de(str(first.get('dueDate') or ''))} wurden auf der Baustelle {site} "
+        f"folgende Tätigkeiten erledigt: {listed}. Ausgeführt von {who}."
+    )
+    return text[:800]
+
+
+def bundle_completion_task(tasks: list[dict[str, Any]]) -> dict[str, Any]:
+    done = [t for t in tasks if isinstance(t, dict) and str(t.get("status") or "").strip().lower() == "done"]
+    if not done:
+        raise HTTPException(status_code=404, detail="Keine erledigten Aufgaben für diese Baustelle.")
+    bundled = dict(done[0])
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in done:
+        for raw_name in item.get("assigneeNames") or []:
+            name = str(raw_name or "").strip()
+            if name and name not in seen:
+                seen.add(name)
+                names.append(name)
+    bundled["assigneeNames"] = names
+    bundled["completionSummary"] = build_group_completion_summary(done)
+    return bundled
+
+
+def done_tasks_for_site_day(
+    store: TenantStore,
+    *,
+    project_id: str,
+    due_date: str,
+    is_owner: bool,
+    employee_id: str | None,
+) -> list[dict[str, Any]]:
+    pid = str(project_id or "").strip()
+    due = _clean_iso_date(due_date)
+    if not pid or not due:
+        raise HTTPException(status_code=400, detail="Baustelle oder Datum fehlt.")
+    eid = str(employee_id or "").strip()
+    out: list[dict[str, Any]] = []
+    for raw in read_tasks(store):
+        task = public_task(raw, store)
+        if task["status"] != "done":
+            continue
+        if str(task.get("projectId") or "") != pid:
+            continue
+        if str(task.get("dueDate") or "")[:10] != due:
+            continue
+        if not is_owner:
+            assignees = task.get("assigneeIds") or []
+            if not eid or eid not in assignees:
+                continue
+        out.append(task)
+    if not out:
+        raise HTTPException(status_code=404, detail="Keine erledigten Aufgaben für diese Baustelle.")
+    return out
+
+
 def _clean_iso_date(raw: Any) -> str:
     s = str(raw or "").strip()
     if len(s) >= 10 and s[4] == "-" and s[7] == "-":

@@ -85,6 +85,26 @@ function dateChips(): { label: string; iso: string }[] {
   ]
 }
 
+function formatGroupCompletionSummary(tasks: SiteTask[]): string {
+  const done = tasks.filter((t) => t.status === 'done')
+  if (!done.length) return ''
+  if (done.length === 1) return String(done[0]?.completionSummary || '').trim()
+  const first = done[0] as SiteTask
+  const labels = done.map((t) => {
+    const title = t.title.trim() || 'Aufgabe'
+    if (t.targetQuantity == null) return `„${title}“`
+    const qty = formatQty(t.actualQuantity ?? t.targetQuantity)
+    return `„${title}“ (${qty} ${t.unit || 'm²'})`
+  })
+  const listed =
+    labels.length === 2 ? `${labels[0]} und ${labels[1]}` : `${labels.slice(0, -1).join(', ')} und ${labels[labels.length - 1]}`
+  const who = joinNamesDe([...new Set(done.flatMap((t) => t.assigneeNames || []))])
+  return (
+    `Am ${formatDateDe(first.dueDate)} wurden auf der Baustelle ${first.projectName || 'Baustelle'} ` +
+    `folgende Tätigkeiten erledigt: ${listed}. Ausgeführt von ${who}.`
+  )
+}
+
 function formatQty(value: number | null | undefined): string {
   const n = Number(value)
   if (!Number.isFinite(n)) return '0'
@@ -166,6 +186,7 @@ function taskGroupKey(t: Pick<SiteTask, 'projectId' | 'projectName' | 'dueDate'>
 
 type TaskGroup = {
   key: string
+  projectId: string
   projectName: string
   projectAddress?: string
   projectCity?: string
@@ -182,6 +203,7 @@ function groupTasksBySiteDay(list: SiteTask[]): TaskGroup[] {
     if (!group) {
       group = {
         key,
+        projectId: t.projectId,
         projectName: t.projectName || 'Baustelle',
         projectAddress: t.projectAddress,
         projectCity: t.projectCity,
@@ -234,6 +256,7 @@ function TaskCard({
   onMediaChanged,
   reportOpen,
   onToggleReport,
+  compactOnly,
 }: {
   t: SiteTask
   expanded: boolean
@@ -254,6 +277,7 @@ function TaskCard({
   onMediaChanged: () => void
   reportOpen: boolean
   onToggleReport: () => void
+  compactOnly?: boolean
 }) {
   const loc = formatProjectLocation(t.projectAddress, t.projectCity)
   const unit = t.unit || 'm²'
@@ -307,7 +331,17 @@ function TaskCard({
       </>
     ) : null
 
-  const head = (
+  const head = compactOnly ? (
+    <div>
+      {siteBlock}
+      <p className={`text-sm font-medium text-white ${showSite ? 'mt-1' : ''}`}>{t.title}</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Datum: {formatDateDe(t.dueDate)}
+        {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+      </p>
+      <MiniQtyBar t={t} />
+    </div>
+  ) : (
     <button type="button" onClick={onToggle} className="block w-full text-left">
       {siteBlock}
       <p className={`text-sm font-medium text-white ${showSite ? 'mt-1' : ''}`}>{t.title}</p>
@@ -319,7 +353,7 @@ function TaskCard({
     </button>
   )
 
-  const body = !expanded ? (
+  const body = compactOnly || !expanded ? (
     head
   ) : (
     <>
@@ -482,6 +516,155 @@ function TaskCard({
     return <div className={wrapClass}>{body}</div>
   }
   return <Card className={wrapClass}>{body}</Card>
+}
+
+function GroupDoneFooter({
+  g,
+  isCompanyOwner,
+  writeBlocked,
+  busy,
+  mediaOpen,
+  reportOpen,
+  onToggleMedia,
+  onToggleReport,
+  onReopenAll,
+  onDeleteAll,
+  onMediaChanged,
+}: {
+  g: TaskGroup
+  isCompanyOwner: boolean
+  writeBlocked: boolean
+  busy: boolean
+  mediaOpen: boolean
+  reportOpen: boolean
+  onToggleMedia: () => void
+  onToggleReport: () => void
+  onReopenAll: () => void
+  onDeleteAll: () => void
+  onMediaChanged: () => void
+}) {
+  const [officeBusy, setOfficeBusy] = useState(false)
+  const [officeMsg, setOfficeMsg] = useState('')
+  const [officeErr, setOfficeErr] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const photoCount = g.tasks.reduce((sum, t) => sum + (t.photoCount || 0), 0)
+  const summary = formatGroupCompletionSummary(g.tasks)
+  const qs = `projectId=${encodeURIComponent(g.projectId)}&dueDate=${encodeURIComponent(g.dueDate)}`
+
+  async function downloadPdf() {
+    setOfficeErr('')
+    setPdfBusy(true)
+    try {
+      await downloadExport(`/api/tasks/completion-bundle/export/pdf?${qs}`)
+    } catch {
+      setOfficeErr('PDF konnte nicht erstellt werden.')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  async function sendOffice() {
+    if (writeBlocked || officeBusy) return
+    setOfficeMsg('')
+    setOfficeErr('')
+    setOfficeBusy(true)
+    try {
+      const res = await api<{ message?: string }>(`/api/tasks/completion-bundle/send-office?${qs}`, {
+        method: 'POST',
+      })
+      setOfficeMsg(res.message?.trim() || 'Aufgabenabschluss wurde ans Büro gesendet.')
+    } catch (ex) {
+      setOfficeErr(ex instanceof Error ? ex.message : 'Versand fehlgeschlagen.')
+    } finally {
+      setOfficeBusy(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 space-y-2 border-t border-white/[0.06] pt-3">
+      <div className="flex flex-wrap gap-1.5">
+        {isCompanyOwner ? (
+          <>
+            <button
+              type="button"
+              disabled={writeBlocked || busy}
+              onClick={() => onReopenAll()}
+              className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-300 disabled:opacity-50"
+            >
+              Wieder öffnen
+            </button>
+            <button
+              type="button"
+              disabled={writeBlocked || busy}
+              onClick={() => onDeleteAll()}
+              className="rounded-xl border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300/90 disabled:opacity-50"
+            >
+              Löschen
+            </button>
+          </>
+        ) : (
+          <span className="text-xs text-emerald-400/90">Erledigt</span>
+        )}
+        <button
+          type="button"
+          onClick={() => onToggleMedia()}
+          className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200"
+        >
+          {mediaOpen ? 'Fotos schließen' : `Fotos${photoCount ? ` (${photoCount})` : ''}`}
+        </button>
+        <button
+          type="button"
+          onClick={() => onToggleReport()}
+          className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200"
+        >
+          {reportOpen ? 'Bericht schließen' : 'Bericht'}
+        </button>
+      </div>
+      {mediaOpen ? (
+        <div className="space-y-3">
+          {g.tasks.map((t) => (
+            <ReportPhotosSection
+              key={t.id}
+              reportId={null}
+              taskId={t.id}
+              enabled
+              embedded
+              iosGalleryRedirect
+              initialOpen
+              onUploadComplete={onMediaChanged}
+            />
+          ))}
+        </div>
+      ) : null}
+      {reportOpen ? (
+        <div className="space-y-2">
+          <p className="text-sm leading-relaxed text-zinc-300">{summary || 'Noch keine Zusammenfassung.'}</p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={pdfBusy}
+              onClick={() => void downloadPdf()}
+              className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200 disabled:opacity-50"
+            >
+              {pdfBusy ? '…' : 'PDF'}
+            </button>
+            {isCompanyOwner ? (
+              <button
+                type="button"
+                disabled={writeBlocked || officeBusy}
+                onClick={() => void sendOffice()}
+                className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-2.5 py-1.5 text-xs font-semibold text-orange-200 disabled:opacity-50"
+              >
+                {officeBusy ? '…' : 'Ans Büro senden'}
+              </button>
+            ) : null}
+          </div>
+          {officeMsg ? <p className="text-xs text-emerald-400/90">{officeMsg}</p> : null}
+          {officeErr ? <p className="text-xs text-red-400">{officeErr}</p> : null}
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 export function TasksPage() {
@@ -762,7 +945,7 @@ export function TasksPage() {
     }
   }
 
-  function renderTaskCard(t: SiteTask, showSite: boolean, embedded = false) {
+  function renderTaskCard(t: SiteTask, showSite: boolean, embedded = false, compactOnly = false) {
     return (
       <TaskCard
         key={t.id}
@@ -770,6 +953,7 @@ export function TasksPage() {
         expanded={expandedTaskId === t.id}
         showSite={showSite}
         embedded={embedded}
+        compactOnly={compactOnly}
         onToggle={() => {
           setExpandedTaskId((cur) => (cur === t.id ? null : t.id))
           if (mediaOpenId === t.id) setMediaOpenId(null)
@@ -1163,6 +1347,7 @@ export function TasksPage() {
               return renderTaskCard(g.tasks[0] as SiteTask, true)
             }
             const open = expandedGroupKey === g.key
+            const allDone = g.tasks.every((t) => t.status === 'done')
             return (
               <Card key={g.key} className="!px-4 !py-3.5">
                 <button
@@ -1185,13 +1370,68 @@ export function TasksPage() {
                 </button>
                 {loc ? <TaskAddressLink loc={loc} /> : null}
                 {open ? (
-                  <div className="mt-3 divide-y divide-white/[0.06] border-t border-white/[0.06] pt-1">
-                    {g.tasks.map((t) => (
-                      <div key={t.id} className="py-2">
-                        {renderTaskCard(t, false, true)}
-                      </div>
-                    ))}
-                  </div>
+                  <>
+                    <div className="mt-3 divide-y divide-white/[0.06] border-t border-white/[0.06] pt-1">
+                      {g.tasks.map((t) => (
+                        <div key={t.id} className="py-2">
+                          {renderTaskCard(t, false, true, allDone)}
+                        </div>
+                      ))}
+                    </div>
+                    {allDone ? (
+                      <GroupDoneFooter
+                        g={g}
+                        isCompanyOwner={isCompanyOwner}
+                        writeBlocked={writeBlocked}
+                        busy={busy}
+                        mediaOpen={mediaOpenId === g.key}
+                        reportOpen={reportOpenId === g.key}
+                        onToggleMedia={() => {
+                          setMediaOpenId((cur) => (cur === g.key ? null : g.key))
+                          setReportOpenId((cur) => (cur === g.key ? null : cur))
+                        }}
+                        onToggleReport={() => {
+                          setReportOpenId((cur) => (cur === g.key ? null : g.key))
+                          setMediaOpenId((cur) => (cur === g.key ? null : cur))
+                        }}
+                        onReopenAll={() => {
+                          if (!window.confirm('Alle Aufgaben dieser Baustelle wieder öffnen?')) return
+                          void (async () => {
+                            setBusy(true)
+                            setErr('')
+                            try {
+                              for (const t of g.tasks) {
+                                await api(`/api/tasks/${encodeURIComponent(t.id)}/reopen`, { method: 'POST' })
+                              }
+                              await loadTasks()
+                            } catch (e) {
+                              setErr(e instanceof Error ? e.message : 'Wiederöffnen fehlgeschlagen.')
+                            } finally {
+                              setBusy(false)
+                            }
+                          })()
+                        }}
+                        onDeleteAll={() => {
+                          if (!window.confirm(`Alle ${g.tasks.length} Aufgaben dieser Baustelle löschen?`)) return
+                          void (async () => {
+                            setBusy(true)
+                            setErr('')
+                            try {
+                              for (const t of g.tasks) {
+                                await api(`/api/tasks/${encodeURIComponent(t.id)}`, { method: 'DELETE' })
+                              }
+                              await loadTasks()
+                            } catch (e) {
+                              setErr(e instanceof Error ? e.message : 'Löschen fehlgeschlagen.')
+                            } finally {
+                              setBusy(false)
+                            }
+                          })()
+                        }}
+                        onMediaChanged={() => void loadTasks()}
+                      />
+                    ) : null}
+                  </>
                 ) : null}
               </Card>
             )
