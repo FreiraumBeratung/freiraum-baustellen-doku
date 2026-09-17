@@ -282,7 +282,71 @@ def public_task(task: dict[str, Any], store: TenantStore | None = None) -> dict[
         "photoCount": len(task_photos_list(task)),
         "hasSignature": task_signature_doc(task) is not None,
         "ownerSeen": bool(task.get("ownerSeen", True)),
+        "completionSummary": completion_summary_for(task),
     }
+
+
+def _date_de(iso: str) -> str:
+    s = str(iso or "").strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return f"{s[8:10]}.{s[5:7]}.{s[:4]}"
+    return s or "—"
+
+
+def _fmt_qty_de(value: float) -> str:
+    s = f"{float(value):.2f}".rstrip("0").rstrip(".")
+    return s.replace(".", ",")
+
+
+def _join_names_de(names: list[str]) -> str:
+    clean = [str(n).strip() for n in names if str(n).strip()]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} und {clean[1]}"
+    return f"{', '.join(clean[:-1])} und {clean[-1]}"
+
+
+def build_completion_summary(task: dict[str, Any], *, actor_name: str = "") -> str:
+    """Fester Standardsatz aus vorhandenen Feldern — keine KI."""
+    site = str(task.get("projectName") or "").strip() or "Baustelle"
+    if len(site) > 120:
+        site = site[:120].rstrip()
+    title = str(task.get("title") or "").strip() or "Aufgabe"
+    if len(title) > 200:
+        title = title[:200].rstrip()
+    who = str(actor_name or "").strip()
+    if not who:
+        names = [str(x).strip() for x in (task.get("assigneeNames") or []) if str(x).strip()]
+        who = _join_names_de(names)
+    if not who:
+        who = "Mitarbeiter"
+    if len(who) > 120:
+        who = who[:120].rstrip()
+    parts = [
+        f"Am {_date_de(str(task.get('dueDate') or ''))} wurde auf der Baustelle {site} „{title}“ erledigt.",
+        f"Ausgeführt von {who}.",
+    ]
+    target = _coerce_quantity(task.get("targetQuantity"))
+    if target is not None:
+        actual = _actual_quantity(_progress_entries(task))
+        qty = actual if actual > 0 else target
+        unit = str(task.get("unit") or "").strip() or "m²"
+        if len(unit) > 16:
+            unit = unit[:16]
+        parts.append(f"Menge: {_fmt_qty_de(qty)} {unit}.")
+    return " ".join(parts)[:500]
+
+
+def completion_summary_for(task: dict[str, Any]) -> str:
+    stored = str(task.get("completionSummary") or "").strip()
+    if stored:
+        return stored[:500]
+    if str(task.get("status") or "").strip().lower() != "done":
+        return ""
+    return build_completion_summary(task)
 
 
 def _clean_iso_date(raw: Any) -> str:
@@ -597,6 +661,7 @@ def complete_task(
     task["completedAt"] = datetime.now(timezone.utc).isoformat()
     task["completedBy"] = str(user_id or "").strip()
     task["ownerSeen"] = False
+    task["completionSummary"] = build_completion_summary(task, actor_name=actor_name)
     tasks[idx] = task
     write_tasks(store, tasks)
     return public_task(task, store)
@@ -612,6 +677,7 @@ def reopen_task(store: TenantStore, task_id: str) -> dict[str, Any]:
     task["completedAt"] = None
     task["completedBy"] = None
     task["ownerSeen"] = True
+    task.pop("completionSummary", None)
     tasks[idx] = task
     write_tasks(store, tasks)
     return public_task(task, store)

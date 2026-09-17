@@ -26,6 +26,7 @@ from office_mail import (
     send_feedback_mail,
     send_protocol_to_office,
     send_report_to_office,
+    send_task_completion_to_office,
 )
 from report_export import (
     build_attachment_names,
@@ -1181,6 +1182,77 @@ def _task_with_access(
         is_owner=owner,
         employee_id=employee_id,
     )
+
+
+@app.get("/api/tasks/{task_id}/completion/export/pdf")
+def export_task_completion_pdf(
+    task_id: str,
+    user_id: str = Depends(require_active_license),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    from app.services.task_completion_export import (
+        build_task_completion_attachment_names,
+        build_task_completion_pdf_bytes,
+    )
+
+    task = site_tasks.public_task(_task_with_access(store, task_id, user_id), store)
+    if str(task.get("status") or "") != "done":
+        raise HTTPException(status_code=400, detail="Aufgabe ist noch nicht erledigt.")
+    prof = store.read_json("company_profile.json", {})
+    try:
+        blob = build_task_completion_pdf_bytes(
+            task,
+            prof,
+            resolve_logo=_export_resolve_logo(store),
+        )
+    except Exception:
+        raise HTTPException(status_code=500, detail="Export konnte nicht erstellt werden.")
+    ascii_fn, desc_fn = build_task_completion_attachment_names(task)
+    return Response(
+        content=blob,
+        media_type="application/pdf",
+        headers={"Content-Disposition": _content_disposition_attachment(ascii_fn, desc_fn)},
+    )
+
+
+@app.post("/api/tasks/{task_id}/completion/send-office")
+def send_task_completion_to_office_endpoint(
+    task_id: str,
+    user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    task = site_tasks.public_task(_task_with_access(store, task_id, user_id), store)
+    if str(task.get("status") or "") != "done":
+        raise HTTPException(status_code=400, detail="Aufgabe ist noch nicht erledigt.")
+    prof = store.read_json("company_profile.json", {})
+    office = str(prof.get("officeEmail") or "").strip()
+    if not office:
+        raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
+    sender_email = _smtp_sender_email_for_user_id(user_id)
+    if not sender_email:
+        raise HTTPException(
+            status_code=401,
+            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
+        )
+    mail_config = get_mail_config(sender_email)
+    if not mail_config:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+            ),
+        )
+    ok, simulated, message = send_task_completion_to_office(
+        task,
+        prof,
+        office,
+        mail_config=mail_config,
+        resolve_logo=_export_resolve_logo(store),
+    )
+    if not ok:
+        raise HTTPException(status_code=500, detail=message or "Aufgabenabschluss konnte nicht gesendet werden.")
+    return {"ok": True, "simulated": simulated, "message": message}
 
 
 @app.get("/api/tasks/{task_id}/photos")

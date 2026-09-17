@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { api } from '../api/client'
+import { api, downloadExport } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { TaskSignatureSection } from '../components/TaskSignatureSection'
 import { TaskPushOptIn } from '../components/TaskPushOptIn'
@@ -49,6 +49,7 @@ export type SiteTask = {
   progress?: TaskProgress[]
   photoCount?: number
   hasSignature?: boolean
+  completionSummary?: string
 }
 
 const TASK_UNITS = ['m²', 'm³', 'm', 'Stk', 'lfm', 'Std'] as const
@@ -217,6 +218,7 @@ function TaskCard({
   t,
   expanded,
   showSite,
+  embedded,
   onToggle,
   isCompanyOwner,
   writeBlocked,
@@ -227,13 +229,16 @@ function TaskCard({
   onComplete,
   onReopen,
   onDelete,
-  mediaOpenId,
+  mediaOpen,
   onToggleMedia,
   onMediaChanged,
+  reportOpen,
+  onToggleReport,
 }: {
   t: SiteTask
   expanded: boolean
   showSite: boolean
+  embedded?: boolean
   onToggle: () => void
   isCompanyOwner: boolean
   writeBlocked: boolean
@@ -244,54 +249,82 @@ function TaskCard({
   onComplete: () => void
   onReopen: () => void
   onDelete: () => void
-  mediaOpenId: string | null
+  mediaOpen: boolean
   onToggleMedia: () => void
   onMediaChanged: () => void
+  reportOpen: boolean
+  onToggleReport: () => void
 }) {
   const loc = formatProjectLocation(t.projectAddress, t.projectCity)
   const unit = t.unit || 'm²'
+  const [officeBusy, setOfficeBusy] = useState(false)
+  const [officeMsg, setOfficeMsg] = useState('')
+  const [officeErr, setOfficeErr] = useState('')
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const wrapClass = embedded
+    ? 'space-y-2 py-1'
+    : expanded
+      ? 'space-y-3'
+      : 'space-y-1 !px-4 !py-3.5'
 
-  if (!expanded) {
-    return (
-      <Card className="space-y-1 !px-4 !py-3.5">
-        {showSite ? (
-          <button type="button" onClick={onToggle} className="block w-full text-left">
-            <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
-              {t.projectName || 'Baustelle'}
-            </p>
-          </button>
-        ) : null}
-        {showSite && loc ? <TaskAddressLink loc={loc} /> : null}
-        <button type="button" onClick={onToggle} className="block w-full text-left">
-          <p className="text-sm font-medium text-white">{t.title}</p>
-          <p className="mt-1 text-xs text-zinc-500">
-            Datum: {formatDateDe(t.dueDate)}
-            {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
-          </p>
-          <MiniQtyBar t={t} />
-        </button>
-      </Card>
-    )
+  async function downloadCompletionPdf() {
+    setOfficeErr('')
+    setPdfBusy(true)
+    try {
+      await downloadExport(`/api/tasks/${encodeURIComponent(t.id)}/completion/export/pdf`)
+    } catch {
+      setOfficeErr('PDF konnte nicht erstellt werden.')
+    } finally {
+      setPdfBusy(false)
+    }
   }
 
-  return (
-    <Card className="space-y-3">
-      <div>
-        <button type="button" onClick={onToggle} className="block w-full text-left">
-          <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
-            {t.projectName || 'Baustelle'}
-          </p>
-        </button>
+  async function sendCompletionOffice() {
+    if (writeBlocked || officeBusy) return
+    setOfficeMsg('')
+    setOfficeErr('')
+    setOfficeBusy(true)
+    try {
+      const res = await api<{ ok?: boolean; message?: string }>(
+        `/api/tasks/${encodeURIComponent(t.id)}/completion/send-office`,
+        { method: 'POST' },
+      )
+      setOfficeMsg(res.message?.trim() || 'Aufgabenabschluss wurde ans Büro gesendet.')
+    } catch (ex) {
+      setOfficeErr(ex instanceof Error ? ex.message : 'Versand fehlgeschlagen.')
+    } finally {
+      setOfficeBusy(false)
+    }
+  }
+
+  const siteBlock =
+    showSite ? (
+      <>
+        <p className="text-[0.7rem] font-medium uppercase tracking-wide text-orange-400/90">
+          {t.projectName || 'Baustelle'}
+        </p>
         {loc ? <TaskAddressLink loc={loc} /> : null}
-        <button type="button" onClick={onToggle} className="mt-1 block w-full text-left">
-          <p className="text-sm font-medium text-white">{t.title}</p>
-          <p className="mt-2 text-xs text-zinc-500">
-            Datum: {formatDateDe(t.dueDate)}
-            {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
-          </p>
-        </button>
-      </div>
-      {t.targetQuantity != null ? (
+      </>
+    ) : null
+
+  const head = (
+    <button type="button" onClick={onToggle} className="block w-full text-left">
+      {siteBlock}
+      <p className={`text-sm font-medium text-white ${showSite ? 'mt-1' : ''}`}>{t.title}</p>
+      <p className="mt-1 text-xs text-zinc-500">
+        Datum: {formatDateDe(t.dueDate)}
+        {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+      </p>
+      {expanded && t.status === 'open' && t.targetQuantity != null ? null : <MiniQtyBar t={t} />}
+    </button>
+  )
+
+  const body = !expanded ? (
+    head
+  ) : (
+    <>
+      {head}
+      {t.status === 'open' && t.targetQuantity != null ? (
         <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
           <div className="flex items-baseline justify-between gap-3">
             <p className="text-sm font-medium text-zinc-100">
@@ -328,35 +361,33 @@ function TaskCard({
           ) : (
             <p className="text-xs text-zinc-500">Noch kein Fortschritt gemeldet.</p>
           )}
-          {t.status === 'open' ? (
-            <div className="flex items-center gap-2 pt-1">
-              <input
-                type="text"
-                inputMode="decimal"
-                className="min-w-0 flex-1 rounded-xl border border-white/[0.1] bg-black/55 px-3 py-2 text-sm text-white outline-none focus:border-orange-500/65"
-                value={progressDraft}
-                onChange={(e) => onProgressDraft(e.target.value)}
-                disabled={writeBlocked || busy}
-              />
-              <button
-                type="button"
-                disabled={writeBlocked || busy || !parseQty(progressDraft)}
-                onClick={() => onAddProgress()}
-                className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
-              >
-                Melden
-              </button>
-            </div>
-          ) : null}
+          <div className="flex items-center gap-2 pt-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              className="min-w-0 flex-1 rounded-xl border border-white/[0.1] bg-black/55 px-3 py-2 text-sm text-white outline-none focus:border-orange-500/65"
+              value={progressDraft}
+              onChange={(e) => onProgressDraft(e.target.value)}
+              disabled={writeBlocked || busy}
+            />
+            <button
+              type="button"
+              disabled={writeBlocked || busy || !parseQty(progressDraft)}
+              onClick={() => onAddProgress()}
+              className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
+            >
+              Melden
+            </button>
+          </div>
         </div>
       ) : null}
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-1.5">
         {t.status === 'open' ? (
           <button
             type="button"
             disabled={writeBlocked || busy}
             onClick={() => onComplete()}
-            className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-3 py-2 text-sm font-semibold text-orange-200 disabled:opacity-50"
+            className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-2.5 py-1.5 text-xs font-semibold text-orange-200 disabled:opacity-50"
           >
             Erledigt ✓
           </button>
@@ -365,36 +396,43 @@ function TaskCard({
             type="button"
             disabled={writeBlocked || busy}
             onClick={() => onReopen()}
-            className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-300 disabled:opacity-50"
+            className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-300 disabled:opacity-50"
           >
             Wieder öffnen
           </button>
         ) : (
-          <span className="text-sm text-emerald-400/90">Erledigt</span>
+          <span className="text-xs text-emerald-400/90">Erledigt</span>
         )}
         {isCompanyOwner ? (
           <button
             type="button"
             disabled={writeBlocked || busy}
             onClick={() => onDelete()}
-            className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm font-medium text-red-300/90 disabled:opacity-50"
+            className="rounded-xl border border-red-500/30 bg-red-500/10 px-2.5 py-1.5 text-xs font-medium text-red-300/90 disabled:opacity-50"
           >
             Löschen
           </button>
         ) : null}
         {t.status === 'done' ? (
-          <button
-            type="button"
-            onClick={() => onToggleMedia()}
-            className="rounded-xl border border-white/[0.12] bg-black/40 px-3 py-2 text-sm font-medium text-zinc-200 disabled:opacity-50"
-          >
-            {mediaOpenId === t.id
-              ? 'Fotos schließen'
-              : `Fotos ansehen${t.photoCount ? ` (${t.photoCount})` : ''}`}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => onToggleMedia()}
+              className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200"
+            >
+              {mediaOpen ? 'Fotos schließen' : `Fotos${t.photoCount ? ` (${t.photoCount})` : ''}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => onToggleReport()}
+              className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200"
+            >
+              {reportOpen ? 'Bericht schließen' : 'Bericht'}
+            </button>
+          </>
         ) : null}
       </div>
-      {t.status === 'open' || mediaOpenId === t.id ? (
+      {t.status === 'open' || mediaOpen ? (
         <div className="space-y-3 border-t border-white/[0.06] pt-3">
           <ReportPhotosSection
             reportId={null}
@@ -402,14 +440,48 @@ function TaskCard({
             enabled
             embedded
             iosGalleryRedirect
-            initialOpen={mediaOpenId === t.id}
+            initialOpen={mediaOpen}
             onUploadComplete={onMediaChanged}
           />
           <TaskSignatureSection taskId={t.id} onChanged={onMediaChanged} />
         </div>
       ) : null}
-    </Card>
+      {t.status === 'done' && reportOpen ? (
+        <div className="space-y-2 border-t border-white/[0.06] pt-3">
+          <p className="text-sm leading-relaxed text-zinc-300">
+            {t.completionSummary?.trim() || 'Noch keine Zusammenfassung.'}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={pdfBusy}
+              onClick={() => void downloadCompletionPdf()}
+              className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200 disabled:opacity-50"
+            >
+              {pdfBusy ? '…' : 'PDF'}
+            </button>
+            {isCompanyOwner ? (
+              <button
+                type="button"
+                disabled={writeBlocked || officeBusy}
+                onClick={() => void sendCompletionOffice()}
+                className="rounded-xl border border-orange-400/40 bg-orange-500/15 px-2.5 py-1.5 text-xs font-semibold text-orange-200 disabled:opacity-50"
+              >
+                {officeBusy ? '…' : 'Ans Büro senden'}
+              </button>
+            ) : null}
+          </div>
+          {officeMsg ? <p className="text-xs text-emerald-400/90">{officeMsg}</p> : null}
+          {officeErr ? <p className="text-xs text-red-400">{officeErr}</p> : null}
+        </div>
+      ) : null}
+    </>
   )
+
+  if (embedded) {
+    return <div className={wrapClass}>{body}</div>
+  }
+  return <Card className={wrapClass}>{body}</Card>
 }
 
 export function TasksPage() {
@@ -424,6 +496,7 @@ export function TasksPage() {
   const [filterProjectId, setFilterProjectId] = useState('')
   const [filterEmployeeId, setFilterEmployeeId] = useState('')
   const [mediaOpenId, setMediaOpenId] = useState<string | null>(queryTaskId || null)
+  const [reportOpenId, setReportOpenId] = useState<string | null>(null)
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null)
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null)
   const [tasks, setTasks] = useState<SiteTask[]>([])
@@ -689,14 +762,19 @@ export function TasksPage() {
     }
   }
 
-  function renderTaskCard(t: SiteTask, showSite: boolean) {
+  function renderTaskCard(t: SiteTask, showSite: boolean, embedded = false) {
     return (
       <TaskCard
         key={t.id}
         t={t}
         expanded={expandedTaskId === t.id}
         showSite={showSite}
-        onToggle={() => setExpandedTaskId((cur) => (cur === t.id ? null : t.id))}
+        embedded={embedded}
+        onToggle={() => {
+          setExpandedTaskId((cur) => (cur === t.id ? null : t.id))
+          if (mediaOpenId === t.id) setMediaOpenId(null)
+          if (reportOpenId === t.id) setReportOpenId(null)
+        }}
         isCompanyOwner={isCompanyOwner}
         writeBlocked={writeBlocked}
         busy={busy}
@@ -706,9 +784,19 @@ export function TasksPage() {
         onComplete={() => void completeTask(t.id)}
         onReopen={() => void reopenTask(t.id)}
         onDelete={() => void deleteTask(t.id)}
-        mediaOpenId={mediaOpenId}
-        onToggleMedia={() => setMediaOpenId((cur) => (cur === t.id ? null : t.id))}
+        mediaOpen={mediaOpenId === t.id}
+        onToggleMedia={() => {
+          setMediaOpenId((cur) => (cur === t.id ? null : t.id))
+          setReportOpenId((cur) => (cur === t.id ? null : cur))
+          setExpandedTaskId(t.id)
+        }}
         onMediaChanged={() => void loadTasks()}
+        reportOpen={reportOpenId === t.id}
+        onToggleReport={() => {
+          setReportOpenId((cur) => (cur === t.id ? null : t.id))
+          setMediaOpenId((cur) => (cur === t.id ? null : cur))
+          setExpandedTaskId(t.id)
+        }}
       />
     )
   }
@@ -1076,25 +1164,36 @@ export function TasksPage() {
             }
             const open = expandedGroupKey === g.key
             return (
-              <div key={g.key} className="space-y-2">
-                <Card className="!px-4 !py-3.5">
-                  <button
-                    type="button"
-                    onClick={() => setExpandedGroupKey((cur) => (cur === g.key ? null : g.key))}
-                    className="flex w-full items-start justify-between gap-3 text-left"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white">{g.projectName}</p>
-                      <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
-                    </div>
-                    <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
-                      {g.tasks.length}
-                    </span>
-                  </button>
-                  {loc ? <TaskAddressLink loc={loc} /> : null}
-                </Card>
-                {open ? g.tasks.map((t) => renderTaskCard(t, false)) : null}
-              </div>
+              <Card key={g.key} className="!px-4 !py-3.5">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setExpandedGroupKey((cur) => (cur === g.key ? null : g.key))
+                    setExpandedTaskId(null)
+                    setMediaOpenId(null)
+                    setReportOpenId(null)
+                  }}
+                  className="flex w-full items-start justify-between gap-3 text-left"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white">{g.projectName}</p>
+                    <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
+                  </div>
+                  <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
+                    {g.tasks.length}
+                  </span>
+                </button>
+                {loc ? <TaskAddressLink loc={loc} /> : null}
+                {open ? (
+                  <div className="mt-3 divide-y divide-white/[0.06] border-t border-white/[0.06] pt-1">
+                    {g.tasks.map((t) => (
+                      <div key={t.id} className="py-2">
+                        {renderTaskCard(t, false, true)}
+                      </div>
+                    ))}
+                  </div>
+                ) : null}
+              </Card>
             )
           })
         )}
