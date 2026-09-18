@@ -2,6 +2,7 @@ import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, downloadExport, resolveBackendPublicUrl } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { BreakMinutesSelect } from '../components/BreakMinutesSelect'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
@@ -846,23 +847,17 @@ function ReportPreviewInner({
                 </div>
                 <label className="block text-left">
                   <span className="text-xs text-zinc-500">Pause</span>
-                  <select
+                  <BreakMinutesSelect
                     className={`${inputClass} disabled:opacity-60`}
                     value={draftMeta.breakMinutes}
                     disabled={writeBlocked}
-                    onChange={(e) =>
+                    onChange={(minutes) =>
                       setDraftMeta((prev) => ({
                         ...prev,
-                        breakMinutes: Number(e.target.value),
+                        breakMinutes: minutes,
                       }))
                     }
-                  >
-                    <option value={0}>Keine Pause</option>
-                    <option value={30}>30 Minuten</option>
-                    <option value={45}>45 Minuten</option>
-                    <option value={60}>60 Minuten</option>
-                    <option value={90}>90 Minuten</option>
-                  </select>
+                  />
                 </label>
                 {draftMeta.employeeIds.length >= 2 ? (
                   <div className="space-y-3 text-left">
@@ -944,30 +939,24 @@ function ReportPreviewInner({
                                   </div>
                                   <label className="mt-2 block">
                                     <span className="text-xs text-zinc-500">Pause</span>
-                                    <select
+                                    <BreakMinutesSelect
                                       className={`${inputClass} disabled:opacity-60`}
                                       value={slot.breakMinutes}
                                       disabled={writeBlocked}
-                                      onChange={(ev) =>
+                                      onChange={(minutes) =>
                                         setDraftMeta((prev) => ({
                                           ...prev,
                                           employeeTimesById: {
                                             ...prev.employeeTimesById,
                                             [e.id]: {
                                               ...slot,
-                                              breakMinutes: Number(ev.target.value),
+                                              breakMinutes: minutes,
                                               employeeId: e.id,
                                             },
                                           },
                                         }))
                                       }
-                                    >
-                                      <option value={0}>Keine Pause</option>
-                                      <option value={30}>30 Minuten</option>
-                                      <option value={45}>45 Minuten</option>
-                                      <option value={60}>60 Minuten</option>
-                                      <option value={90}>90 Minuten</option>
-                                    </select>
+                                    />
                                   </label>
                                 </div>
                               )

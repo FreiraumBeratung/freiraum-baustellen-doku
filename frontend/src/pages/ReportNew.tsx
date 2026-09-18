@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { BigButton, Card, PageTitle } from '../components/ui'
+import { BreakMinutesSelect } from '../components/BreakMinutesSelect'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { useAuth } from '../context/AuthContext'
 import { hasSiteSpotField, SITE_SPOT_MAX_LEN } from '../utils/siteSpot'
@@ -530,17 +531,11 @@ export function ReportNewPage() {
 
               <label className="block">
                 <span className="text-[0.875rem] text-zinc-500">Pause</span>
-                <select
+                <BreakMinutesSelect
                   className="mt-1.5 w-full min-w-0 rounded-2xl border border-white/[0.1] bg-black/55 px-3 py-2.5 text-white outline-none focus:border-orange-500/65 focus:ring-[2px] focus:ring-orange-500/35"
                   value={breakMinutes}
-                  onChange={(e) => setBreakMinutes(Number(e.target.value))}
-                >
-                  <option value={0}>Keine Pause</option>
-                  <option value={30}>30 Minuten</option>
-                  <option value={45}>45 Minuten</option>
-                  <option value={60}>60 Minuten</option>
-                  <option value={90}>90 Minuten</option>
-                </select>
+                  onChange={setBreakMinutes}
+                />
               </label>
 
               <label className="block">
@@ -627,21 +622,13 @@ export function ReportNewPage() {
                                   </div>
                                   <label className="mt-2 block">
                                     <span className="text-xs text-zinc-500">Pause</span>
-                                    <select
+                                    <BreakMinutesSelect
                                       className="mt-1 w-full rounded-xl border border-white/[0.1] bg-black/55 px-2 py-2 text-sm text-white outline-none focus:border-orange-500/65"
                                       value={slot.breakMinutes}
-                                      onChange={(ev) =>
-                                        updateEmpTime(e.id, {
-                                          breakMinutes: Number(ev.target.value),
-                                        })
+                                      onChange={(minutes) =>
+                                        updateEmpTime(e.id, { breakMinutes: minutes })
                                       }
-                                    >
-                                      <option value={0}>Keine Pause</option>
-                                      <option value={30}>30 Minuten</option>
-                                      <option value={45}>45 Minuten</option>
-                                      <option value={60}>60 Minuten</option>
-                                      <option value={90}>90 Minuten</option>
-                                    </select>
+                                    />
                                   </label>
                                 </div>
                               )
