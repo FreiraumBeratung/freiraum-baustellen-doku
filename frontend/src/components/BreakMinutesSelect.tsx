@@ -24,6 +24,7 @@ export function BreakMinutesSelect({
   className: string
 }) {
   const [customMode, setCustomMode] = useState(() => !isPreset(value))
+  const [draft, setDraft] = useState<string | null>(null)
 
   useEffect(() => {
     if (!isPreset(value)) setCustomMode(true)
@@ -39,20 +40,25 @@ export function BreakMinutesSelect({
           max={480}
           step={1}
           className={className}
-          value={Number.isFinite(value) ? value : ''}
+          value={draft !== null ? draft : Number.isFinite(value) ? String(value) : ''}
           disabled={disabled}
           aria-label="Individuelle Pause in Minuten"
           onChange={(e) => {
             const raw = e.target.value
+            setDraft(raw)
             if (raw.trim() === '') return
-            onChange(clampBreak(Number(raw)))
+            const n = Number(raw)
+            if (!Number.isFinite(n)) return
+            onChange(clampBreak(n))
           }}
+          onBlur={() => setDraft(null)}
         />
         <button
           type="button"
           disabled={disabled}
           className="shrink-0 text-xs font-medium text-orange-400 hover:underline disabled:opacity-50"
           onClick={() => {
+            setDraft(null)
             setCustomMode(false)
             if (!isPreset(value)) onChange(45)
           }}
