@@ -23,6 +23,7 @@ export function TaskHintPhotos({
   const [photos, setPhotos] = useState<ReportPhoto[]>([])
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -44,6 +45,20 @@ export function TaskHintPhotos({
     }
   }, [open, taskId])
 
+  useEffect(() => {
+    if (!viewer) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewer(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [viewer])
+
   if (count <= 0) return null
 
   async function removePhoto(photoId: string) {
@@ -54,6 +69,7 @@ export function TaskHintPhotos({
       await deleteTaskHintPhoto(taskId, photoId)
       const next = photos.filter((p) => p.id !== photoId)
       setPhotos(next)
+      setViewer(null)
       if (!next.length) setOpen(false)
       onChanged?.()
     } catch (ex) {
@@ -70,6 +86,7 @@ export function TaskHintPhotos({
         onClick={(e) => {
           e.stopPropagation()
           setOpen((cur) => !cur)
+          setViewer(null)
         }}
         className="rounded-xl border border-white/[0.12] bg-black/40 px-2.5 py-1.5 text-xs font-medium text-zinc-200"
       >
@@ -85,21 +102,29 @@ export function TaskHintPhotos({
             <ul className="grid grid-cols-2 gap-2">
               {photos.map((photo) => {
                 const src = resolveBackendPublicUrl(photo.url) ?? photo.url ?? ''
+                const alt = photo.originalFilename || 'Hinweis-Foto'
                 return (
                   <li
                     key={photo.id}
                     className="relative overflow-hidden rounded-xl border border-white/[0.08] bg-zinc-950"
                   >
                     {src ? (
-                      <a href={src} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        className="block h-36 w-full"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          setViewer({ src, alt })
+                        }}
+                      >
                         <img
                           src={src}
-                          alt={photo.originalFilename || 'Hinweis-Foto'}
+                          alt={alt}
                           className="h-36 w-full object-cover"
                           loading="lazy"
                           decoding="async"
                         />
-                      </a>
+                      </button>
                     ) : (
                       <div className="flex h-36 items-center justify-center text-xs text-zinc-600">Foto</div>
                     )}
@@ -125,6 +150,34 @@ export function TaskHintPhotos({
             <p className="text-xs text-zinc-500">Kein Foto gefunden.</p>
           ) : null}
           {err ? <p className="text-xs text-red-400">{err}</p> : null}
+        </div>
+      ) : null}
+      {viewer ? (
+        <div
+          className="fixed inset-0 z-[120] flex flex-col bg-black/92 px-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Hinweis-Foto"
+          onClick={(e) => {
+            e.stopPropagation()
+            setViewer(null)
+          }}
+        >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              className="rounded-xl border border-white/[0.12] bg-black/50 px-3 py-1.5 text-xs font-medium text-zinc-200"
+              onClick={(e) => {
+                e.stopPropagation()
+                setViewer(null)
+              }}
+            >
+              Schließen
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <img src={viewer.src} alt={viewer.alt} className="max-h-full max-w-full object-contain" />
+          </div>
         </div>
       ) : null}
     </div>
