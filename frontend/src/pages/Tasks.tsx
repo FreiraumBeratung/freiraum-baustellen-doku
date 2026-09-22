@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { MapPin } from 'lucide-react'
 import { useSearchParams } from 'react-router-dom'
-import { api, downloadExport } from '../api/client'
+import { api, downloadExport, uploadTaskHintPhoto } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
+import { TaskHintPhotos } from '../components/TaskHintPhotos'
 import { TaskSignatureSection } from '../components/TaskSignatureSection'
 import { TaskPushOptIn } from '../components/TaskPushOptIn'
 import { TasksWeekView } from '../components/TasksWeekView'
 import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { compressImageForUpload } from '../utils/compressImage'
 import {
   addDaysIso,
   formatDayMonth,
@@ -48,6 +50,7 @@ export type SiteTask = {
   unit?: string
   progress?: TaskProgress[]
   photoCount?: number
+  hintPhotoCount?: number
   hasSignature?: boolean
   completionSummary?: string
 }
@@ -59,6 +62,8 @@ type DraftLine = {
   title: string
   targetQty: string
   unit: (typeof TASK_UNITS)[number]
+  hintFile: File | null
+  hintPreview: string
 }
 
 function newDraftLine(): DraftLine {
@@ -67,7 +72,13 @@ function newDraftLine(): DraftLine {
     title: '',
     targetQty: '',
     unit: 'm²',
+    hintFile: null,
+    hintPreview: '',
   }
+}
+
+function revokeDraftHint(line: DraftLine) {
+  if (line.hintPreview) URL.revokeObjectURL(line.hintPreview)
 }
 
 function formatDateDe(iso: string): string {
@@ -353,11 +364,26 @@ function TaskCard({
     </button>
   )
 
+  const hintBlock =
+    (t.hintPhotoCount || 0) > 0 ? (
+      <TaskHintPhotos
+        taskId={t.id}
+        count={t.hintPhotoCount || 0}
+        canManage={isCompanyOwner}
+        writeBlocked={writeBlocked}
+        onChanged={onMediaChanged}
+      />
+    ) : null
+
   const body = compactOnly || !expanded ? (
-    head
+    <>
+      {head}
+      {hintBlock}
+    </>
   ) : (
     <>
       {head}
+      {hintBlock}
       {t.status === 'open' && t.targetQuantity != null ? (
         <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
           <div className="flex items-baseline justify-between gap-3">
@@ -842,7 +868,7 @@ export function TasksPage() {
     setBusy(true)
     try {
       const proj = projects.find((p) => p.id === projectId)
-      await api<{ tasks: SiteTask[] }>('/api/tasks/batch', {
+      const created = await api<{ tasks: SiteTask[] }>('/api/tasks/batch', {
         method: 'POST',
         body: JSON.stringify({
           projectId,
@@ -856,10 +882,24 @@ export function TasksPage() {
           })),
         }),
       })
+      const made = Array.isArray(created.tasks) ? created.tasks : []
+      let hintFailed = 0
+      for (let i = 0; i < validDrafts.length; i++) {
+        const file = validDrafts[i]?.hintFile
+        const id = made[i]?.id
+        if (!file || !id) continue
+        try {
+          const prepared = await compressImageForUpload(file)
+          await uploadTaskHintPhoto(id, prepared)
+        } catch {
+          hintFailed += 1
+        }
+      }
       const planDate = dueDate
       const siteName = proj?.name || ''
       const who = employees.filter((e) => selectedEmp[e.id]).map((e) => e.name)
       const titles = validDrafts.map((line) => line.title.trim())
+      draftLines.forEach(revokeDraftHint)
       setDraftLines([newDraftLine()])
       setComposerOpen(false)
       setViewMode('list')
@@ -867,6 +907,13 @@ export function TasksPage() {
       setExpandedTaskId(null)
       setExpandedGroupKey(`${projectId}|${planDate}`)
       setMsg(createdTaskMessage(titles, siteName, who, planDate))
+      if (hintFailed) {
+        setErr(
+          hintFailed === 1
+            ? 'Aufgabe angelegt, Hinweis-Foto konnte nicht hochgeladen werden.'
+            : `${hintFailed} Hinweis-Fotos konnten nicht hochgeladen werden.`,
+        )
+      }
       window.dispatchEvent(new Event('freiraum-tasks-changed'))
       await loadTasks()
     } catch (e) {
@@ -1064,7 +1111,11 @@ export function TasksPage() {
                           type="button"
                           disabled={writeBlocked}
                           onClick={() =>
-                            setDraftLines((prev) => prev.filter((item) => item.key !== line.key))
+                            setDraftLines((prev) => {
+                              const next = prev.filter((item) => item.key !== line.key)
+                              revokeDraftHint(line)
+                              return next
+                            })
                           }
                           className="text-xs text-zinc-400 hover:text-red-300"
                         >
@@ -1128,6 +1179,60 @@ export function TasksPage() {
                           ))}
                         </select>
                       </label>
+                    </div>
+                    <div className="text-left">
+                      <span className="text-xs text-zinc-500">Hinweis-Foto (optional)</span>
+                      {line.hintPreview ? (
+                        <div className="mt-2 flex items-center gap-3">
+                          <img
+                            src={line.hintPreview}
+                            alt="Hinweis-Foto"
+                            className="h-16 w-16 rounded-xl object-cover ring-1 ring-white/[0.1]"
+                          />
+                          <button
+                            type="button"
+                            disabled={writeBlocked}
+                            onClick={() =>
+                              setDraftLines((prev) =>
+                                prev.map((item) => {
+                                  if (item.key !== line.key) return item
+                                  revokeDraftHint(item)
+                                  return { ...item, hintFile: null, hintPreview: '' }
+                                }),
+                              )
+                            }
+                            className="text-xs text-zinc-400 hover:text-red-300"
+                          >
+                            Foto entfernen
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="mt-2 flex cursor-pointer items-center justify-center rounded-xl border border-white/[0.1] bg-black/40 px-3 py-2 text-xs font-medium text-zinc-300">
+                          Foto wählen
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="sr-only"
+                            disabled={writeBlocked}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0] || null
+                              e.target.value = ''
+                              if (!file) return
+                              setDraftLines((prev) =>
+                                prev.map((item) => {
+                                  if (item.key !== line.key) return item
+                                  revokeDraftHint(item)
+                                  return {
+                                    ...item,
+                                    hintFile: file,
+                                    hintPreview: URL.createObjectURL(file),
+                                  }
+                                }),
+                              )
+                            }}
+                          />
+                        </label>
+                      )}
                     </div>
                   </div>
                 ))}

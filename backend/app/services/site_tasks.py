@@ -21,6 +21,7 @@ TASK_STATUSES = frozenset({"open", "done"})
 MAX_TARGET_QUANTITY = 1_000_000.0
 MAX_PROGRESS_ENTRIES = 80
 MAX_PHOTOS_PER_TASK = 10
+MAX_HINT_PHOTOS_PER_TASK = 3
 MAX_TASKS_PER_BATCH = 20
 UNIT_ALIASES = {
     "m2": "m²",
@@ -211,6 +212,23 @@ def save_task_photos(store: TenantStore, task_id: str, photos: list[dict[str, An
     raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
 
 
+def task_hint_photos_list(task: dict[str, Any]) -> list[dict[str, Any]]:
+    raw = task.get("hintPhotos")
+    if not isinstance(raw, list):
+        return []
+    return [p for p in raw if isinstance(p, dict) and p.get("filename")]
+
+
+def save_task_hint_photos(store: TenantStore, task_id: str, photos: list[dict[str, Any]]) -> dict[str, Any]:
+    tasks = read_tasks(store)
+    for item in tasks:
+        if str(item.get("id") or "") == str(task_id):
+            item["hintPhotos"] = photos
+            write_tasks(store, tasks)
+            return item
+    raise HTTPException(status_code=404, detail="Aufgabe nicht gefunden")
+
+
 def save_task_signature(
     store: TenantStore,
     task_id: str,
@@ -228,6 +246,10 @@ def save_task_signature(
 def task_media_filenames(task: dict[str, Any]) -> tuple[list[str], list[str]]:
     photos: list[str] = []
     for entry in task_photos_list(task):
+        fn = str(entry.get("filename") or "").strip()
+        if fn:
+            photos.append(fn)
+    for entry in task_hint_photos_list(task):
         fn = str(entry.get("filename") or "").strip()
         if fn:
             photos.append(fn)
@@ -280,6 +302,7 @@ def public_task(task: dict[str, Any], store: TenantStore | None = None) -> dict[
         "unit": unit,
         "progress": entries,
         "photoCount": len(task_photos_list(task)),
+        "hintPhotoCount": len(task_hint_photos_list(task)),
         "hasSignature": task_signature_doc(task) is not None,
         "ownerSeen": bool(task.get("ownerSeen", True)),
         "completionSummary": completion_summary_for(task),
@@ -643,6 +666,7 @@ def _new_task_record(
         "unit": unit,
         "progress": [],
         "photos": [],
+        "hintPhotos": [],
         "signature": None,
     }
 
