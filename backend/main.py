@@ -81,6 +81,7 @@ from app.services.mail_store import (
     has_mail_config,
     save_mail_config,
 )
+from app.services.resend_mail import resend_is_configured, resend_transport_config
 from app.services.password_security import (
     apply_password_hash_to_user,
     hash_password,
@@ -471,6 +472,63 @@ def _smtp_sender_email_for_user_id(user_id: str) -> str:
     return owner_email_for_smtp(get_users(), user)
 
 
+def _owner_user_for_id(user_id: str) -> dict[str, Any] | None:
+    user = find_user_by_id(user_id)
+    if not user:
+        return None
+    if is_company_owner(user):
+        return user
+    return find_tenant_owner(get_users(), tenant_id_for_user(user))
+
+
+def _owner_uses_freiraum_mail(user_id: str) -> bool:
+    owner = _owner_user_for_id(user_id)
+    if not owner:
+        return False
+    return str(owner.get("mailMode") or "").strip().lower() == "freiraum"
+
+
+def _mail_config_for_send(user_id: str) -> dict[str, Any] | None:
+    """SMTP gewinnt immer. Resend nur ohne SMTP-Config und nur mit mailMode=freiraum."""
+    sender_email = _smtp_sender_email_for_user_id(user_id)
+    if sender_email:
+        smtp = get_mail_config(sender_email)
+        if smtp:
+            return smtp
+    if _owner_uses_freiraum_mail(user_id):
+        return resend_transport_config()
+    return None
+
+
+def _require_mail_config(
+    user_id: str,
+    *,
+    missing_detail: str | None = None,
+) -> dict[str, Any]:
+    sender_email = _smtp_sender_email_for_user_id(user_id)
+    if not sender_email:
+        raise HTTPException(
+            status_code=401,
+            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
+        )
+    mail_config = _mail_config_for_send(user_id)
+    if mail_config:
+        return mail_config
+    if _owner_uses_freiraum_mail(user_id):
+        raise HTTPException(
+            status_code=400,
+            detail="Freiraum-Versand ist nicht eingerichtet. Bitte den Administrator informieren.",
+        )
+    raise HTTPException(
+        status_code=400,
+        detail=missing_detail
+        or (
+            "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
+            "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
+        ),
+    )
+
+
 def get_tenant_store_write(user_id: str = Depends(require_active_license)) -> TenantStore:
     user = next((u for u in get_users() if u.get("id") == user_id), None)
     if not user:
@@ -859,15 +917,13 @@ async def create_feedback(
     store.write_json("feedback.json", {"items": items})
 
     sender_email = _smtp_sender_email_for_user_id(user_id)
-    mail_config = get_mail_config(sender_email) if sender_email else None
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal ausloggen und wieder einloggen, "
-                "damit SMTP-Daten aktualisiert werden."
-            ),
-        )
+    mail_config = _require_mail_config(
+        user_id,
+        missing_detail=(
+            "Mail-Anbindung fehlt. Bitte einmal ausloggen und wieder einloggen, "
+            "damit SMTP-Daten aktualisiert werden."
+        ),
+    )
 
     local_time = datetime.now().strftime("%d.%m.%Y %H:%M")
     subject = f"[App-Feedback] {category_norm} | {company_name or sender_email or 'Unbekannt'}"
@@ -904,6 +960,7 @@ async def create_feedback(
         body="\n".join(lines),
         mail_config=mail_config,
         attachments=attachments,
+        reply_to=sender_email or None,
     )
     if not ok:
         raise HTTPException(status_code=500, detail=send_message or "Feedback konnte nicht gesendet werden.")
@@ -1228,21 +1285,7 @@ def send_task_completion_to_office_endpoint(
     office = str(prof.get("officeEmail") or "").strip()
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(
-            status_code=401,
-            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
-        )
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
     ok, simulated, message = send_task_completion_to_office(
         task,
         prof,
@@ -1313,21 +1356,7 @@ def send_task_completion_bundle_to_office(
     office = str(prof.get("officeEmail") or "").strip()
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(
-            status_code=401,
-            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
-        )
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
     ok, simulated, message = send_task_completion_to_office(
         bundled,
         prof,
@@ -1613,19 +1642,22 @@ def register(body: RegisterBody):
     if find_user_by_email(email_norm):
         raise HTTPException(status_code=400, detail="E-Mail bereits registriert")
 
-    # SMTP-Auto-Discovery + Login-Test als Eintrittsbedingung. Ohne gueltige
-    # Mail-Credentials wird KEIN User angelegt - so ist sichergestellt, dass der
-    # Tagesbericht-Versand direkt funktioniert.
-    smtp_status = _verify_and_store_smtp(email_norm, body.password)
-    if not smtp_status.get("ok"):
-        raise HTTPException(
-            status_code=400,
-            detail=_format_smtp_error_message(
-                "Mail-Anbindung fehlgeschlagen",
-                smtp_status.get("error"),
-                smtp_status.get("provider_hint"),
-            ),
-        )
+    # Mit Resend-Key: neue Firmen ohne SMTP. Ohne Key bleibt die bisherige SMTP-Pflicht.
+    use_freiraum = resend_is_configured()
+    smtp_status: dict[str, Any]
+    if use_freiraum:
+        smtp_status = {"ok": True, "source": "freiraum"}
+    else:
+        smtp_status = _verify_and_store_smtp(email_norm, body.password)
+        if not smtp_status.get("ok"):
+            raise HTTPException(
+                status_code=400,
+                detail=_format_smtp_error_message(
+                    "Mail-Anbindung fehlgeschlagen",
+                    smtp_status.get("error"),
+                    smtp_status.get("provider_hint"),
+                ),
+            )
 
     pwd_hash = hash_password(body.password)
     user_id = str(uuid.uuid4())
@@ -1639,6 +1671,7 @@ def register(body: RegisterBody):
         "passwordHash": pwd_hash,
         "licenseActive": True,
         "isAdmin": False,
+        "mailMode": "freiraum" if use_freiraum else "customer_smtp",
         "createdAt": datetime.now(timezone.utc).isoformat(),
     }
     users = get_users()
@@ -1730,6 +1763,23 @@ def login(body: LoginBody):
 
     email_norm = str(user.get("email") or "").strip().lower()
     local_pw_ok = verify_password(body.password, user)
+    mail_mode = str(user.get("mailMode") or "").strip().lower()
+
+    # Freiraum-Kunden: App-Passwort, kein SMTP-Sync (Passwort ist nicht das Postfach).
+    if mail_mode == "freiraum":
+        if not local_pw_ok:
+            raise HTTPException(status_code=401, detail="Ungültige Zugangsdaten")
+        _migrate_user_password_if_needed(email_norm, body.password)
+        return {
+            "access_token": user["id"],
+            "token_type": "bearer",
+            "user_id": user["id"],
+            **_auth_session_fields(user),
+            "mail": {
+                "configured": resend_is_configured(),
+                "source": "freiraum",
+            },
+        }
 
     if not local_pw_ok:
         # Fallback: Vielleicht wurde das Mail-Passwort beim Provider geaendert.
@@ -3529,21 +3579,7 @@ def send_report_to_office_endpoint(
             detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.",
         )
 
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(
-            status_code=401,
-            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
-        )
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
 
     ok, simulated, message = send_report_to_office(
         rep,
@@ -3572,21 +3608,7 @@ def send_collective_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(
-            status_code=401,
-            detail="Versand nicht möglich: Anmeldung nicht mehr gültig. Bitte erneut anmelden.",
-        )
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
 
     ok, simulated, message = send_collective_to_office(
         payload,
@@ -3615,18 +3637,7 @@ def send_collective_protocol_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
 
     ok, simulated, message = send_collective_protocol_to_office(
         payload,
@@ -4001,18 +4012,7 @@ def send_protocol_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
 
     ok, simulated, message = send_protocol_to_office(
         protocol,
@@ -4242,18 +4242,7 @@ def send_delivery_note_to_office_endpoint(
     if not office:
         raise HTTPException(status_code=400, detail="Keine Büro-E-Mail im Firmenprofil hinterlegt.")
 
-    sender_email = _smtp_sender_email_for_user_id(user_id)
-    if not sender_email:
-        raise HTTPException(status_code=401, detail="Versand nicht möglich: Anmeldung nicht mehr gültig.")
-    mail_config = get_mail_config(sender_email)
-    if not mail_config:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "Mail-Anbindung fehlt. Bitte einmal in der App ausloggen und "
-                "wieder einloggen, damit die SMTP-Daten geprüft und gespeichert werden."
-            ),
-        )
+    mail_config = _require_mail_config(user_id)
 
     ok, simulated, message = send_delivery_note_to_office(
         note,

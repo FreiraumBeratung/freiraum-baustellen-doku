@@ -30,7 +30,7 @@ export function RegisterPage() {
 
   return (
     <div>
-      <PageTitle variant="auth" title="Firma registrieren" subtitle="Legen Sie Ihr lokales Firmenkonto in wenigen Schritten an." />
+      <PageTitle variant="auth" title="Firma registrieren" subtitle="Legen Sie Ihr Firmenkonto an. Berichte gehen über Freiraum an Ihre Büro-Mail — ohne Mail-Passwort." />
       <Card className="border-zinc-700/80 shadow-xl shadow-black/40">
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block">

@@ -5,7 +5,8 @@
     "entrepreneurName": "Max",
     "email": "max@test.de",
     "password": "secret",
-    "createdAt": "2026-05-11T16:07:20.630960+00:00"
+    "createdAt": "2026-05-11T16:07:20.630960+00:00",
+    "tenantId": "be02d994-e3db-4267-907a-804067a45522"
   },
   {
     "id": "509c38a3-e3f6-4b8b-8c16-38cc29e752a2",
@@ -13,7 +14,8 @@
     "entrepreneurName": "Max",
     "email": "max2@test.de",
     "password": "secret",
-    "createdAt": "2026-05-11T16:07:26.238233+00:00"
+    "createdAt": "2026-05-11T16:07:26.238233+00:00",
+    "tenantId": "509c38a3-e3f6-4b8b-8c16-38cc29e752a2"
   },
   {
     "id": "0a329ffe-5435-4812-8ad1-d5f3e2c6c26f",
@@ -21,7 +23,8 @@
     "entrepreneurName": "M",
     "email": "u3@t.de",
     "password": "x",
-    "createdAt": "2026-05-11T16:07:32.265939+00:00"
+    "createdAt": "2026-05-11T16:07:32.265939+00:00",
+    "tenantId": "0a329ffe-5435-4812-8ad1-d5f3e2c6c26f"
   },
   {
     "id": "e0ee9831-4ce8-4dc4-be67-57ba518edeaa",
@@ -29,6 +32,33 @@
     "entrepreneurName": "Denis Bytyqi",
     "email": "denisbytyqi598@web.de",
     "password": "KruemelJeta2212!",
-    "createdAt": "2026-05-11T16:30:17.132326+00:00"
+    "createdAt": "2026-05-11T16:30:17.132326+00:00",
+    "tenantId": "e0ee9831-4ce8-4dc4-be67-57ba518edeaa"
+  },
+  {
+    "id": "dfafa2d8-093f-4634-8a1c-48fcdf412ff6",
+    "tenantId": "dfafa2d8-093f-4634-8a1c-48fcdf412ff6",
+    "accountRole": "owner",
+    "companyName": "Bytyqi GartenGlück",
+    "entrepreneurName": "Denis Bytyqi",
+    "email": "db@noeke.de",
+    "passwordHash": "$2b$12$1FsNpE3XUzRk.4CgGGNGjubQ0cWlCnZgu3wJ/Em4mDikPQLpty1ba",
+    "licenseActive": true,
+    "isAdmin": false,
+    "mailMode": "freiraum",
+    "createdAt": "2026-09-23T19:31:18.425303+00:00"
+  },
+  {
+    "id": "0eb2664d-ec78-469d-96e3-53b98d5ab0cf",
+    "tenantId": "0eb2664d-ec78-469d-96e3-53b98d5ab0cf",
+    "accountRole": "owner",
+    "companyName": "GartenGlück",
+    "entrepreneurName": "Denis",
+    "email": "bac598@web.de",
+    "passwordHash": "$2b$12$Nllbl6WqCC8duaVg3C3nh.OE4SHtKTmyS4DPNnW5OwaOBR6j5tu6W",
+    "licenseActive": true,
+    "isAdmin": false,
+    "mailMode": "freiraum",
+    "createdAt": "2026-09-23T19:33:37.025583+00:00"
   }
 ]

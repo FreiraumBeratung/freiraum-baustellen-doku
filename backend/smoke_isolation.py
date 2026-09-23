@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 
 def isolate_smoke_data(tmp: Path) -> None:
+    # Resend-Key aus der lokalen .env darf SMTP-Register-Tests nicht umbiegen.
+    os.environ.pop("RESEND_API_KEY", None)
     import main
     from app.services import tenant_storage as ts
 

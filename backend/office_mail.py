@@ -55,6 +55,86 @@ MSG_SENT_TASK_COMPLETION = "Aufgabenabschluss wurde ans Büro gesendet."
 MSG_FEEDBACK_SENT = "Feedback wurde gesendet."
 
 
+def _is_resend_config(mail_config: dict[str, Any] | None) -> bool:
+    if not isinstance(mail_config, dict):
+        return False
+    return str(mail_config.get("transport") or "").strip().lower() == "resend"
+
+
+def _mail_ready(mail_config: dict[str, Any] | None) -> bool:
+    if not isinstance(mail_config, dict):
+        return False
+    if _is_resend_config(mail_config):
+        return bool(str(mail_config.get("email") or "").strip())
+    return bool(
+        str(mail_config.get("host") or "").strip()
+        and str(mail_config.get("password") or "")
+        and str(mail_config.get("email") or "").strip()
+        and int(mail_config.get("port") or 0) > 0
+    )
+
+
+def _deliver_smtp(msg: EmailMessage, mail_config: dict[str, Any]) -> tuple[bool, str]:
+    user = str(mail_config.get("email") or "").strip()
+    password = str(mail_config.get("password") or "")
+    host = str(mail_config.get("host") or "").strip()
+    port = int(mail_config.get("port") or 0)
+    use_tls = bool(mail_config.get("use_tls", True))
+    use_ssl = bool(mail_config.get("use_ssl", False))
+    if not user or not password or not host or not port:
+        return False, MSG_NOT_CONFIGURED
+
+    ctx = ssl.create_default_context()
+    try:
+        if use_ssl:
+            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
+                smtp.login(user, password)
+                smtp.send_message(msg)
+        else:
+            with smtplib.SMTP(host, port, timeout=60) as smtp:
+                smtp.ehlo()
+                if use_tls:
+                    smtp.starttls(context=ctx)
+                    smtp.ehlo()
+                smtp.login(user, password)
+                smtp.send_message(msg)
+    except OSError:
+        logger.exception("SMTP Netzwerkfehler beim Versand")
+        return False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
+    except smtplib.SMTPAuthenticationError:
+        logger.exception("SMTP-Authentifizierung beim Versand fehlgeschlagen")
+        return False, "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden."
+    except smtplib.SMTPException:
+        logger.exception("SMTP-Fehler beim Versand")
+        return False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
+    return True, ""
+
+
+def _deliver_message(
+    msg: EmailMessage,
+    mail_config: dict[str, Any],
+    *,
+    profile: dict[str, Any] | None = None,
+    reply_to: str | None = None,
+) -> tuple[bool, str]:
+    """SMTP unverändert; Resend nur wenn die Config explizit ``transport=resend`` hat."""
+    if _is_resend_config(mail_config):
+        from app.services.resend_mail import format_from_header, send_email_message
+
+        from_email = str(mail_config.get("email") or "").strip()
+        if from_email:
+            if "From" in msg:
+                del msg["From"]
+            msg["From"] = format_from_header(profile or {}, from_email)
+        reply = str(reply_to or "").strip()
+        if reply:
+            if "Reply-To" in msg:
+                del msg["Reply-To"]
+            msg["Reply-To"] = reply
+        return send_email_message(msg)
+    return _deliver_smtp(msg, mail_config)
+
+
 def _format_date_de(date_raw: Any) -> str:
     """Formatiert ein Datum fuer den Mail-Text im deutschen Stil (z.B. 25.5.2026)."""
     s = str(date_raw or "").strip()
@@ -219,19 +299,10 @@ def send_report_to_office(
         in V2: ohne gültige Konfiguration wird klar ``ok=False`` mit Hinweis
         zurückgegeben, statt einen Dry-Run vorzutäuschen.
     """
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     subject_day = _format_date_de(report.get("date"))
     subject = f"Tagesbericht: {format_baustelle_display(report)} vom {subject_day}"
@@ -270,34 +341,9 @@ def send_report_to_office(
     if attached_photos != photo_count:
         photo_count = attached_photos
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Versand fehlgeschlagen")
-        return (
-            False,
-            False,
-            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
-        )
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, MSG_SENT_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT
 
 
@@ -340,19 +386,10 @@ def send_protocol_to_office(
     resolve_signature: SignaturePathResolver | None = None,
     photos_upload_dir: Path | str | None = None,
 ) -> tuple[bool, bool, str]:
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     subject_day = _format_date_de(protocol.get("date"))
     mode = str(protocol.get("mode") or "quick")
@@ -389,34 +426,9 @@ def send_protocol_to_office(
     if attached_photos != photo_count:
         photo_count = attached_photos
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Protokoll-Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Protokoll-Versand fehlgeschlagen")
-        return (
-            False,
-            False,
-            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
-        )
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Protokoll-Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, MSG_SENT_PROTOCOL_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT_PROTOCOL
 
 
@@ -455,19 +467,10 @@ def send_delivery_note_to_office(
     # photos_upload_dir absichtlich ungenutzt: Lieferschein-Mail nur PDF, keine Einzelbilder.
     _ = photos_upload_dir
 
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     subject_day = _format_date_de(note.get("date"))
     site = note.get("projectName") or "—"
@@ -497,34 +500,9 @@ def send_delivery_note_to_office(
     # Nur PDF — keine Einzel-Fotos als Extra-Anhänge (Berichte/Protokolle bleiben unverändert).
     msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Lieferschein-Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Lieferschein-Versand fehlgeschlagen")
-        return (
-            False,
-            False,
-            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
-        )
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Lieferschein-Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, MSG_SENT_DELIVERY_WITH_PHOTOS.format(count=photo_count) if photo_count else MSG_SENT_DELIVERY
 
 
@@ -545,19 +523,10 @@ def send_collective_to_office(
     hängt die Fotos des Durchlaufs an. Spiegelt die Versand-/Fehlerlogik von
     ``send_report_to_office`` (rein additiv, ohne diese zu verändern).
     """
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     project_name = str(payload.get("projectName") or "—")
     df = _format_date_de(payload.get("dateFrom"))
@@ -605,30 +574,9 @@ def send_collective_to_office(
     if attached_photos != photo_count:
         photo_count = attached_photos
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Gesamtbericht-Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Gesamtbericht-Versand fehlgeschlagen")
-        return False, False, "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden."
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Gesamtbericht-Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, (
         f"Gesamtbericht mit {photo_count} Foto(s) wurde ans Büro gesendet."
         if photo_count
@@ -643,21 +591,13 @@ def send_feedback_mail(
     body: str,
     mail_config: dict[str, Any] | None = None,
     attachments: list[tuple[str, bytes, str, str]] | None = None,
+    reply_to: str | None = None,
 ) -> tuple[bool, str]:
     """Sendet eine Text-Feedback-Mail via gespeicherter SMTP-Konfiguration (optional mit Anhängen)."""
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, MSG_NOT_CONFIGURED
 
     msg = EmailMessage()
     msg["Subject"] = subject
@@ -668,30 +608,9 @@ def send_feedback_mail(
     for attach_name, blob, main, sub in attachments or []:
         msg.add_attachment(blob, maintype=main, subtype=sub, filename=attach_name)
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Feedback-Versand")
-        return False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Feedback-Versand fehlgeschlagen")
-        return False, "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden."
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Feedback-Versand")
-        return False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, reply_to=reply_to)
+    if not ok:
+        return False, err
     return True, MSG_FEEDBACK_SENT
 
 
@@ -704,19 +623,10 @@ def send_collective_protocol_to_office(
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
 ) -> tuple[bool, bool, str]:
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     site = str(payload.get("projectName") or "—")
     zeitraum = str(payload.get("dateRange") or "—")
@@ -752,34 +662,9 @@ def send_collective_protocol_to_office(
     msg.set_content(body)
     msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Gesamtprotokoll-Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Gesamtprotokoll-Versand fehlgeschlagen")
-        return (
-            False,
-            False,
-            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
-        )
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Gesamtprotokoll-Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, MSG_SENT_COLLECTIVE_PROTOCOL
 
 
@@ -792,19 +677,10 @@ def send_task_completion_to_office(
     resolve_logo: LogoPathResolver | None = None,
 ) -> tuple[bool, bool, str]:
     """Sendet den schlanken Aufgabenabschluss ans Büro — nicht den Tagesbericht."""
-    if not mail_config or not mail_config.get("host") or not mail_config.get("password"):
+    if not _mail_ready(mail_config):
         return False, False, MSG_NOT_CONFIGURED
 
     from_addr = str(mail_config.get("email") or "").strip()
-    user = str(mail_config.get("email") or "").strip()
-    password = str(mail_config.get("password") or "")
-    host = str(mail_config.get("host") or "").strip()
-    port = int(mail_config.get("port") or 0)
-    use_tls = bool(mail_config.get("use_tls", True))
-    use_ssl = bool(mail_config.get("use_ssl", False))
-
-    if not from_addr or not user or not password or not host or not port:
-        return False, False, MSG_NOT_CONFIGURED
 
     from app.services.task_completion_export import (
         build_task_completion_attachment_names,
@@ -837,32 +713,7 @@ def send_task_completion_to_office(
     msg.set_content(body)
     msg.add_attachment(blob, maintype="application", subtype="pdf", filename=ascii_fn)
 
-    ctx = ssl.create_default_context()
-    try:
-        if use_ssl:
-            with smtplib.SMTP_SSL(host, port, timeout=60, context=ctx) as smtp:
-                smtp.login(user, password)
-                smtp.send_message(msg)
-        else:
-            with smtplib.SMTP(host, port, timeout=60) as smtp:
-                smtp.ehlo()
-                if use_tls:
-                    smtp.starttls(context=ctx)
-                    smtp.ehlo()
-                smtp.login(user, password)
-                smtp.send_message(msg)
-    except OSError:
-        logger.exception("SMTP Netzwerkfehler beim Aufgabenabschluss-Versand")
-        return False, False, "Netzwerkfehler beim Versand. Bitte erneut versuchen."
-    except smtplib.SMTPAuthenticationError:
-        logger.exception("SMTP-Authentifizierung beim Aufgabenabschluss-Versand fehlgeschlagen")
-        return (
-            False,
-            False,
-            "Mail-Zugangsdaten wurden vom Anbieter abgelehnt. Bitte erneut anmelden.",
-        )
-    except smtplib.SMTPException:
-        logger.exception("SMTP-Fehler beim Aufgabenabschluss-Versand")
-        return False, False, "SMTP-Fehler beim Versand. Bitte später erneut versuchen."
-
+    ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
+    if not ok:
+        return False, False, err
     return True, False, MSG_SENT_TASK_COMPLETION
