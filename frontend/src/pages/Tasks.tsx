@@ -779,7 +779,6 @@ export function TasksPage() {
       .then((r) => {
         const aktiv = (r.projects || []).filter((p) => ((p.status as string) || 'aktiv') === 'aktiv')
         setProjects(aktiv)
-        if (aktiv[0]?.id) setProjectId(aktiv[0].id)
       })
       .catch(() => setProjects([]))
     api<{ employees: Employee[] }>('/api/employees')
@@ -1063,6 +1062,7 @@ export function TasksPage() {
                   onChange={(e) => setProjectId(e.target.value)}
                   disabled={!projects.length || writeBlocked}
                 >
+                  <option value="">— — —</option>
                   {projects.map((p) => (
                     <option key={p.id} value={p.id}>
                       {p.name}

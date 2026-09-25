@@ -108,9 +108,7 @@ export function ReportNewPage() {
     api<{ projects: Project[] }>('/api/projects').then((r) => {
       const aktiv = r.projects.filter((p) => ((p.status as string | undefined) || 'aktiv') === 'aktiv')
       setProjects(aktiv)
-      const firstId = aktiv[0]?.id
-      if (firstId) setProjectId(firstId)
-      else setProjectId('')
+      setProjectId('')
     })
     api<{ employees: Employee[] }>('/api/employees').then((r) => {
       const active = r.employees.filter((e) => e.active)
@@ -441,6 +439,7 @@ export function ReportNewPage() {
               onChange={(e) => setProjectId(e.target.value)}
               disabled={!projects.length}
             >
+              <option value="">— — —</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

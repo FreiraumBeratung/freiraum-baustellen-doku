@@ -12,6 +12,7 @@ import {
   saveReportPreviewPersist,
 } from '../utils/reportPreviewPersist'
 import { formatArbeitszeitField, formatArbeitszeitWithHours } from '../utils/formatArbeitszeit'
+import { formatDateDe, toIsoDateInput } from '../utils/formatDateDe'
 import { formatBaustelleLabel, hasSiteSpotField, SITE_SPOT_MAX_LEN } from '../utils/siteSpot'
 import { useAuth } from '../context/AuthContext'
 import {
@@ -87,6 +88,12 @@ function defaultEmployeeIds(st: ReportPreviewState): string[] {
 }
 
 type DraftMeta = {
+  date: string
+  projectId: string
+  projectName: string
+  customerName: string
+  projectAddress: string
+  projectCity: string
   startTime: string
   endTime: string
   breakMinutes: number
@@ -96,8 +103,23 @@ type DraftMeta = {
   employeeTimesById: Record<string, EmployeeTimeSlot>
 }
 
+type EditProject = {
+  id: string
+  name: string
+  customer: string
+  address?: string
+  city?: string
+  status?: string
+}
+
 function emptyDraftMeta(): DraftMeta {
   return {
+    date: '',
+    projectId: '',
+    projectName: '',
+    customerName: '',
+    projectAddress: '',
+    projectCity: '',
     startTime: '08:00',
     endTime: '16:30',
     breakMinutes: 45,
@@ -111,6 +133,12 @@ function emptyDraftMeta(): DraftMeta {
 function metaFromState(st: ReportPreviewState): DraftMeta {
   const times = Array.isArray(st.employeeTimes) ? st.employeeTimes : []
   return {
+    date: st.date,
+    projectId: st.projectId,
+    projectName: st.projectName,
+    customerName: st.customerName,
+    projectAddress: String(st.projectAddress || ''),
+    projectCity: String(st.projectCity || ''),
     startTime: st.startTime,
     endTime: st.endTime,
     breakMinutes: defaultBreakMinutes(st),
@@ -122,6 +150,16 @@ function metaFromState(st: ReportPreviewState): DraftMeta {
 }
 
 function metaEqual(a: DraftMeta, b: DraftMeta): boolean {
+  if (
+    a.date !== b.date ||
+    a.projectId !== b.projectId ||
+    a.projectName !== b.projectName ||
+    a.customerName !== b.customerName ||
+    a.projectAddress !== b.projectAddress ||
+    a.projectCity !== b.projectCity
+  ) {
+    return false
+  }
   if (a.startTime !== b.startTime || a.endTime !== b.endTime || a.breakMinutes !== b.breakMinutes) {
     return false
   }
@@ -238,7 +276,7 @@ function buildPlainText(companyName: string, st: ReportPreviewState, structured:
     `Firma: ${companyName}`,
     `Baustelle: ${formatBaustelleLabel(st.projectName, st.siteSpot)}`,
     `Kunde: ${st.customerName}`,
-    `Datum: ${st.date}`,
+    `Datum: ${formatDateDe(st.date)}`,
     empLine,
     timeLine,
     `Format: ${st.exportFormat}`,
@@ -553,6 +591,7 @@ function ReportPreviewInner({
   const [pageWakeKey, setPageWakeKey] = useState(0)
   const [moreOpen, setMoreOpen] = useState(false)
   const [roster, setRoster] = useState<{ id: string; name: string; active?: boolean }[]>([])
+  const [projects, setProjects] = useState<EditProject[]>([])
 
   useEffect(() => {
     api<{ companyName: string; officeEmail: string; logoUrl: string | null }>('/api/company-profile').then(
@@ -563,6 +602,14 @@ function ReportPreviewInner({
       },
     )
   }, [])
+
+  // Nur Edit-Modus: Baustellen laden (Create-Vorschau bleibt unverändert).
+  useEffect(() => {
+    if (!metaEditable) return
+    api<{ projects: EditProject[] }>('/api/projects')
+      .then((r) => setProjects(Array.isArray(r.projects) ? r.projects : []))
+      .catch(() => setProjects([]))
+  }, [metaEditable])
 
   // Nur Edit-Modus: Mitarbeiterliste laden (Create-Vorschau bleibt unverändert).
   useEffect(() => {
@@ -595,6 +642,27 @@ function ReportPreviewInner({
       })
       .catch(() => setRoster([]))
   }, [metaEditable, setDraftMeta, setMetaBaseline])
+
+  const projectOptions = useMemo(() => {
+    const list = [...projects]
+    if (draftMeta.projectId && !list.some((p) => p.id === draftMeta.projectId)) {
+      list.unshift({
+        id: draftMeta.projectId,
+        name: draftMeta.projectName || 'Aktuelle Baustelle',
+        customer: draftMeta.customerName,
+        address: draftMeta.projectAddress,
+        city: draftMeta.projectCity,
+      })
+    }
+    return list
+  }, [
+    projects,
+    draftMeta.projectId,
+    draftMeta.projectName,
+    draftMeta.customerName,
+    draftMeta.projectAddress,
+    draftMeta.projectCity,
+  ])
 
   const s = draftStructured
 
@@ -722,10 +790,40 @@ function ReportPreviewInner({
             <span className="text-zinc-500">Firma</span>
             <span className="text-right font-medium text-white">{companyName}</span>
           </div>
-          <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
-            <span className="text-zinc-500">Baustelle</span>
-            <span className="text-right text-white">{formatBaustelleLabel(st.projectName, siteSpot)}</span>
-          </div>
+          {metaEditable ? (
+            <label className="block border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Baustelle</span>
+              <select
+                className={`${inputClass} disabled:opacity-60`}
+                value={draftMeta.projectId}
+                disabled={writeBlocked}
+                onChange={(e) => {
+                  const pid = e.target.value
+                  const p = projectOptions.find((row) => row.id === pid)
+                  setDraftMeta((prev) => ({
+                    ...prev,
+                    projectId: pid,
+                    projectName: p?.name || prev.projectName,
+                    customerName: p?.customer || prev.customerName,
+                    projectAddress: String(p?.address || ''),
+                    projectCity: String(p?.city || ''),
+                  }))
+                }}
+              >
+                {projectOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                    {p.customer ? ` (${p.customer})` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Baustelle</span>
+              <span className="text-right text-white">{formatBaustelleLabel(st.projectName, siteSpot)}</span>
+            </div>
+          )}
           {showSiteSpot && !(savedReportId && !st.existingReportId) ? (
             <label className="block border-b border-zinc-800 pb-2">
               <span className="text-zinc-500">Ort / Laterne</span>
@@ -740,14 +838,48 @@ function ReportPreviewInner({
               />
             </label>
           ) : null}
-          <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
-            <span className="text-zinc-500">Kunde</span>
-            <span className="text-right text-white">{st.customerName}</span>
-          </div>
-          <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
-            <span className="text-zinc-500">Datum</span>
-            <span className="text-right text-white">{st.date}</span>
-          </div>
+          {metaEditable ? (
+            <label className="block border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Kunde</span>
+              <input
+                type="text"
+                className={`${inputClass} disabled:opacity-60`}
+                value={draftMeta.customerName}
+                disabled={writeBlocked}
+                onChange={(e) =>
+                  setDraftMeta((prev) => ({ ...prev, customerName: e.target.value }))
+                }
+                autoComplete="off"
+              />
+            </label>
+          ) : (
+            <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Kunde</span>
+              <span className="text-right text-white">{st.customerName}</span>
+            </div>
+          )}
+          {metaEditable ? (
+            <label className="block border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Datum</span>
+              <input
+                type="date"
+                lang="de-DE"
+                className={`${inputClass} disabled:opacity-60`}
+                value={toIsoDateInput(draftMeta.date)}
+                disabled={writeBlocked}
+                onChange={(e) => {
+                  const next = e.target.value
+                  if (!next) return
+                  setDraftMeta((prev) => ({ ...prev, date: next }))
+                }}
+              />
+            </label>
+          ) : (
+            <div className="flex justify-between gap-2 border-b border-zinc-800 pb-2">
+              <span className="text-zinc-500">Datum</span>
+              <span className="text-right text-white">{formatDateDe(st.date)}</span>
+            </div>
+          )}
           <div className="flex gap-3 border-b border-zinc-800 pb-2">
             <span className="text-zinc-500 shrink-0 pt-0.5">Mitarbeiter</span>
             <div className="min-w-0 flex-1 text-right font-medium text-white">
@@ -1008,7 +1140,7 @@ function ReportPreviewInner({
                       employeeTimes: st.employeeTimes,
                     })
                   : [
-                      formatArbeitszeitWithHours(st.startTime, st.endTime),
+                      formatArbeitszeitWithHours(st.startTime, st.endTime, st.employees.length),
                       `Pause: ${defaultBreakMinutes(st)} Min.`,
                       st.structured.workTime || '',
                     ]
@@ -1245,8 +1377,8 @@ function ReportPreviewInner({
                         const state: FeedbackNavState = {
                           category: 'Problem',
                           reportId: savedReportId,
-                          reportLabel: `${st.projectName} · ${st.date}`,
-                          prefill: `Betreffender Bericht: ${st.projectName}, ${st.date}\n\n`,
+                          reportLabel: `${st.projectName} · ${formatDateDe(st.date)}`,
+                          prefill: `Betreffender Bericht: ${st.projectName}, ${formatDateDe(st.date)}\n\n`,
                         }
                         nav('/feedback', { state })
                       }}
@@ -1403,12 +1535,12 @@ export function ReportPreviewPage() {
         companyName,
         companyLogoUrl: resolveBackendPublicUrl(logoUrl),
         officeEmail,
-        projectId: st.projectId,
-        projectName: st.projectName,
-        customerName: st.customerName,
-        projectAddress: st.projectAddress || '',
-        projectCity: st.projectCity || '',
-        date: st.date,
+        projectId: isEdit ? draftMeta.projectId : st.projectId,
+        projectName: isEdit ? draftMeta.projectName : st.projectName,
+        customerName: isEdit ? draftMeta.customerName : st.customerName,
+        projectAddress: isEdit ? draftMeta.projectAddress : st.projectAddress || '',
+        projectCity: isEdit ? draftMeta.projectCity : st.projectCity || '',
+        date: isEdit ? toIsoDateInput(draftMeta.date) || st.date : st.date,
         // Edit: Zeiten/Mitarbeiter aus Draft — Create: unverändert aus st.
         employees: isEdit ? draftMeta.employees : st.employees,
         employeeIds: isEdit ? draftMeta.employeeIds : defaultEmployeeIds(st),

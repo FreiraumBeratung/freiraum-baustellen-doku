@@ -124,6 +124,9 @@ def main() -> int:
         failures.append(f"Stunden Max falsch (got={by_emp.get('Max')})")
     if abs(by_emp.get("Goran", 0) - 8.25) > 0.01:
         failures.append(f"Stunden Goran falsch (got={by_emp.get('Goran')})")
+    # Gesamtstunden = Summe der Mitarbeiterstunden (Tag1 Max+Goran, Tag2 Max)
+    if abs(float(totals.get("totalHours") or 0) - 24.75) > 0.01:
+        failures.append(f"Gesamtstunden falsch (got={totals.get('totalHours')})")
     # Notiz erhalten
     if not any("Maler" in (dd.get("notes") or "") for dd in payload.get("days", [])):
         failures.append("Gesamtbericht: Notiz (Besonderheit) fehlt")
@@ -163,6 +166,59 @@ def main() -> int:
         failures.append("Signatur-Aggregation: Kundensignatur Tag 1 fehlt")
     if not any(d.get("summary") == "Tag 1 Text" for d in pay2.get("days", [])):
         failures.append("Tages-Summary nicht erhalten")
+
+    # ---- Pure: Einzelzeiten + gemischte Datumsformate ------------------------
+    proj3 = {"id": "pZ", "name": "Panzek", "customer": "P", "status": "aktiv", "currentRunId": "rZ"}
+    reports3 = [
+        {
+            "id": "z2",
+            "projectId": "pZ",
+            "runId": "rZ",
+            "date": "24.09.2026",
+            "employees": ["Stefan", "Uwe"],
+            "employeeIds": ["e-stefan", "e-uwe"],
+            "startTime": "11:00",
+            "endTime": "16:00",
+            "breakMinutes": 0,
+            "employeeTimes": [
+                {"employeeId": "e-stefan", "startTime": "11:00", "endTime": "16:00", "breakMinutes": 0},
+                {"employeeId": "e-uwe", "startTime": "08:00", "endTime": "12:00", "breakMinutes": 30},
+            ],
+            "structured": {"summary": "Tag 24", "activities": ["Pflaster"]},
+            "photos": [],
+        },
+        {
+            "id": "z1",
+            "projectId": "pZ",
+            "runId": "rZ",
+            "date": "2026-09-23",
+            "employees": ["Stefan"],
+            "employeeIds": ["e-stefan"],
+            "startTime": "07:00",
+            "endTime": "14:00",
+            "breakMinutes": 0,
+            "structured": {"summary": "Tag 23", "activities": ["Aushub"]},
+            "photos": [],
+        },
+    ]
+    pay3 = collective.build_collective_payload(proj3, reports3, run_id="rZ")
+    if pay3.get("dateFrom") != "2026-09-23" or pay3.get("dateTo") != "2026-09-24":
+        failures.append(f"Zeitraum gemischt falsch (got={pay3.get('dateFrom')}..{pay3.get('dateTo')})")
+    day_dates = [str(d.get("date") or "") for d in pay3.get("days", [])]
+    if day_dates != ["2026-09-23", "24.09.2026"]:
+        failures.append(f"Tagesverlauf nicht chronologisch (got={day_dates})")
+    hours_by_day = {str(d.get("date") or ""): float(d.get("hours") or 0) for d in pay3.get("days", [])}
+    if abs(hours_by_day.get("2026-09-23", 0) - 7.0) > 0.01:
+        failures.append(f"Tag 23 Stunden falsch (got={hours_by_day.get('2026-09-23')})")
+    if abs(hours_by_day.get("24.09.2026", 0) - 8.5) > 0.01:
+        failures.append(f"Tag 24 Stunden falsch (got={hours_by_day.get('24.09.2026')})")
+    if abs(float(pay3.get("totals", {}).get("totalHours") or 0) - 15.5) > 0.01:
+        failures.append(f"Gesamtstunden Einzelzeiten falsch (got={pay3.get('totals', {}).get('totalHours')})")
+    by_emp3 = {e["name"]: e["hours"] for e in pay3.get("totals", {}).get("hoursByEmployee", [])}
+    if abs(by_emp3.get("Stefan", 0) - 12.0) > 0.01:
+        failures.append(f"Stunden Stefan falsch (got={by_emp3.get('Stefan')})")
+    if abs(by_emp3.get("Uwe", 0) - 3.5) > 0.01:
+        failures.append(f"Stunden Uwe falsch (got={by_emp3.get('Uwe')})")
 
     # ---- Export-Builder (PDF/DOCX) erzeugen ----------------------------------
     from report_export import build_collective_pdf_bytes, build_collective_docx_bytes  # noqa: E402

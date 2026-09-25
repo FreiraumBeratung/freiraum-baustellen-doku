@@ -9,6 +9,7 @@ import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
 import { buildReportPreviewStateFromDoc } from '../utils/reportEditState'
 import { formatArbeitszeitField } from '../utils/formatArbeitszeit'
+import { formatDateDe } from '../utils/formatDateDe'
 import { formatBaustelleLabel } from '../utils/siteSpot'
 import type { FeedbackNavState } from './Feedback'
 
@@ -174,7 +175,7 @@ export function ReportDetailPage() {
       `Firma: ${report.companyName}`,
       `Baustelle: ${formatBaustelleLabel(report.projectName, report.siteSpot)}`,
       `Kunde: ${report.customerName}`,
-      `Datum: ${report.date}`,
+      `Datum: ${formatDateDe(report.date)}`,
       `Mitarbeiter: ${report.employees.length ? report.employees.join(', ') : 'Keine Angabe'}`,
       `Arbeitszeit: ${formatArbeitszeitField({
         startTime: report.startTime,
@@ -199,13 +200,13 @@ export function ReportDetailPage() {
 
   return (
     <div className="overflow-x-hidden">
-      <PageTitle title="Tagesbericht" subtitle={report.date} />
+      <PageTitle title="Tagesbericht" subtitle={formatDateDe(report.date)} />
 
       <Card className="mb-4 space-y-4">
         <Field k="Firma" v={report.companyName} />
         <Field k="Baustelle" v={formatBaustelleLabel(report.projectName, report.siteSpot)} />
         <Field k="Kunde" v={report.customerName} />
-        <Field k="Datum" v={report.date} />
+        <Field k="Datum" v={formatDateDe(report.date)} />
         <Field k="Mitarbeiter" v={report.employees.length ? report.employees.join(', ') : 'Keine Angabe'} />
         {String(report.reportKind || '').toLowerCase() === 'ortstermin' ? (
           <Field k="Art" v="Ortstermin" />
@@ -291,8 +292,8 @@ export function ReportDetailPage() {
             const state: FeedbackNavState = {
               category: 'Problem',
               reportId: id,
-              reportLabel: `${report.projectName} · ${report.date}`,
-              prefill: `Betreffender Bericht: ${report.projectName}, ${report.date}\n\n`,
+              reportLabel: `${report.projectName} · ${formatDateDe(report.date)}`,
+              prefill: `Betreffender Bericht: ${report.projectName}, ${formatDateDe(report.date)}\n\n`,
             }
             nav('/feedback', { state })
           }}

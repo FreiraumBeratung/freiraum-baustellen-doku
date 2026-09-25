@@ -10,6 +10,8 @@ Alle Kernfunktionen sind pur (ohne Storage/HTTP), damit sie isoliert testbar sin
 
 from __future__ import annotations
 
+import re
+from datetime import date
 from typing import Any
 
 from app.services.time_account import compute_booked_hours, work_time_for_employee
@@ -96,11 +98,58 @@ def reports_for_run(
         if run_id is not None and str(r.get("runId") or "") != str(run_id):
             continue
         out.append(r)
-    out.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("createdAt") or "")))
+    out.sort(key=lambda r: (_date_sort_key(r.get("date")), str(r.get("createdAt") or "")))
     return out
 
 
+def _parse_report_date(date_raw: Any) -> date | None:
+    """ISO YYYY-MM-DD oder DE TT.MM.JJJJ — sonst None (kein Raten)."""
+    s = str(date_raw or "").strip()
+    if not s:
+        return None
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+        except ValueError:
+            return None
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})", s)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1)))
+        except ValueError:
+            return None
+    return None
+
+
+def _date_sort_key(date_raw: Any) -> str:
+    parsed = _parse_report_date(date_raw)
+    if parsed:
+        return parsed.isoformat()
+    # Unbekanntes Format ans Ende, Originaltext behalten — nichts erfinden.
+    return f"\uffff{str(date_raw or '')}"
+
+
+def _zeitraum_bounds(days: list[dict[str, Any]]) -> tuple[str, str]:
+    parsed: list[date] = []
+    raws: list[str] = []
+    for day in days:
+        raw = str(day.get("date") or "").strip()
+        if not raw:
+            continue
+        raws.append(raw)
+        p = _parse_report_date(raw)
+        if p:
+            parsed.append(p)
+    if parsed:
+        return min(parsed).isoformat(), max(parsed).isoformat()
+    if raws:
+        return min(raws), max(raws)
+    return "", ""
+
+
 def _day_hours(report: dict[str, Any]) -> float:
+    """Kopf-Uhr des Berichts (Fallback, wenn keine Mitarbeiterzeilen)."""
     hours = compute_booked_hours(
         str(report.get("startTime") or ""),
         str(report.get("endTime") or ""),
@@ -151,12 +200,17 @@ def build_collective_payload(
         day_summary = str(st.get("summary") or "").strip()
         emps = _as_list(r.get("employees"))
         emp_ids = _as_list(r.get("employeeIds"))
-        day_h = _day_hours(r)
+        clock_h = _day_hours(r)
+        day_h = 0.0
+        if emps:
+            for idx, name in enumerate(emps):
+                eid = emp_ids[idx] if idx < len(emp_ids) else ""
+                person_h = _employee_day_hours(r, eid) if eid else clock_h
+                hours_by_emp[name] = round(hours_by_emp.get(name, 0.0) + person_h, 2)
+                day_h += person_h
+        else:
+            day_h = clock_h
         total_hours += day_h
-        for idx, name in enumerate(emps):
-            eid = emp_ids[idx] if idx < len(emp_ids) else ""
-            person_h = _employee_day_hours(r, eid) if eid else day_h
-            hours_by_emp[name] = round(hours_by_emp.get(name, 0.0) + person_h, 2)
 
         all_materials.extend(mats)
         all_open.extend(opens)
@@ -209,9 +263,7 @@ def build_collective_payload(
             }
         )
 
-    dates = [d["date"] for d in days if d["date"]]
-    date_from = min(dates) if dates else ""
-    date_to = max(dates) if dates else ""
+    date_from, date_to = _zeitraum_bounds(days)
 
     customer_name = ""
     company_name = ""

@@ -6,7 +6,7 @@ import json
 import os
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -3032,15 +3032,26 @@ def update_report(
         existing_kind = str(existing.get("reportKind") or "").strip().casefold()
         report_kind = "ortstermin" if existing_kind == "ortstermin" else ""
 
+    next_date = _normalize_report_date(body.date) or str(existing.get("date") or "")
+    next_pid = str(body.projectId or "").strip()
+    next_pname = str(body.projectName or "").strip()
+    old_pid = str(existing.get("projectId") or "").strip()
+    if not next_pid:
+        next_pid = old_pid
+        next_pname = str(existing.get("projectName") or "")
+    elif not next_pname:
+        next_pname = str(existing.get("projectName") or "")
+
     existing.update(
         {
-            "companyName": body.companyName,
+            # Firma am gespeicherten Bericht nicht überschreiben.
+            "companyName": existing.get("companyName") or body.companyName,
             "companyLogoUrl": company_logo_url,
             "officeEmail": body.officeEmail or prof.get("officeEmail", "") or existing.get("officeEmail", ""),
-            "projectId": body.projectId,
-            "projectName": body.projectName,
-            "customerName": body.customerName,
-            "date": body.date,
+            "projectId": next_pid,
+            "projectName": next_pname,
+            "customerName": str(body.customerName or "").strip(),
+            "date": next_date,
             "employees": body.employees,
             "employeeIds": [str(x).strip() for x in body.employeeIds if str(x).strip()],
             "startTime": body.startTime,
@@ -3057,6 +3068,9 @@ def update_report(
             "updatedAt": datetime.now(timezone.utc).isoformat(),
         }
     )
+    # Run gehört zur alten Baustelle — bei Wechsel nicht mitnehmen.
+    if next_pid != old_pid:
+        existing["runId"] = None
     if site_spot_enabled_for_tenant(store.tenant_id):
         existing["siteSpot"] = site_spot_for_update(
             store.tenant_id, body.siteSpot, existing.get("siteSpot")
@@ -3094,6 +3108,26 @@ def _find_report_doc(store: TenantStore, report_id: str) -> dict[str, Any]:
         if r.get("id") == report_id:
             return r
     raise HTTPException(status_code=404, detail="Bericht nicht gefunden")
+
+
+def _normalize_report_date(raw: Any) -> str:
+    """ISO oder DE-Datum → YYYY-MM-DD. Ungültiges/leeres unverändert bzw. leer."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", s)
+    if m:
+        try:
+            return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+        except ValueError:
+            return s
+    m = re.match(r"^(\d{1,2})\.(\d{1,2})\.(\d{4})$", s)
+    if m:
+        try:
+            return date(int(m.group(3)), int(m.group(2)), int(m.group(1))).isoformat()
+        except ValueError:
+            return s
+    return s
 
 
 def _lookup_project_address(store: TenantStore, project_id: str) -> tuple[str, str, str]:

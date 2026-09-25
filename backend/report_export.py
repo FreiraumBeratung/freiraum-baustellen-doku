@@ -835,8 +835,8 @@ def _parse_hhmm_minutes(value: Any) -> int | None:
     return hour * 60 + minute
 
 
-def format_arbeitszeit_with_hours(start_time: Any, end_time: Any) -> str:
-    """Anzeige: „08:00 – 13:45 | 5,75 Stunden“ (Brutto-Differenz ohne Pause)."""
+def format_arbeitszeit_with_hours(start_time: Any, end_time: Any, worker_count: int = 1) -> str:
+    """Anzeige: „08:00 – 13:45 | 5,75 Stunden“ (Brutto × Mitarbeiterzahl)."""
     start = str(start_time or "?").strip() or "?"
     end = str(end_time or "?").strip() or "?"
     base = f"{start} – {end}"
@@ -844,30 +844,29 @@ def format_arbeitszeit_with_hours(start_time: Any, end_time: Any) -> str:
     end_min = _parse_hhmm_minutes(end)
     if start_min is None or end_min is None or end_min <= start_min:
         return base
-    hours = round((end_min - start_min) / 60.0, 2)
+    n = int(worker_count) if worker_count and int(worker_count) > 0 else 1
+    hours = round(((end_min - start_min) / 60.0) * n, 2)
     return f"{base} | {_fmt_hours(hours)} Stunden"
 
 
-def _employee_hours_lines_for_report(report: dict[str, Any]) -> list[str]:
-    """Wenn Einzelzeiten gesetzt sind: Zeilen „Name: 08:00 – 13:00 | 4,50 Stunden“."""
-    raw_times = report.get("employeeTimes")
-    if not isinstance(raw_times, list) or not raw_times:
-        return []
+def _report_worker_count(report: dict[str, Any]) -> int:
     names = report.get("employees") if isinstance(report.get("employees"), list) else []
     ids = report.get("employeeIds") if isinstance(report.get("employeeIds"), list) else []
-    name_by_id: dict[str, str] = {}
-    for i, eid_raw in enumerate(ids):
-        eid = str(eid_raw or "").strip()
-        if not eid:
-            continue
-        label = str(names[i] if i < len(names) else "").strip() or eid
-        name_by_id[eid] = label
+    n_names = sum(1 for x in names if str(x or "").strip())
+    n_ids = sum(1 for x in ids if str(x or "").strip())
+    return max(n_names, n_ids)
 
-    # Fallback: nur IDs aus employeeTimes
+
+def _sum_employee_times_hours(report: dict[str, Any]) -> float | None:
+    """Summe der gebuchten Einzelzeiten — nur Anzeige, keine Buchung."""
+    raw_times = report.get("employeeTimes")
+    if not isinstance(raw_times, list) or not raw_times:
+        return None
     from app.services.time_account import compute_booked_hours, work_time_for_employee
 
-    lines: list[str] = []
+    total = 0.0
     seen: set[str] = set()
+    any_ok = False
     for item in raw_times:
         if not isinstance(item, dict):
             continue
@@ -877,20 +876,23 @@ def _employee_hours_lines_for_report(report: dict[str, Any]) -> list[str]:
         seen.add(eid)
         start, end, br = work_time_for_employee(report, eid)
         net = compute_booked_hours(start, end, br)
-        label = name_by_id.get(eid) or eid
         if net is None:
-            lines.append(f"{label}: {start} – {end}")
-        else:
-            lines.append(f"{label}: {start} – {end} | {_fmt_hours(net)} Stunden")
-    return lines
+            continue
+        total += float(net)
+        any_ok = True
+    return round(total, 2) if any_ok else None
 
 
 def format_arbeitszeit_field_for_report(report: dict[str, Any]) -> str:
-    """Arbeitszeit-Feld: bei Einzelzeiten die Mitarbeiterzeilen, sonst die Sammelzeit."""
-    lines = _employee_hours_lines_for_report(report)
-    if lines:
-        return "\n".join(lines)
-    return format_arbeitszeit_with_hours(report.get("startTime"), report.get("endTime"))
+    """Arbeitszeit im Tagesbericht: Gesamtstunden aller Mitarbeiter."""
+    start = report.get("startTime")
+    end = report.get("endTime")
+    summed = _sum_employee_times_hours(report)
+    if summed is not None:
+        start_s = str(start or "?").strip() or "?"
+        end_s = str(end or "?").strip() or "?"
+        return f"{start_s} – {end_s} | {_fmt_hours(summed)} Stunden"
+    return format_arbeitszeit_with_hours(start, end, _report_worker_count(report))
 
 
 def build_collective_pdf_bytes(

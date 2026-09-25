@@ -69,9 +69,7 @@ export function ProtocolNewPage() {
     api<{ projects: Project[] }>('/api/projects').then((r) => {
       const aktiv = r.projects.filter((p) => ((p.status as string | undefined) || 'aktiv') === 'aktiv')
       setProjects(aktiv)
-      const firstId = aktiv[0]?.id
-      if (firstId) setProjectId(firstId)
-      else setProjectId('')
+      setProjectId('')
     })
     api<{ defaultExportFormat: string }>('/api/company-profile').then((p) => {
       if (p.defaultExportFormat === 'Word' || p.defaultExportFormat === 'PDF') {
@@ -221,6 +219,7 @@ export function ProtocolNewPage() {
                 onChange={(e) => setProjectId(e.target.value)}
                 disabled={!projects.length}
               >
+                <option value="">— — —</option>
                 {projects.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}

@@ -5,6 +5,7 @@ import { api } from '../api/client'
 import { Card, PageTitle } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { buildReportPreviewStateFromDoc, type ReportDocForEdit } from '../utils/reportEditState'
+import { formatDateDe } from '../utils/formatDateDe'
 import { formatBaustelleLabel } from '../utils/siteSpot'
 
 type ReportRow = {
@@ -144,7 +145,7 @@ export function ReportsListPage() {
 
               <div className="pr-[5.25rem]">
                 <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                  Datum <span className="text-orange-400/95">{rep.date}</span>
+                  Datum <span className="text-orange-400/95">{formatDateDe(rep.date)}</span>
                 </p>
                 <h3 className="mt-3 text-[1.12rem] font-semibold tracking-tight text-white">
                   {formatBaustelleLabel(rep.projectName, rep.siteSpot)}
