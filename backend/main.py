@@ -128,6 +128,7 @@ from services.ai_report_service import (
 )
 from app.services.activity_canonicalizer import collect_unmatched_chunks
 from app.services.note_translator import expand_notes_if_guarded
+from app.services.typed_field_notes import rescue_typed_field_notes
 from app.services.site_spot import (
     format_baustelle_display,
     site_spot_enabled_for_tenant,
@@ -558,6 +559,7 @@ def _normalize_company_profile(prof: dict[str, Any]) -> dict[str, Any]:
         "defaultExportFormat": export_fmt,
         "defaultRecipientEmail": str(prof.get("defaultRecipientEmail") or ""),
         "logoFilename": prof.get("logoFilename"),
+        "includePhotosInPdf": bool(prof.get("includePhotosInPdf")),
     }
 
 
@@ -590,6 +592,7 @@ class CompanyProfileBody(BaseModel):
     address: str = ""
     defaultExportFormat: str = "PDF"
     defaultRecipientEmail: str = ""
+    includePhotosInPdf: bool | None = None
 
 
 def _validate_company_profile_body(body: CompanyProfileBody) -> None:
@@ -1914,6 +1917,10 @@ def post_company_profile(
     payload["defaultExportFormat"] = payload["defaultExportFormat"].strip()
     if not payload.get("defaultRecipientEmail", "").strip():
         payload["defaultRecipientEmail"] = payload["officeEmail"].strip()
+    if payload.get("includePhotosInPdf") is None:
+        payload["includePhotosInPdf"] = bool(existing.get("includePhotosInPdf"))
+    else:
+        payload["includePhotosInPdf"] = bool(payload["includePhotosInPdf"])
     merged = {**existing, **payload}
     # logoFilename kommt nicht aus dem Profil-Formular (separater Upload-Endpoint).
     # Bestehenden Dateinamen bewahren, damit ein vorher hochgeladenes Logo nicht verloren geht.
@@ -2831,6 +2838,21 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
         structured_dict,
     )
 
+    # Getippte Feldnotiz: nur wenn Filter keine Tätigkeit geliefert hat.
+    rescued_acts = rescue_typed_field_notes(
+        body.rawText, list(structured_dict.get("activities") or [])
+    )
+    if rescued_acts:
+        structured_dict["activities"] = rescued_acts
+        structured_dict["summary"] = build_professional_summary(
+            {
+                "projectName": body.projectName,
+                "date": body.date,
+                "employeeNames": body.employeeNames,
+            },
+            structured_dict,
+        )
+
     # Hebel 1: Zusammenfassung natuerlicher formulieren — ausschliesslich aus den
     # bereits geprueften Daten. Ohne Key/bei Fehler bleibt die deterministische
     # Zusammenfassung erhalten (kein Bestehendes wird veraendert).
@@ -3623,6 +3645,7 @@ def send_report_to_office_endpoint(
         photos_upload_dir=store.uploads_dir("photos"),
         resolve_logo=_export_resolve_logo(store),
         resolve_signature=_export_resolve_signature(store),
+        resolve_photo=_export_resolve_photo(store),
     )
     if not ok:
         raise HTTPException(status_code=500, detail=message or "Bericht konnte nicht gesendet werden.")
@@ -3713,6 +3736,7 @@ def export_report_pdf(report_id: str, store: TenantStore = Depends(get_tenant_st
             prof,
             resolve_logo=_export_resolve_logo(store),
             resolve_signature=_export_resolve_signature(store),
+            resolve_photo=_export_resolve_photo(store) if bool(prof.get("includePhotosInPdf")) else None,
         )
     except Exception:
         raise HTTPException(

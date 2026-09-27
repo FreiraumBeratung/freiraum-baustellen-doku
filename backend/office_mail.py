@@ -280,6 +280,7 @@ def send_report_to_office(
     photos_upload_dir: Path | str | None = None,
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
+    resolve_photo: PhotoPathResolver | None = None,
 ) -> tuple[bool, bool, str]:
     """Sendet den Tagesbericht per SMTP ans Büro.
 
@@ -308,6 +309,7 @@ def send_report_to_office(
     subject = f"Tagesbericht: {format_baustelle_display(report)} vom {subject_day}"
 
     fmt = str(report.get("exportFormat") or "PDF").strip().lower()
+    photos_in_pdf = bool(profile.get("includePhotosInPdf")) and fmt != "word"
     try:
         if fmt == "word":
             blob = build_docx_bytes(report, profile, resolve_logo=resolve_logo)
@@ -320,6 +322,7 @@ def send_report_to_office(
                 profile,
                 resolve_logo=resolve_logo,
                 resolve_signature=resolve_signature,
+                resolve_photo=resolve_photo if photos_in_pdf else None,
             )
             ascii_fn, _desc = build_attachment_names(report, "pdf")
             main = "application"
@@ -334,12 +337,13 @@ def send_report_to_office(
     msg["To"] = to_email
 
     photos_dir = Path(photos_upload_dir) if photos_upload_dir else None
-    photo_count = _count_attachable_photos(report, photos_dir)
+    photo_count = 0 if photos_in_pdf else _count_attachable_photos(report, photos_dir)
     msg.set_content(_build_mail_body(report, profile, photo_count=photo_count))
     msg.add_attachment(blob, maintype=main, subtype=sub, filename=ascii_fn)
-    attached_photos = _attach_report_photos(msg, report, photos_dir)
-    if attached_photos != photo_count:
-        photo_count = attached_photos
+    if not photos_in_pdf:
+        attached_photos = _attach_report_photos(msg, report, photos_dir)
+        if attached_photos != photo_count:
+            photo_count = attached_photos
 
     ok, err = _deliver_message(msg, mail_config, profile=profile, reply_to=to_email)
     if not ok:

@@ -384,12 +384,57 @@ def _append_pdf_signatures(
     story.append(sig_tbl)
 
 
+_MAX_REPORT_PDF_PHOTOS = 10
+
+
+def _append_report_photos_pdf(
+    story: list[Any],
+    report: dict[str, Any],
+    *,
+    resolve_photo: Callable[[str], Path | None],
+    section_head: ParagraphStyle,
+    meta_style: ParagraphStyle,
+) -> None:
+    """Hängt vorhandene Berichtsfotos an — fehlende Dateien still überspringen."""
+    raw = report.get("photos")
+    if not isinstance(raw, list) or not raw:
+        return
+    rendered: list[Any] = []
+    shown = 0
+    for ph in raw:
+        if shown >= _MAX_REPORT_PDF_PHOTOS:
+            break
+        if not isinstance(ph, dict):
+            continue
+        fn = ph.get("filename")
+        if not isinstance(fn, str) or not fn.strip():
+            continue
+        try:
+            path = resolve_photo(fn)
+        except Exception:
+            continue
+        if path is None:
+            continue
+        img = _logo_image_for_pdf(path, max_width_cm=8.0, max_height_cm=6.0)
+        if img is None:
+            continue
+        rendered.append(Spacer(1, 4))
+        rendered.append(img)
+        shown += 1
+    if not rendered:
+        return
+    story.append(Paragraph(_xml_para_text("Fotos"), section_head))
+    for flow in rendered:
+        story.append(flow)
+
+
 def build_pdf_bytes(
     report: dict[str, Any],
     company_profile: dict[str, Any],
     *,
     resolve_logo: LogoPathResolver | None = None,
     resolve_signature: SignaturePathResolver | None = None,
+    resolve_photo: Callable[[str], Path | None] | None = None,
 ) -> bytes:
     from kodra_letterhead import is_kodra_export
     from kodra_report_export import build_kodra_report_pdf_bytes
@@ -616,6 +661,15 @@ def build_pdf_bytes(
         meta_style=meta_style,
         resolve_signature=resolve_signature,
     )
+
+    if resolve_photo is not None and bool(company_profile.get("includePhotosInPdf")):
+        _append_report_photos_pdf(
+            story,
+            report,
+            resolve_photo=resolve_photo,
+            section_head=section_head,
+            meta_style=meta_style,
+        )
 
     doc_tpl.build(story, onFirstPage=footer, onLaterPages=footer)
     return buf.getvalue()

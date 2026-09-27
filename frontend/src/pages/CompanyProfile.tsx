@@ -14,6 +14,7 @@ type CompanyProfile = {
   address: string
   defaultExportFormat: string
   defaultRecipientEmail: string
+  includePhotosInPdf: boolean
   logoUrl: string | null
 }
 
@@ -27,7 +28,7 @@ export function CompanyProfilePage() {
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')
-      .then(setProf)
+      .then((p) => setProf({ ...p, includePhotosInPdf: Boolean(p.includePhotosInPdf) }))
       .finally(() => setLoading(false))
   }, [])
 
@@ -46,6 +47,7 @@ export function CompanyProfilePage() {
           address: prof.address,
           defaultExportFormat: prof.defaultExportFormat,
           defaultRecipientEmail: prof.defaultRecipientEmail,
+          includePhotosInPdf: Boolean(prof.includePhotosInPdf),
         }),
       })
       setProf(next)
@@ -139,6 +141,22 @@ export function CompanyProfilePage() {
               <option value="PDF">PDF</option>
               <option value="Word">Word</option>
             </select>
+          </label>
+          <label className="flex cursor-pointer items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-1 h-4 w-4 accent-orange-500"
+              checked={Boolean(prof.includePhotosInPdf)}
+              disabled={writeBlocked}
+              onChange={(e) => setProf({ ...prof, includePhotosInPdf: e.target.checked })}
+            />
+            <span>
+              <span className="block text-sm text-zinc-400">Fotos in der Tagesbericht-PDF</span>
+              <span className="mt-1 block text-[0.72rem] leading-snug text-zinc-600">
+                Aus: Fotos bleiben in der App und gehen wie bisher extra mit der Mail. An: die
+                Bilder stehen im PDF.
+              </span>
+            </span>
           </label>
 
           <label className="block">

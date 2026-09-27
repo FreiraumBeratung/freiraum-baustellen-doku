@@ -8,6 +8,7 @@ export type CompanyProfileResponse = {
   address?: string
   defaultExportFormat?: string
   defaultRecipientEmail?: string
+  includePhotosInPdf?: boolean
   logoUrl?: string | null
 }
 
