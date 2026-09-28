@@ -1270,7 +1270,7 @@ function ReportPreviewInner({
           <section className="border-t border-zinc-800 pt-4">
             <p className="mb-3 text-xs leading-relaxed text-zinc-500">
               Bericht gespeichert. Jetzt Fotos aufnehmen und Unterschriften erfassen — alles wird direkt im
-              Bericht gebündelt. Unten kannst du den Bericht senden oder herunterladen.
+              Bericht gebündelt. Unten kannst du den Bericht senden oder nochmal bearbeiten.
             </p>
             <ReportPhotosSection
               reportId={savedReportId}
@@ -1337,6 +1337,24 @@ function ReportPreviewInner({
             >
               {officeBusy ? '…' : 'Ans Büro senden'}
             </BigButton>
+            <BigButton
+              variant="secondary"
+              type="button"
+              disabled={writeBlocked}
+              onClick={() =>
+                nav('/bericht/vorschau', {
+                  replace: true,
+                  state: {
+                    ...st,
+                    structured: draftStructured,
+                    siteSpot,
+                    existingReportId: savedReportId,
+                  },
+                })
+              }
+            >
+              Bearbeiten
+            </BigButton>
 
             <div className="overflow-hidden rounded-2xl ring-1 ring-white/[0.08]">
               <button
@@ -1345,7 +1363,7 @@ function ReportPreviewInner({
                 onClick={() => setMoreOpen((o) => !o)}
                 className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-zinc-400 transition hover:bg-white/[0.04]"
               >
-                <span>Weitere Optionen</span>
+                <span>Mehr</span>
                 <span className="text-zinc-500">{moreOpen ? '▴' : '▾'}</span>
               </button>
               {moreOpen ? (
@@ -1369,23 +1387,21 @@ function ReportPreviewInner({
                   <BigButton variant="secondary" type="button" onClick={() => onCopy(companyName, draftStructured)}>
                     Als Text kopieren
                   </BigButton>
-                  {savedReportId ? (
-                    <BigButton
-                      variant="secondary"
-                      type="button"
-                      onClick={() => {
-                        const state: FeedbackNavState = {
-                          category: 'Problem',
-                          reportId: savedReportId,
-                          reportLabel: `${st.projectName} · ${formatDateDe(st.date)}`,
-                          prefill: `Betreffender Bericht: ${st.projectName}, ${formatDateDe(st.date)}\n\n`,
-                        }
-                        nav('/feedback', { state })
-                      }}
-                    >
-                      Problem melden
-                    </BigButton>
-                  ) : null}
+                  <BigButton
+                    variant="secondary"
+                    type="button"
+                    onClick={() => {
+                      const state: FeedbackNavState = {
+                        category: 'Problem',
+                        reportId: savedReportId,
+                        reportLabel: `${st.projectName} · ${formatDateDe(st.date)}`,
+                        prefill: `Betreffender Bericht: ${st.projectName}, ${formatDateDe(st.date)}\n\n`,
+                      }
+                      nav('/feedback', { state })
+                    }}
+                  >
+                    Problem melden
+                  </BigButton>
                 </div>
               ) : null}
             </div>

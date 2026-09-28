@@ -73,6 +73,7 @@ export function ReportDetailPage() {
   const [officeBusy, setOfficeBusy] = useState(false)
   const [officeMsg, setOfficeMsg] = useState('')
   const [officeErr, setOfficeErr] = useState('')
+  const [moreOpen, setMoreOpen] = useState(false)
   const abschlussRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -276,54 +277,68 @@ export function ReportDetailPage() {
         {dlErr ? <p className="text-sm text-red-400">{dlErr}</p> : null}
         <BigButton
           type="button"
+          disabled={writeBlocked || officeBusy || dlBusy}
+          onClick={() => void sendOffice()}
+        >
+          {officeBusy ? '…' : 'Ans Büro senden'}
+        </BigButton>
+        <BigButton
+          type="button"
           variant="secondary"
           disabled={writeBlocked}
           onClick={() => nav('/bericht/vorschau', { state: buildReportPreviewStateFromDoc(report) })}
         >
           Bearbeiten
         </BigButton>
-        <BigButton type="button" onClick={copyAll}>
-          Text kopieren
-        </BigButton>
-        <BigButton
-          variant="secondary"
-          type="button"
-          onClick={() => {
-            const state: FeedbackNavState = {
-              category: 'Problem',
-              reportId: id,
-              reportLabel: `${report.projectName} · ${formatDateDe(report.date)}`,
-              prefill: `Betreffender Bericht: ${report.projectName}, ${formatDateDe(report.date)}\n\n`,
-            }
-            nav('/feedback', { state })
-          }}
-        >
-          Problem melden
-        </BigButton>
-        <BigButton
-          variant="secondary"
-          type="button"
-          disabled={dlBusy}
-          onClick={() => void dlExport('pdf')}
-        >
-          {dlBusy ? '…' : 'PDF herunterladen'}
-        </BigButton>
-        <BigButton
-          variant="secondary"
-          type="button"
-          disabled={dlBusy}
-          onClick={() => void dlExport('word')}
-        >
-          {dlBusy ? '…' : 'Word herunterladen'}
-        </BigButton>
-        <BigButton
-          variant="secondary"
-          type="button"
-          disabled={writeBlocked || officeBusy || dlBusy}
-          onClick={() => void sendOffice()}
-        >
-          {officeBusy ? '…' : 'Ans Büro senden'}
-        </BigButton>
+        <div className="overflow-hidden rounded-2xl ring-1 ring-white/[0.08]">
+          <button
+            type="button"
+            aria-expanded={moreOpen}
+            onClick={() => setMoreOpen((o) => !o)}
+            className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm font-medium text-zinc-400 transition hover:bg-white/[0.04]"
+          >
+            <span>Mehr</span>
+            <span className="text-zinc-500">{moreOpen ? '▴' : '▾'}</span>
+          </button>
+          {moreOpen ? (
+            <div className="space-y-2 border-t border-white/[0.06] px-3 py-3">
+              <BigButton
+                variant="secondary"
+                type="button"
+                disabled={dlBusy || officeBusy}
+                onClick={() => void dlExport('pdf')}
+              >
+                {dlBusy ? '…' : 'PDF herunterladen'}
+              </BigButton>
+              <BigButton
+                variant="secondary"
+                type="button"
+                disabled={dlBusy || officeBusy}
+                onClick={() => void dlExport('word')}
+              >
+                {dlBusy ? '…' : 'Word herunterladen'}
+              </BigButton>
+              <BigButton variant="secondary" type="button" onClick={copyAll}>
+                Text kopieren
+              </BigButton>
+              <BigButton
+                variant="secondary"
+                type="button"
+                onClick={() => {
+                  const state: FeedbackNavState = {
+                    category: 'Problem',
+                    reportId: id,
+                    reportLabel: `${report.projectName} · ${formatDateDe(report.date)}`,
+                    prefill: `Betreffender Bericht: ${report.projectName}, ${formatDateDe(report.date)}\n\n`,
+                  }
+                  nav('/feedback', { state })
+                }}
+              >
+                Problem melden
+              </BigButton>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   )
