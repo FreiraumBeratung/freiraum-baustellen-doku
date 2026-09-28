@@ -99,3 +99,28 @@ body[data-photo-upload-busy='1'] nav[aria-label='Hauptnavigation'] {
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
 }
+
+/* Home: To-do atmet nur bei offenen Aufgaben — kein Scale, keine Layout-Verschiebung. */
+@keyframes freiraum-todo-breathe {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(249, 115, 22, 0),
+      0 10px 28px -18px rgba(249, 115, 22, 0.2);
+  }
+  50% {
+    box-shadow:
+      0 0 0 5px rgba(249, 115, 22, 0.14),
+      0 14px 32px -12px rgba(249, 115, 22, 0.38);
+  }
+}
+
+.freiraum-todo-breathe {
+  animation: freiraum-todo-breathe 3.8s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freiraum-todo-breathe {
+    animation: none;
+  }
+}

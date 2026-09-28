@@ -9,11 +9,11 @@ type CompanyProfile = {
   logoUrl: string | null
 }
 
-type Tile = { to: string; title: string; emoji: string; primary?: boolean }
+type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
 
 const allTiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
-  { to: '/aufgaben', title: 'To-do / Aufgaben', emoji: '✅' },
+  { to: '/aufgaben', title: 'To-do / Aufgaben', emoji: '✅', accent: true },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
   { to: '/lieferschein', title: 'Lieferschein scannen', emoji: '📦' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
@@ -27,6 +27,7 @@ export function DashboardPage() {
   const { can, isCompanyOwner, logout } = useAuth()
   const nav = useNavigate()
   const [company, setCompany] = useState<CompanyProfile | null>(null)
+  const [todoOpen, setTodoOpen] = useState(false)
 
   const tiles = useMemo(
     () =>
@@ -49,6 +50,26 @@ export function DashboardPage() {
       .then(setCompany)
       .catch(() => setCompany({ companyName: '', logoUrl: null }))
   }, [])
+
+  useEffect(() => {
+    if (!can('tasks')) {
+      setTodoOpen(false)
+      return
+    }
+    let cancelled = false
+    api<{ tasks?: { status?: string }[] }>('/api/tasks?status=open')
+      .then((r) => {
+        if (cancelled) return
+        const list = Array.isArray(r.tasks) ? r.tasks : []
+        setTodoOpen(list.length > 0)
+      })
+      .catch(() => {
+        if (!cancelled) setTodoOpen(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [can])
 
   return (
     <div className="flex min-h-full flex-col">
@@ -95,21 +116,25 @@ export function DashboardPage() {
             } ${
               t.primary
                 ? 'border border-orange-400/35 bg-[linear-gradient(155deg,rgba(249,115,22,0.16),rgba(249,115,22,0.04)_60%)] ring-1 ring-orange-400/20'
-                : 'border border-white/[0.07] bg-zinc-900/[0.5] ring-1 ring-white/[0.04] hover:bg-white/[0.05]'
-            }`}
+                : t.accent
+                  ? 'border border-orange-400/22 bg-[linear-gradient(155deg,rgba(249,115,22,0.10),rgba(24,24,27,0.55)_62%)] ring-1 ring-orange-400/12 hover:bg-orange-500/[0.08]'
+                  : 'border border-white/[0.09] bg-[linear-gradient(180deg,rgba(255,255,255,0.045),rgba(24,24,27,0.55))] ring-1 ring-white/[0.05] hover:bg-white/[0.06]'
+            } ${t.accent && todoOpen ? 'freiraum-todo-breathe' : ''}`}
           >
             <span
               className={`flex h-[3rem] w-[3rem] items-center justify-center rounded-[1rem] text-[1.45rem] ring-1 transition ${
                 t.primary
                   ? 'bg-black/40 ring-orange-300/25'
-                  : 'bg-black/45 ring-white/[0.08] group-hover:ring-white/[0.14]'
+                  : t.accent
+                    ? 'bg-black/40 ring-orange-300/20'
+                    : 'bg-black/45 ring-white/[0.08] group-hover:ring-white/[0.14]'
               }`}
             >
               {t.emoji}
             </span>
             <span
               className={`text-[0.8rem] font-medium leading-tight tracking-tight ${
-                t.primary ? 'text-orange-100/95' : 'text-zinc-300'
+                t.primary ? 'text-orange-100/95' : t.accent ? 'text-orange-100/88' : 'text-zinc-300'
               }`}
             >
               {t.title}
