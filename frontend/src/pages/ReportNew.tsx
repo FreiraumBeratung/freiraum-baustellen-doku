@@ -402,8 +402,8 @@ export function ReportNewPage() {
 
       <PageTitle title="Tagesbericht" subtitle="Sprache und Notizen" />
 
-      <div className="space-y-8">
-        <Card className="space-y-5 border-transparent bg-black/35 px-[1.35rem] py-8 shadow-none ring-1 ring-white/[0.06] backdrop-blur-sm">
+      <div className="space-y-6">
+        <Card className="space-y-3 border-transparent bg-black/30 px-[1.15rem] py-4 shadow-none ring-1 ring-white/[0.05] backdrop-blur-sm">
           <div className="flex items-center justify-between gap-3">
             <p className="text-[0.68rem] font-medium tracking-[0.14em] text-zinc-600">Projekt</p>
             <button
@@ -475,7 +475,7 @@ export function ReportNewPage() {
 
         </Card>
 
-        <div className="rounded-3xl bg-black/45 ring-1 ring-white/[0.08]">
+        <div className="rounded-3xl bg-black/35 ring-1 ring-white/[0.06]">
           <button
             type="button"
             aria-expanded={detailsOpen}
@@ -650,32 +650,32 @@ export function ReportNewPage() {
           ) : null}
         </div>
 
-        <Card className="relative overflow-hidden border-transparent bg-[linear-gradient(180deg,rgba(255,255,255,0.05),transparent_52%)] px-[1.15rem] py-6 shadow-none ring-1 ring-orange-400/14 backdrop-blur-sm">
+        <Card className="relative overflow-hidden border-transparent bg-[linear-gradient(180deg,rgba(249,115,22,0.09),rgba(24,24,27,0.4)_46%,transparent_82%)] px-[1.15rem] py-8 shadow-none ring-1 ring-orange-400/22 backdrop-blur-sm">
           <div
             aria-hidden
-            className="pointer-events-none absolute inset-x-1/4 top-[-35%] h-[62%] rounded-full bg-orange-500/[0.08] blur-[44px]"
+            className="pointer-events-none absolute inset-x-[10%] top-[-30%] h-[72%] rounded-full bg-orange-500/[0.13] blur-[52px]"
           />
           <div className="relative space-y-5">
-            <div>
-              <p className="text-[0.68rem] font-medium tracking-[0.14em] text-orange-300/85">Aufnahme</p>
-              <p className="mt-2 text-[0.86rem] leading-[1.5] text-zinc-500">Frei sprechen oder unten schreiben.</p>
+            <div className="text-center">
+              <p className="text-[0.68rem] font-medium tracking-[0.16em] text-orange-300/90">Aufnahme</p>
+              <p className="mt-1.5 text-[0.86rem] leading-[1.5] text-zinc-500">Frei sprechen oder unten schreiben.</p>
             </div>
 
             {voiceSupported ? (
-              <div className="flex flex-col items-center gap-3 py-0">
-                <div className="rounded-[1.8rem] bg-black/35 p-[0.3rem] ring-1 ring-white/[0.07]">
+              <div className="flex flex-col items-center gap-3 py-3">
+                <div className="rounded-[2rem] bg-black/40 p-[0.38rem] ring-1 ring-orange-400/18">
                 <button
                   type="button"
                   disabled={busy || writeBlocked}
                   onClick={() => toggleVoice()}
-                  className={`flex h-[5.5rem] w-[5.5rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/45 ring-offset-2 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
+                  className={`flex h-[6.25rem] w-[6.25rem] items-center justify-center rounded-full bg-gradient-to-br from-orange-400 to-orange-600 text-zinc-950 outline-none ring-2 ring-orange-400/50 ring-offset-2 ring-offset-zinc-950 transition hover:from-orange-300 hover:to-orange-500 disabled:opacity-35 focus-visible:ring-orange-400/70 ${voiceActive ? 'freiraum-mic-recording' : voiceSavedFlash ? '' : 'freiraum-mic-idle'}`}
                   aria-pressed={voiceActive}
                   aria-label={voiceActive ? 'Spracheingabe stoppen' : 'Spracheingabe starten'}
                 >
                   {voiceSavedFlash && !voiceActive ? (
-                    <Check className="h-9 w-9" strokeWidth={2.5} aria-hidden />
+                    <Check className="h-10 w-10" strokeWidth={2.5} aria-hidden />
                   ) : (
-                    <Mic className="h-9 w-9" strokeWidth={2} aria-hidden />
+                    <Mic className="h-10 w-10" strokeWidth={2} aria-hidden />
                   )}
                 </button>
                 </div>
@@ -704,9 +704,9 @@ export function ReportNewPage() {
             </label>
 
             <label className="block">
-              <span className="text-[0.875rem] text-zinc-500">Besonderheiten (optional)</span>
+              <span className="text-[0.75rem] text-zinc-600">Besonderheiten (optional)</span>
               <textarea
-                className="mt-2 min-h-[5rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.09] bg-black/55 px-4 py-[0.875rem] text-base leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
+                className="mt-1.5 min-h-[3.25rem] w-full min-w-0 rounded-[1.15rem] border border-white/[0.07] bg-black/40 px-4 py-[0.7rem] text-[0.95rem] leading-relaxed text-white outline-none backdrop-blur-sm focus:border-orange-500/60 focus:ring-[1px] focus:ring-orange-500/55"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="z. B. Arbeit unterbrochen, weil der Maler kam …"
