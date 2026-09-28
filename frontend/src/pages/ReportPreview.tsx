@@ -336,9 +336,9 @@ function EditableArraySection({
   return (
     <section>
       <h3 className="text-sm font-semibold uppercase tracking-wide text-orange-400">{title}</h3>
-      <div className="mt-3 space-y-3">
-        {items.length ? (
-          items.map((value, i) => (
+      <div className={`${items.length ? 'mt-3 space-y-3' : 'mt-2 space-y-2'}`}>
+        {items.length
+          ? items.map((value, i) => (
             <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-start">
               <textarea
                 rows={2}
@@ -359,9 +359,7 @@ function EditableArraySection({
               </button>
             </div>
           ))
-        ) : (
-          <p className="text-sm text-zinc-500">Noch keine Einträge — unten einen Punkt hinzufügen.</p>
-        )}
+          : null}
         <BigButton variant="secondary" type="button" disabled={disabled} className="!py-2 text-sm" onClick={addRow}>
           {addLabel}
         </BigButton>
@@ -503,9 +501,9 @@ function MachineHoursSection({
           ))}
         </div>
       ) : null}
-      <div className="mt-3 space-y-3">
-        {items.length ? (
-          items.map((value, i) => (
+      <div className={`${items.length ? 'mt-3 space-y-3' : 'mt-2 space-y-2'}`}>
+        {items.length
+          ? items.map((value, i) => (
             <div key={i} className="flex flex-col gap-2 sm:flex-row sm:items-start">
               <textarea
                 rows={2}
@@ -526,9 +524,7 @@ function MachineHoursSection({
               </button>
             </div>
           ))
-        ) : (
-          <p className="text-sm text-zinc-500">Noch keine Einträge — unten einen Punkt hinzufügen.</p>
-        )}
+          : null}
         <BigButton variant="secondary" type="button" disabled={disabled} className="!py-2 text-sm" onClick={addRow}>
           + Maschinenstunde hinzufügen
         </BigButton>
@@ -1243,9 +1239,11 @@ function ReportPreviewInner({
             Kundengespräch
           </h3>
           <textarea
-            className={`${textareaClass} disabled:opacity-60`}
-            rows={5}
-            value={s.customerTalk}
+            className={`${textareaClass} disabled:opacity-60 ${
+              !s.customerTalk.trim() || s.customerTalk.trim() === 'Keine Angabe' ? '!min-h-[4.5rem]' : ''
+            }`}
+            rows={!s.customerTalk.trim() || s.customerTalk.trim() === 'Keine Angabe' ? 3 : 5}
+            value={s.customerTalk.trim() === 'Keine Angabe' ? '' : s.customerTalk}
             disabled={Boolean(savedReportId)}
             onChange={(e) =>
               setDraftStructured((prev) => ({ ...prev, customerTalk: e.target.value }))
