@@ -142,22 +142,33 @@ export function CompanyProfilePage() {
               <option value="Word">Word</option>
             </select>
           </label>
-          <label className="flex cursor-pointer items-start gap-3">
-            <input
-              type="checkbox"
-              className="mt-1 h-4 w-4 accent-orange-500"
-              checked={Boolean(prof.includePhotosInPdf)}
-              disabled={writeBlocked}
-              onChange={(e) => setProf({ ...prof, includePhotosInPdf: e.target.checked })}
-            />
-            <span>
-              <span className="block text-sm text-zinc-400">Fotos in der Tagesbericht-PDF</span>
-              <span className="mt-1 block text-[0.72rem] leading-snug text-zinc-600">
-                Aus: Fotos bleiben in der App und gehen wie bisher extra mit der Mail. An: die
-                Bilder stehen im PDF.
-              </span>
-            </span>
-          </label>
+          <div className="rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-zinc-300">Fotos in der Tagesbericht-PDF</span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={Boolean(prof.includePhotosInPdf)}
+                aria-label="Fotos in der Tagesbericht-PDF"
+                disabled={writeBlocked}
+                onClick={() => setProf({ ...prof, includePhotosInPdf: !prof.includePhotosInPdf })}
+                className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                  prof.includePhotosInPdf ? 'bg-orange-500' : 'bg-zinc-700'
+                } disabled:opacity-50`}
+              >
+                <span
+                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${
+                    prof.includePhotosInPdf ? 'left-5' : 'left-0.5'
+                  }`}
+                />
+              </button>
+            </div>
+            <p className="mt-2 text-[0.72rem] leading-snug text-zinc-600">
+              {prof.includePhotosInPdf
+                ? 'An: die Bilder stehen im PDF. In der Mail dann kein extra Foto-Anhang.'
+                : 'Aus: Fotos bleiben in der App und gehen wie bisher extra mit der Mail.'}
+            </p>
+          </div>
 
           <label className="block">
             <span className="text-sm text-zinc-400">Firmenlogo</span>
