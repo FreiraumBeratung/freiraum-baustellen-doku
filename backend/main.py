@@ -2343,7 +2343,16 @@ def list_time_accounts_endpoint(
     )
 
 
-def _time_export_payload(store: TenantStore, month: str | None) -> dict[str, Any]:
+def _time_export_employee_slug(name: str) -> str:
+    slug = re.sub(r"[^A-Za-z0-9]+", "_", str(name or "").strip())[:32].strip("_")
+    return slug or "mitarbeiter"
+
+
+def _time_export_payload(
+    store: TenantStore,
+    month: str | None,
+    employee_id: str | None = None,
+) -> dict[str, Any]:
     month_prefix = str(month or datetime.now(timezone.utc).strftime("%Y-%m")).strip()[:7]
     if not re.match(r"^\d{4}-\d{2}$", month_prefix):
         raise HTTPException(status_code=400, detail="Ungültiger Monat (YYYY-MM)")
@@ -2358,23 +2367,47 @@ def _time_export_payload(store: TenantStore, month: str | None) -> dict[str, Any
     accounts_doc = time_account.list_time_accounts(employees, read_json=store.time_account_read_json, month=month_prefix)
     company = store.read_json("company_profile.json", {})
     company_name = str(company.get("companyName") or "")
+    accounts = list(accounts_doc.get("accounts") or [])
+
+    eid = str(employee_id or "").strip()
+    if eid:
+        if len(eid) > 80 or "/" in eid or "\\" in eid or ".." in eid:
+            raise HTTPException(status_code=400, detail="Ungültige Mitarbeiter-ID")
+        known_ids = {str(e.get("id") or "").strip() for e in employees if str(e.get("id") or "").strip()}
+        entries = [e for e in entries if str(e.get("employeeId") or "") == eid]
+        accounts = [a for a in accounts if str(a.get("employeeId") or "") == eid]
+        if eid not in known_ids and not entries and not accounts:
+            raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
 
     return {
         "entries": entries,
-        "accounts": list(accounts_doc.get("accounts") or []),
+        "accounts": accounts,
         "month": month_prefix,
         "company_name": company_name,
     }
 
 
+def _time_export_stem(payload: dict[str, Any], employee_id: str | None) -> str:
+    month_prefix = str(payload.get("month") or "")
+    eid = str(employee_id or "").strip()
+    if not eid:
+        return f"stundenkonto_{month_prefix}"
+    accounts = payload.get("accounts") if isinstance(payload.get("accounts"), list) else []
+    name = ""
+    if accounts and isinstance(accounts[0], dict):
+        name = str(accounts[0].get("employeeName") or "")
+    return f"stundenkonto_{month_prefix}_{_time_export_employee_slug(name)}"
+
+
 @app.get("/api/time-accounts/export/csv")
 def export_time_accounts_csv(
     month: str | None = None,
+    employeeId: str | None = None,
     store: TenantStore = Depends(get_tenant_store),
 ):
-    payload = _time_export_payload(store, month)
+    payload = _time_export_payload(store, month, employeeId)
     blob = time_account.build_time_export_csv(**payload)
-    ascii_fn = f"stundenkonto_{payload['month']}.csv"
+    ascii_fn = f"{_time_export_stem(payload, employeeId)}.csv"
     return Response(
         content=blob,
         media_type="text/csv; charset=utf-8",
@@ -2387,14 +2420,15 @@ def export_time_accounts_csv(
 @app.get("/api/time-accounts/export/xlsx")
 def export_time_accounts_xlsx(
     month: str | None = None,
+    employeeId: str | None = None,
     store: TenantStore = Depends(get_tenant_store),
 ):
-    payload = _time_export_payload(store, month)
+    payload = _time_export_payload(store, month, employeeId)
     try:
         blob = time_account.build_time_export_xlsx(**payload)
     except Exception as exc:
         raise HTTPException(status_code=500, detail="Excel-Export konnte nicht erstellt werden.") from exc
-    ascii_fn = f"stundenkonto_{payload['month']}.xlsx"
+    ascii_fn = f"{_time_export_stem(payload, employeeId)}.xlsx"
     return Response(
         content=blob,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

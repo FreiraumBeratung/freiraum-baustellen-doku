@@ -213,4 +213,33 @@ _expect(
 )
 _expect(res_xlsx.content[:2] == b"PK", "xlsx zip signature")
 
+res_csv_one = client.get(
+    f"/api/time-accounts/export/csv?month=2026-05&employeeId={matthias_id}",
+    headers=hdrs,
+)
+_expect(res_csv_one.status_code == 200, f"csv one: {res_csv_one.status_code}")
+body_one = res_csv_one.content.decode("utf-8-sig")
+_expect("Matthias" in body_one, "csv one contains Matthias")
+_expect("Denis" not in body_one, "csv one excludes other employee")
+_expect("ZUSAMMENFASSUNG" in body_one, "csv one still has summary")
+
+res_xlsx_one = client.get(
+    f"/api/time-accounts/export/xlsx?month=2026-05&employeeId={denis_id}",
+    headers=hdrs,
+)
+_expect(res_xlsx_one.status_code == 200, f"xlsx one: {res_xlsx_one.status_code}")
+_expect(res_xlsx_one.content[:2] == b"PK", "xlsx one zip signature")
+cd_one = res_xlsx_one.headers.get("content-disposition") or ""
+_expect("Denis" in cd_one, f"xlsx one filename: {cd_one}")
+
+res_csv_all = client.get("/api/time-accounts/export/csv?month=2026-05", headers=hdrs)
+body_all = res_csv_all.content.decode("utf-8-sig")
+_expect("Denis" in body_all and "Matthias" in body_all, "month csv still both employees")
+
+res_missing = client.get(
+    "/api/time-accounts/export/csv?month=2026-05&employeeId=missing-employee",
+    headers=hdrs,
+)
+_expect(res_missing.status_code == 404, f"unknown employee: {res_missing.status_code}")
+
 print("TIME-ACCOUNT-SMOKE (Z1): OK")

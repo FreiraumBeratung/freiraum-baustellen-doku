@@ -445,7 +445,9 @@ export function TimeAccountsPage() {
   const [entriesByEmployee, setEntriesByEmployee] = useState<Record<string, TimeEntry[]>>({})
   const [entriesLoading, setEntriesLoading] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
-  const [exportBusy, setExportBusy] = useState<'xlsx' | 'csv' | false>(false)
+  const [exportBusy, setExportBusy] = useState<
+    false | { kind: 'xlsx' | 'csv'; employeeId?: string }
+  >(false)
   const [exportMsg, setExportMsg] = useState('')
   const [err, setErr] = useState('')
 
@@ -512,16 +514,22 @@ export function TimeAccountsPage() {
 
   const activeAccounts = accounts.filter((a) => a.active || a.entryCount > 0 || a.hoursBalanceStart !== 0)
 
-  async function exportFile(kind: 'xlsx' | 'csv') {
+  async function exportFile(kind: 'xlsx' | 'csv', employeeId?: string) {
     if (!month || month.length !== 7) return
-    setExportBusy(kind)
+    setExportBusy({ kind, employeeId })
     setExportMsg('')
     try {
-      await downloadExport(`/api/time-accounts/export/${kind}?month=${encodeURIComponent(month)}`)
+      const qs = new URLSearchParams({ month })
+      if (employeeId) qs.set('employeeId', employeeId)
+      await downloadExport(`/api/time-accounts/export/${kind}?${qs.toString()}`)
       setExportMsg(
         kind === 'xlsx'
-          ? 'Excel exportiert — Datei öffnet sich direkt in Excel.'
-          : 'CSV exportiert — für ERP-Import geeignet.',
+          ? employeeId
+            ? 'Excel für diesen Mitarbeiter exportiert.'
+            : 'Excel exportiert — Datei öffnet sich direkt in Excel.'
+          : employeeId
+            ? 'CSV für diesen Mitarbeiter exportiert.'
+            : 'CSV exportiert — für ERP-Import geeignet.',
       )
       window.setTimeout(() => setExportMsg(''), 5000)
     } catch {
@@ -557,7 +565,7 @@ export function TimeAccountsPage() {
           onClick={() => exportFile('xlsx')}
         >
           <Download className="h-4 w-4 shrink-0" aria-hidden />
-          {exportBusy === 'xlsx' ? '…' : 'Excel'}
+          {exportBusy && exportBusy.kind === 'xlsx' && !exportBusy.employeeId ? '…' : 'Excel'}
         </button>
         <button
           type="button"
@@ -566,7 +574,7 @@ export function TimeAccountsPage() {
           onClick={() => exportFile('csv')}
         >
           <Download className="h-4 w-4 shrink-0" aria-hidden />
-          {exportBusy === 'csv' ? '…' : 'CSV'}
+          {exportBusy && exportBusy.kind === 'csv' && !exportBusy.employeeId ? '…' : 'CSV'}
         </button>
       </div>
       <p className="mb-5 text-center text-xs text-zinc-600">
@@ -639,6 +647,37 @@ export function TimeAccountsPage() {
                       {' · '}gebucht {fmtHours(acct.bookedHoursTotal)}
                     </p>
                   ) : null}
+                  <div className="mb-4 grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={Boolean(exportBusy) || !month}
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-orange-500/30 bg-orange-500/[0.08] text-sm font-semibold text-orange-200 transition hover:bg-orange-500/[0.14] disabled:opacity-40"
+                      onClick={() => void exportFile('xlsx', acct.employeeId)}
+                    >
+                      <Download className="h-4 w-4 shrink-0" aria-hidden />
+                      {exportBusy &&
+                      exportBusy.kind === 'xlsx' &&
+                      exportBusy.employeeId === acct.employeeId
+                        ? '…'
+                        : 'Excel'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={Boolean(exportBusy) || !month}
+                      className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-900/60 text-sm font-semibold text-zinc-200 transition hover:bg-zinc-800 disabled:opacity-40"
+                      onClick={() => void exportFile('csv', acct.employeeId)}
+                    >
+                      <Download className="h-4 w-4 shrink-0" aria-hidden />
+                      {exportBusy &&
+                      exportBusy.kind === 'csv' &&
+                      exportBusy.employeeId === acct.employeeId
+                        ? '…'
+                        : 'CSV'}
+                    </button>
+                  </div>
+                  <p className="mb-4 text-center text-xs text-zinc-600">
+                    Nur {acct.employeeName || 'dieser Mitarbeiter'} · gewählter Monat
+                  </p>
                   <StartBalanceSection acct={acct} onSaved={() => loadAccounts()} />
                   <ManualCorrectionForm acct={acct} onSaved={() => reloadEmployeeData(acct.employeeId)} />
                   <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-600">Buchungen</p>
