@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api, downloadExport } from '../api/client'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
 import { ReportSignaturesSection } from '../components/ReportSignaturesSection'
-import { BigButton, Card, PageTitle } from '../components/ui'
+import { BigButton, Card, PageTitle, ActionSignal } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { isTabletDevice } from '../utils/isTabletDevice'
 import { wakePageAfterPhotoUpload } from '../utils/pwaRepaint'
@@ -270,9 +270,9 @@ export function ReportDetailPage() {
 
       <div className="mt-6 space-y-3">
         {navState?.photoUploadOk || uploadedFromQuery ? (
-          <p className="text-center text-sm text-emerald-400/90">Foto übernommen.</p>
+          <ActionSignal>Foto übernommen.</ActionSignal>
         ) : null}
-        {officeMsg ? <p className="text-sm text-orange-300">{officeMsg}</p> : null}
+        {officeMsg ? <ActionSignal>{officeMsg}</ActionSignal> : null}
         {officeErr ? <p className="text-sm text-red-400">{officeErr}</p> : null}
         {dlErr ? <p className="text-sm text-red-400">{dlErr}</p> : null}
         <BigButton

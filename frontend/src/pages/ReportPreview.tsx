@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState, useEffect, useLayoutEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { api, downloadExport, resolveBackendPublicUrl } from '../api/client'
-import { BigButton, Card, PageTitle } from '../components/ui'
+import { BigButton, Card, PageTitle, ActionSignal } from '../components/ui'
 import { BreakMinutesSelect } from '../components/BreakMinutesSelect'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { ReportPhotosSection } from '../components/ReportPhotosSection'
@@ -1320,10 +1320,10 @@ function ReportPreviewInner({
         ) : null}
 
         {saveErr ? <p className="text-center text-sm text-red-400">{saveErr}</p> : null}
-        {saveMsg ? <p className="text-center text-sm text-emerald-400/90">{saveMsg}</p> : null}
-        {timeBookingMsg ? <p className="text-center text-sm text-emerald-400/90">{timeBookingMsg}</p> : null}
+        {saveMsg ? <ActionSignal>{saveMsg}</ActionSignal> : null}
+        {timeBookingMsg ? <ActionSignal>{timeBookingMsg}</ActionSignal> : null}
         {timeBookingWarn ? <p className="text-center text-sm text-amber-400/90">{timeBookingWarn}</p> : null}
-        {officeMsg ? <p className="text-center text-sm text-orange-300">{officeMsg}</p> : null}
+        {officeMsg ? <ActionSignal>{officeMsg}</ActionSignal> : null}
         {officeErr ? <p className="text-center text-sm text-red-400">{officeErr}</p> : null}
 
         {savedReportId ? (

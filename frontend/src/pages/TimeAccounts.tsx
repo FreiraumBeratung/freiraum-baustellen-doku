@@ -593,7 +593,10 @@ export function TimeAccountsPage() {
           const busy = entriesLoading === acct.employeeId
 
           return (
-            <Card key={acct.employeeId} className="p-0 overflow-hidden">
+            <Card
+              key={acct.employeeId}
+              className="overflow-hidden border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))] p-0 shadow-none ring-1 ring-white/[0.05]"
+            >
               <button
                 type="button"
                 className="flex w-full items-start gap-3 px-5 py-4 text-left transition hover:bg-white/[0.03]"
@@ -601,37 +604,20 @@ export function TimeAccountsPage() {
                 aria-expanded={open}
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-semibold text-white">{acct.employeeName || 'Unbenannt'}</span>
-                    {!acct.active ? <span className="text-xs text-zinc-600">inaktiv</span> : null}
-                  </div>
-                  <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
-                    <div>
-                      <span className="text-zinc-500">Saldo </span>
-                      <span className={`font-medium ${balanceTone(acct.currentBalance)}`}>
-                        {fmtHours(acct.currentBalance)}
+                    {!acct.active ? (
+                      <span className="rounded-full bg-zinc-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 ring-1 ring-zinc-400/30">
+                        inaktiv
                       </span>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500">Monat </span>
-                      <span className="text-zinc-200">{fmtHours(acct.monthHours)}</span>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500">Woche </span>
-                      <span className="text-zinc-200">{fmtHours(acct.weekHours)}</span>
-                    </div>
-                    <div>
-                      <span className="text-zinc-500">Buchungen </span>
-                      <span className="text-zinc-200">{acct.entryCount}</span>
-                    </div>
+                    ) : null}
                   </div>
-                  {acct.hoursBalanceStart !== 0 || acct.hoursBalanceStartDate ? (
-                    <p className="mt-2 text-xs text-zinc-600">
-                      Startsaldo {fmtHours(acct.hoursBalanceStart)}
-                      {acct.hoursBalanceStartDate ? ` · Stand ${fmtDate(acct.hoursBalanceStartDate)}` : ''}
-                      {' · '}gebucht {fmtHours(acct.bookedHoursTotal)}
-                    </p>
-                  ) : null}
+                  <p className="mt-1.5 text-sm">
+                    <span className={`font-medium ${balanceTone(acct.currentBalance)}`}>
+                      Saldo {fmtHours(acct.currentBalance)}
+                    </span>
+                    <span className="text-zinc-500"> · Monat {fmtHours(acct.monthHours)}</span>
+                  </p>
                 </div>
                 {open ? (
                   <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-zinc-500" aria-hidden />
@@ -642,6 +628,17 @@ export function TimeAccountsPage() {
 
               {open ? (
                 <div className="border-t border-white/[0.06] px-5 py-4">
+                  <p className="mb-3 text-sm text-zinc-400">
+                    Woche {fmtHours(acct.weekHours)} · {acct.entryCount}{' '}
+                    {acct.entryCount === 1 ? 'Buchung' : 'Buchungen'}
+                  </p>
+                  {acct.hoursBalanceStart !== 0 || acct.hoursBalanceStartDate ? (
+                    <p className="mb-3 text-xs text-zinc-600">
+                      Startsaldo {fmtHours(acct.hoursBalanceStart)}
+                      {acct.hoursBalanceStartDate ? ` · Stand ${fmtDate(acct.hoursBalanceStartDate)}` : ''}
+                      {' · '}gebucht {fmtHours(acct.bookedHoursTotal)}
+                    </p>
+                  ) : null}
                   <StartBalanceSection acct={acct} onSaved={() => loadAccounts()} />
                   <ManualCorrectionForm acct={acct} onSaved={() => reloadEmployeeData(acct.employeeId)} />
                   <p className="mb-3 text-xs font-medium uppercase tracking-wide text-zinc-600">Buchungen</p>

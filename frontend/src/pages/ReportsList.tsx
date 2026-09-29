@@ -129,51 +129,37 @@ export function ReportsListPage() {
         <p className={`mb-3 text-sm ${msg.includes('Konnte nicht') ? 'text-red-400' : 'text-orange-300'}`}>{msg}</p>
       ) : null}
 
-      <div className="space-y-5">
+      <div className="space-y-3">
         {reports.map((rep) => {
           const hasSummary = Boolean(rep.structured?.summary?.trim())
 
           return (
             <Card
               key={rep.id}
-              className="relative overflow-hidden border-transparent bg-[linear-gradient(168deg,rgba(255,255,255,0.045)_0%,transparent_56%)] px-7 py-10 shadow-none ring-1 ring-white/[0.07]"
+              className="border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))] px-5 py-4 shadow-none ring-1 ring-white/[0.05]"
             >
-              <div className="absolute right-5 top-5 flex shrink-0 items-center gap-1 rounded-full bg-orange-500/[0.17] px-2.5 py-[0.4rem] ring-1 ring-orange-400/[0.34]">
-                <FileText className="h-3.5 w-3.5 text-orange-400" aria-hidden />
-                <span className="text-xs font-semibold text-orange-400">{rep.exportFormat}</span>
-              </div>
-
-              <div className="pr-[5.25rem]">
-                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-zinc-500">
-                  Datum <span className="text-orange-400/95">{formatDateDe(rep.date)}</span>
-                </p>
-                <h3 className="mt-3 text-[1.12rem] font-semibold tracking-tight text-white">
-                  {formatBaustelleLabel(rep.projectName, rep.siteSpot)}
-                </h3>
-                <p className="mt-2 text-sm">
-                  <span className="text-zinc-500">Mitwirkende</span>{' '}
-                  {rep.employees.length ? (
-                    <span className="font-medium text-zinc-300">{rep.employees.join(', ')}</span>
-                  ) : (
-                    <span className="text-[0.8125rem] font-normal italic text-zinc-600">Keine Angabe</span>
-                  )}
-                </p>
-                <div className="mt-4 flex flex-wrap items-center gap-2">
-                  <span className="rounded-full bg-black/42 px-[0.7rem] py-[0.28rem] text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500 ring-1 ring-white/[0.07]">
-                    Bericht gespeichert
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-[1.05rem] font-semibold tracking-tight text-white">
+                    {formatBaustelleLabel(rep.projectName, rep.siteSpot)}
+                  </h3>
+                  <p className="mt-1 truncate text-sm text-zinc-400">
+                    {formatDateDe(rep.date)}
+                    {rep.employees.length ? ` · ${rep.employees.join(', ')}` : ''}
+                  </p>
+                </div>
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-orange-500/[0.14] px-2.5 py-[0.28rem] ring-1 ring-orange-400/30">
+                  <FileText className="h-3.5 w-3.5 text-orange-400" aria-hidden />
+                  <span className="text-[10px] font-semibold uppercase tracking-wide text-orange-300">
+                    {rep.exportFormat}
                   </span>
-                </div>
-
-                <div className="mt-3 min-h-[2.375rem]">
-                  {hasSummary ? (
-                    <p className="line-clamp-2 text-sm leading-snug text-zinc-400">{rep.structured.summary}</p>
-                  ) : (
-                    <p className="text-[0.78rem] leading-relaxed text-zinc-600">Keine Zusammenfassung vorhanden</p>
-                  )}
-                </div>
+                </span>
               </div>
+              {hasSummary ? (
+                <p className="mt-2 line-clamp-1 text-sm leading-snug text-zinc-500">{rep.structured.summary}</p>
+              ) : null}
 
-              <div className="mt-6 grid grid-cols-3 gap-2">
+              <div className="mt-4 grid grid-cols-3 gap-2">
                 <Link
                   to={`/berichte/${rep.id}`}
                   className="inline-flex h-11 items-center justify-center rounded-2xl bg-white/[0.08] text-[0.82rem] font-semibold text-white ring-1 ring-white/[0.12] transition hover:bg-white/[0.12] focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/55 active:scale-[0.98]"

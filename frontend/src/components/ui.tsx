@@ -78,3 +78,15 @@ export function PoweredBy() {
     </p>
   )
 }
+
+/** Kurze Bestätigung nach Speichern/Senden — nur Optik. */
+export function ActionSignal({ children }: { children: ReactNode }) {
+  return (
+    <p
+      role="status"
+      className="freiraum-action-signal rounded-2xl border border-orange-400/25 bg-orange-500/[0.1] px-4 py-3 text-center text-sm font-medium text-orange-200"
+    >
+      {children}
+    </p>
+  )
+}

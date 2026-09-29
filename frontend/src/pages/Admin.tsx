@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
 import {
   deleteAdminUser,
   listAdminUsers,
@@ -35,6 +35,7 @@ export function AdminPage() {
   const [msg, setMsg] = useState('')
   const [err, setErr] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [detailsOpen, setDetailsOpen] = useState<Record<string, boolean>>({})
 
   const load = useCallback(async () => {
     setErr('')
@@ -118,57 +119,41 @@ export function AdminPage() {
           return (
             <Card
               key={row.id}
-              className="border-white/[0.07] bg-black/35 px-5 py-4 shadow-none ring-1 ring-white/[0.05]"
+              className="border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))] px-5 py-4 shadow-none ring-1 ring-white/[0.05]"
             >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate text-base font-semibold text-white">{row.companyName || '—'}</h2>
-                    {usedToday ? (
-                      <span
-                        className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-400/40"
-                        title={activityTitle}
-                      >
-                        Heute aktiv
-                      </span>
-                    ) : (
-                      <span
-                        className="rounded-full bg-zinc-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 ring-1 ring-zinc-400/35"
-                        title={activityTitle}
-                      >
-                        Heute still
-                      </span>
-                    )}
-                    {row.isAdmin ? (
-                      <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-300 ring-1 ring-orange-500/30">
-                        Admin
-                      </span>
-                    ) : null}
-                    {!row.licenseActive ? (
-                      <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 ring-1 ring-amber-500/30">
-                        Pausiert
-                      </span>
-                    ) : null}
-                  </div>
-                  <p className="mt-1 truncate text-sm text-zinc-400">{row.email}</p>
-                  {row.entrepreneurName ? (
-                    <p className="mt-0.5 text-xs text-zinc-500">{row.entrepreneurName}</p>
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="truncate text-base font-semibold text-white">{row.companyName || '—'}</h2>
+                  {usedToday ? (
+                    <span
+                      className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-400/40"
+                      title={activityTitle}
+                    >
+                      Heute aktiv
+                    </span>
+                  ) : (
+                    <span
+                      className="rounded-full bg-zinc-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-300 ring-1 ring-zinc-400/35"
+                      title={activityTitle}
+                    >
+                      Heute still
+                    </span>
+                  )}
+                  {row.isAdmin ? (
+                    <span className="rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-300 ring-1 ring-orange-500/30">
+                      Admin
+                    </span>
                   ) : null}
-                  <p className="mt-2 text-xs text-zinc-500">Registriert: {fmtDate(row.createdAt)}</p>
-                  <p className="mt-1 text-sm font-medium text-zinc-200" title={activityTitle}>
-                    {row.lastActivityAt ? activityTitle : 'Noch keine Nutzung erkannt'}
-                  </p>
-                  {!row.isAdmin ? (
-                    <p className="mt-1 text-sm text-zinc-300">
-                      Registrierte Mitarbeiter: {typeof row.workerCount === 'number' ? row.workerCount : 0}
-                    </p>
+                  {!row.licenseActive ? (
+                    <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200 ring-1 ring-amber-500/30">
+                      Pausiert
+                    </span>
                   ) : null}
-                  <p className="mt-2 break-all font-mono text-[11px] leading-snug text-zinc-600">
-                    ID: {row.id}
-                    <br />
-                    Tenant-ID: {row.tenantId || row.id}
-                  </p>
                 </div>
+                <p className="mt-1 truncate text-sm text-zinc-400">{row.email}</p>
+                {row.entrepreneurName ? (
+                  <p className="mt-0.5 text-xs text-zinc-500">{row.entrepreneurName}</p>
+                ) : null}
               </div>
 
               <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -201,6 +186,43 @@ export function AdminPage() {
                     <Trash2 className="h-4 w-4" aria-hidden />
                     {busy ? '…' : 'Löschen'}
                   </button>
+                ) : null}
+              </div>
+
+              <div className="mt-3 overflow-hidden rounded-2xl ring-1 ring-white/[0.08]">
+                <button
+                  type="button"
+                  aria-expanded={Boolean(detailsOpen[row.id])}
+                  onClick={() =>
+                    setDetailsOpen((prev) => ({ ...prev, [row.id]: !prev[row.id] }))
+                  }
+                  className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left text-sm font-medium text-zinc-400 transition hover:bg-white/[0.04]"
+                >
+                  <span>Details</span>
+                  {detailsOpen[row.id] ? (
+                    <ChevronUp strokeWidth={2} className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                  ) : (
+                    <ChevronDown strokeWidth={2} className="h-4 w-4 shrink-0 text-zinc-500" aria-hidden />
+                  )}
+                </button>
+                {detailsOpen[row.id] ? (
+                  <div className="space-y-2 border-t border-white/[0.06] px-4 py-3 text-sm text-zinc-400">
+                    <p>Registriert: {fmtDate(row.createdAt)}</p>
+                    <p title={activityTitle}>
+                      {row.lastActivityAt ? activityTitle : 'Noch keine Nutzung erkannt'}
+                    </p>
+                    {!row.isAdmin ? (
+                      <p>
+                        Registrierte Mitarbeiter:{' '}
+                        {typeof row.workerCount === 'number' ? row.workerCount : 0}
+                      </p>
+                    ) : null}
+                    <p className="break-all font-mono text-[11px] leading-snug text-zinc-600">
+                      ID: {row.id}
+                      <br />
+                      Tenant-ID: {row.tenantId || row.id}
+                    </p>
+                  </div>
                 ) : null}
               </div>
             </Card>

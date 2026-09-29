@@ -299,8 +299,8 @@ function TaskCard({
   const wrapClass = embedded
     ? 'space-y-2 py-1'
     : expanded
-      ? 'space-y-3'
-      : 'space-y-1 !px-4 !py-3.5'
+      ? 'space-y-3 border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))]'
+      : 'space-y-1 !px-4 !py-3.5 border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))]'
 
   async function downloadCompletionPdf() {
     setOfficeErr('')
@@ -342,24 +342,43 @@ function TaskCard({
       </>
     ) : null
 
+  const statusPill =
+    t.status === 'done' ? (
+      <span className="shrink-0 rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-300 ring-1 ring-emerald-400/35">
+        Erledigt
+      </span>
+    ) : (
+      <span className="shrink-0 rounded-full bg-orange-500/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-orange-200 ring-1 ring-orange-400/30">
+        Offen
+      </span>
+    )
+
+  const titleRow = (
+    <div className={`flex items-start justify-between gap-2 ${showSite ? 'mt-1' : ''}`}>
+      <p className="min-w-0 text-sm font-medium text-white">{t.title}</p>
+      {statusPill}
+    </div>
+  )
+
+  const metaLine = (
+    <p className="mt-1 text-xs text-zinc-500">
+      {formatDateDe(t.dueDate)}
+      {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
+    </p>
+  )
+
   const head = compactOnly ? (
     <div>
       {siteBlock}
-      <p className={`text-sm font-medium text-white ${showSite ? 'mt-1' : ''}`}>{t.title}</p>
-      <p className="mt-1 text-xs text-zinc-500">
-        Datum: {formatDateDe(t.dueDate)}
-        {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
-      </p>
+      {titleRow}
+      {metaLine}
       <MiniQtyBar t={t} />
     </div>
   ) : (
     <button type="button" onClick={onToggle} className="block w-full text-left">
       {siteBlock}
-      <p className={`text-sm font-medium text-white ${showSite ? 'mt-1' : ''}`}>{t.title}</p>
-      <p className="mt-1 text-xs text-zinc-500">
-        Datum: {formatDateDe(t.dueDate)}
-        {t.assigneeNames?.length ? ` · ${t.assigneeNames.join(', ')}` : ''}
-      </p>
+      {titleRow}
+      {metaLine}
       {expanded && t.status === 'open' && t.targetQuantity != null ? null : <MiniQtyBar t={t} />}
     </button>
   )
@@ -1454,7 +1473,7 @@ export function TasksPage() {
             const open = expandedGroupKey === g.key
             const allDone = g.tasks.every((t) => t.status === 'done')
             return (
-              <Card key={g.key} className="!px-4 !py-3.5">
+              <Card key={g.key} className="!px-4 !py-3.5 border-white/[0.08] bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(24,24,27,0.5))]">
                 <button
                   type="button"
                   onClick={() => {
@@ -1467,7 +1486,7 @@ export function TasksPage() {
                 >
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white">{g.projectName}</p>
-                    <p className="mt-1 text-xs text-zinc-500">Datum: {formatDateDe(g.dueDate)}</p>
+                    <p className="mt-1 text-xs text-zinc-500">{formatDateDe(g.dueDate)}</p>
                   </div>
                   <span className="flex h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-orange-500/20 px-2 text-xs font-semibold text-orange-200">
                     {g.tasks.length}
