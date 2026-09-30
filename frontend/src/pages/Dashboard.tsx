@@ -3,19 +3,30 @@ import { Link, useNavigate } from 'react-router-dom'
 import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { tilePermission } from '../utils/accountPermissions'
+import { formatDateDe } from '../utils/formatDateDe'
+import { addDaysIso, todayIsoLocal } from '../utils/taskWeek'
 
 type CompanyProfile = {
   companyName: string
   logoUrl: string | null
 }
 
+type RecurringProject = {
+  id: string
+  name: string
+  customer?: string
+  recurringCustomer?: boolean
+  recurringNextDate?: string
+}
+
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
+
+const RECURRING_DUE_DAYS = 14
 
 const allTiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
   { to: '/aufgaben', title: 'To-do / Aufgaben', emoji: '✅', accent: true },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
-  { to: '/lieferschein', title: 'Lieferschein scannen', emoji: '📦' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
   { to: '/stunden', title: 'Stundenkonto', emoji: '⏱️' },
   { to: '/baustellen', title: 'Baustellen', emoji: '🏗️' },
@@ -28,6 +39,7 @@ export function DashboardPage() {
   const nav = useNavigate()
   const [company, setCompany] = useState<CompanyProfile | null>(null)
   const [todoOpen, setTodoOpen] = useState(false)
+  const [recurringDue, setRecurringDue] = useState<RecurringProject[]>([])
 
   const tiles = useMemo(
     () =>
@@ -71,6 +83,38 @@ export function DashboardPage() {
     }
   }, [can])
 
+  useEffect(() => {
+    if (!can('projects')) {
+      setRecurringDue([])
+      return
+    }
+    let cancelled = false
+    const today = todayIsoLocal()
+    const horizon = addDaysIso(today, RECURRING_DUE_DAYS)
+    api<{ projects?: RecurringProject[] }>('/api/projects')
+      .then((r) => {
+        if (cancelled) return
+        const list = Array.isArray(r.projects) ? r.projects : []
+        const due = list
+          .filter((p) => {
+            if (!p.recurringCustomer) return false
+            const d = String(p.recurringNextDate || '').trim()
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return false
+            return d <= horizon
+          })
+          .sort((a, b) =>
+            String(a.recurringNextDate || '').localeCompare(String(b.recurringNextDate || '')),
+          )
+        setRecurringDue(due.slice(0, 5))
+      })
+      .catch(() => {
+        if (!cancelled) setRecurringDue([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [can])
+
   return (
     <div className="flex min-h-full flex-col">
       {/* Dominanter Kopf: großes Logo schafft das „meine App"-Gefühl */}
@@ -104,6 +148,42 @@ export function DashboardPage() {
           </p>
         </div>
       </header>
+
+      {recurringDue.length > 0 ? (
+        <Link
+          to="/baustellen"
+          className="relative mt-6 block rounded-[1.25rem] border border-orange-400/18 bg-orange-500/[0.06] px-4 py-3 ring-1 ring-orange-400/10 transition hover:bg-orange-500/[0.09] active:scale-[0.99]"
+        >
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-orange-300/90">
+            Dauerkunde
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {recurringDue.map((p) => {
+              const d = String(p.recurringNextDate || '').trim()
+              const overdue = d < todayIsoLocal()
+              const today = d === todayIsoLocal()
+              return (
+                <li
+                  key={p.id}
+                  className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+                >
+                  <span className="min-w-0 truncate text-zinc-200">
+                    {p.customer?.trim() || p.name}
+                  </span>
+                  <span
+                    className={`shrink-0 tabular-nums ${
+                      overdue || today ? 'text-orange-300' : 'text-zinc-500'
+                    }`}
+                  >
+                    {overdue ? 'fällig · ' : today ? 'heute · ' : ''}
+                    {formatDateDe(d)}
+                  </span>
+                </li>
+              )
+            })}
+          </ul>
+        </Link>
+      ) : null}
 
       {/* 3 + 3 + 1 Kacheln — ans untere Ende geschoben */}
       <nav aria-label="Schnellzugriff" className="mt-auto grid grid-cols-3 gap-2.5 pb-1 pt-8">

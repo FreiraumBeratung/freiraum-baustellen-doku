@@ -79,6 +79,39 @@ export function PoweredBy() {
   )
 }
 
+/** Orange Switch wie Firmenprofil — kein nativer Browser-Haken. */
+export function Switch({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean
+  onChange: (next: boolean) => void
+  disabled?: boolean
+  label: string
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+        checked ? 'bg-orange-500' : 'bg-zinc-700'
+      } disabled:opacity-50`}
+    >
+      <span
+        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${
+          checked ? 'left-5' : 'left-0.5'
+        }`}
+      />
+    </button>
+  )
+}
+
 /** Kurze Bestätigung nach Speichern/Senden — nur Optik. */
 export function ActionSignal({ children }: { children: ReactNode }) {
   return (

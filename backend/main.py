@@ -645,6 +645,8 @@ class ProjectCreate(BaseModel):
     contactPerson: str = ""
     note: str = ""
     status: str = "aktiv"
+    recurringCustomer: bool = False
+    recurringNextDate: str = ""
 
 
 class ProjectPatch(BaseModel):
@@ -655,6 +657,8 @@ class ProjectPatch(BaseModel):
     contactPerson: str | None = None
     note: str | None = None
     status: str | None = None
+    recurringCustomer: bool | None = None
+    recurringNextDate: str | None = None
 
 
 # --- Structure report ---
@@ -2438,6 +2442,21 @@ def export_time_accounts_xlsx(
     )
 
 
+def _normalize_recurring_next_date(raw: Any) -> str:
+    """Leer bleibt leer; sonst gültiges ISO/DE-Datum → YYYY-MM-DD, sonst 400."""
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    iso = _normalize_report_date(s)
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})$", iso or "")
+    if not m:
+        raise HTTPException(status_code=400, detail="Ungültiges Datum für Dauerkunde (YYYY-MM-DD)")
+    try:
+        return date(int(m.group(1)), int(m.group(2)), int(m.group(3))).isoformat()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Ungültiges Datum für Dauerkunde (YYYY-MM-DD)")
+
+
 @app.get("/api/projects")
 def list_projects(store: TenantStore = Depends(get_tenant_store)):
     return store.read_json("projects.json", {"projects": []})
@@ -2450,6 +2469,8 @@ def create_project(
     store: TenantStore = Depends(get_tenant_store_write),
 ):
     data = store.read_json("projects.json", {"projects": []})
+    recurring = bool(body.recurringCustomer)
+    next_date = _normalize_recurring_next_date(body.recurringNextDate) if recurring else ""
     proj = {
         "id": str(uuid.uuid4()),
         "name": body.name.strip(),
@@ -2459,6 +2480,8 @@ def create_project(
         "contactPerson": body.contactPerson.strip(),
         "note": body.note.strip(),
         "status": body.status if body.status in {"aktiv", "pausiert", "abgeschlossen"} else "aktiv",
+        "recurringCustomer": recurring,
+        "recurringNextDate": next_date,
     }
     data.setdefault("projects", []).append(proj)
     store.write_json("projects.json", data)
@@ -2490,6 +2513,12 @@ def patch_project(
             if body.status is not None:
                 if body.status in {"aktiv", "pausiert", "abgeschlossen"}:
                     p["status"] = body.status
+            if body.recurringCustomer is not None:
+                p["recurringCustomer"] = bool(body.recurringCustomer)
+                if not p["recurringCustomer"]:
+                    p["recurringNextDate"] = ""
+            if body.recurringNextDate is not None and bool(p.get("recurringCustomer")):
+                p["recurringNextDate"] = _normalize_recurring_next_date(body.recurringNextDate)
             store.write_json("projects.json", data)
             return p
     raise HTTPException(status_code=404, detail="Baustelle nicht gefunden")

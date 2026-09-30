@@ -1,8 +1,9 @@
 import { Download, Layers, RotateCcw, Send, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api, downloadExport } from '../api/client'
-import { BigButton, Card, PageTitle } from '../components/ui'
+import { BigButton, Card, PageTitle, Switch } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { formatDateDe, toIsoDateInput } from '../utils/formatDateDe'
 
 type Project = {
   id: string
@@ -17,7 +18,12 @@ type Project = {
   currentRunId?: string | null
   runStartedAt?: string | null
   lastClosedRunId?: string | null
+  recurringCustomer?: boolean
+  recurringNextDate?: string
 }
+
+const dateInputClass =
+  'mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42 [color-scheme:dark]'
 
 function formatDateTimeDe(iso: string | null | undefined): string {
   if (!iso) return ''
@@ -48,6 +54,8 @@ export function ProjectsPage() {
   const [city, setCity] = useState('')
   const [contactPerson, setContactPerson] = useState('')
   const [note, setNote] = useState('')
+  const [recurring, setRecurring] = useState(false)
+  const [recurringNextDate, setRecurringNextDate] = useState('')
   const [busyRunId, setBusyRunId] = useState<string | null>(null)
   const [runMsg, setRunMsg] = useState<Record<string, string>>({})
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
@@ -74,6 +82,8 @@ export function ProjectsPage() {
         contactPerson,
         note,
         status: 'aktiv',
+        recurringCustomer: recurring,
+        recurringNextDate: recurring ? recurringNextDate : '',
       }),
     })
     setName('')
@@ -82,7 +92,26 @@ export function ProjectsPage() {
     setCity('')
     setContactPerson('')
     setNote('')
+    setRecurring(false)
+    setRecurringNextDate('')
     load()
+  }
+
+  async function patchRecurring(
+    p: Project,
+    next: { recurringCustomer?: boolean; recurringNextDate?: string },
+  ) {
+    if (writeBlocked) return
+    setBusyRunId(p.id)
+    try {
+      await api(`/api/projects/${p.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(next),
+      })
+      await load()
+    } finally {
+      setBusyRunId(null)
+    }
   }
 
   async function cycleStatus(p: Project) {
@@ -224,6 +253,37 @@ export function ProjectsPage() {
               onChange={(e) => setNote(e.target.value)}
             />
           </label>
+          <div className="rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+            <div className="flex items-center justify-between gap-3">
+              <div className="min-w-0">
+                <span className="text-sm text-zinc-300">Dauerkunde</span>
+                <p className="mt-0.5 text-[0.72rem] leading-snug text-zinc-600">
+                  Wiederkehrender Auftrag — nächster Termin nur merken, kein To-do.
+                </p>
+              </div>
+              <Switch
+                checked={recurring}
+                onChange={(next) => {
+                  setRecurring(next)
+                  if (!next) setRecurringNextDate('')
+                }}
+                disabled={writeBlocked}
+                label="Dauerkunde"
+              />
+            </div>
+            {recurring ? (
+              <label className="mt-3 block min-w-0">
+                <span className="text-xs tracking-wide text-zinc-400">Nächster Termin</span>
+                <input
+                  type="date"
+                  lang="de-DE"
+                  className={dateInputClass}
+                  value={recurringNextDate}
+                  onChange={(e) => setRecurringNextDate(e.target.value)}
+                />
+              </label>
+            ) : null}
+          </div>
           <BigButton type="submit" disabled={writeBlocked}>Baustelle anlegen</BigButton>
         </form>
       </Card>
@@ -239,6 +299,11 @@ export function ProjectsPage() {
                     <span className={`inline-flex items-center rounded-full px-2.5 py-[0.22rem] text-[9px] font-semibold uppercase tracking-[0.14em] ${statusTone[p.status]}`}>
                       {statusLabel[p.status]}
                     </span>
+                    {p.recurringCustomer ? (
+                      <span className="inline-flex items-center rounded-full border border-orange-400/35 bg-orange-500/[0.08] px-2.5 py-[0.22rem] text-[9px] font-semibold uppercase tracking-[0.14em] text-orange-200/90">
+                        Dauerkunde
+                      </span>
+                    ) : null}
                   </div>
                   {p.customer ? <div className="mt-1.5 text-sm text-zinc-400">{p.customer}</div> : null}
                   {p.contactPerson ? (
@@ -252,6 +317,56 @@ export function ProjectsPage() {
               {p.note ? (
                 <p className="rounded-[1rem] bg-black/52 px-[0.875rem] py-[0.625rem] text-[0.805rem] text-zinc-300 ring-1 ring-white/[0.06]">{p.note}</p>
               ) : null}
+
+              <div className="rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-sm text-zinc-300">Dauerkunde</span>
+                    {p.recurringCustomer && p.recurringNextDate ? (
+                      <p className="mt-0.5 text-[0.72rem] leading-snug text-zinc-500">
+                        Nächster Termin · {formatDateDe(p.recurringNextDate)}
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-[0.72rem] leading-snug text-zinc-600">
+                        Wiederkehrender Auftrag merken
+                      </p>
+                    )}
+                  </div>
+                  <Switch
+                    checked={Boolean(p.recurringCustomer)}
+                    onChange={(next) =>
+                      patchRecurring(
+                        p,
+                        next
+                          ? { recurringCustomer: true }
+                          : { recurringCustomer: false, recurringNextDate: '' },
+                      )
+                    }
+                    disabled={writeBlocked || busyRunId === p.id}
+                    label={`Dauerkunde ${p.name}`}
+                  />
+                </div>
+                {p.recurringCustomer ? (
+                  <label className="mt-3 block min-w-0">
+                    <span className="text-xs tracking-wide text-zinc-400">Nächster Termin</span>
+                    <input
+                      type="date"
+                      lang="de-DE"
+                      className={`${dateInputClass} disabled:opacity-50`}
+                      value={toIsoDateInput(p.recurringNextDate || '')}
+                      disabled={writeBlocked || busyRunId === p.id}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        if (!next) {
+                          patchRecurring(p, { recurringNextDate: '' })
+                          return
+                        }
+                        patchRecurring(p, { recurringNextDate: next })
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
 
               {confirmDeleteId === p.id ? (
                 <div className="mt-2 flex items-center gap-2 rounded-[1rem] border border-red-500/35 bg-red-500/[0.08] px-3 py-2.5">
