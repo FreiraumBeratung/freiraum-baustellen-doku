@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import { Card, PageTitle } from '../components/ui'
+import { BigButton, Card, PageTitle } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { formatDateDe } from '../utils/formatDateDe'
 
 type LeavePerson = {
   employeeId: string
@@ -14,11 +15,39 @@ type LeavePerson = {
   remainingDays: number | null
 }
 
+type LeaveBlock = {
+  id: string
+  employeeId: string
+  employeeName: string
+  fromDate: string
+  toDate: string
+  status: string
+}
+
+type LeaveOpenRequest = {
+  id: string
+  employeeId: string
+  employeeName: string
+  fromDate: string
+  toDate: string
+  status: string
+  weekdayCount: number
+  yearDays: number
+}
+
 type LeaveOverview = {
   year: number
   selfEmployeeId: string | null
   people: LeavePerson[]
+  openRequests?: LeaveOpenRequest[]
+  blocks?: LeaveBlock[]
 }
+
+const dateInputClass =
+  'mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42 [color-scheme:dark]'
+
+const selectClass =
+  'mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42'
 
 function restLine(p: LeavePerson): string {
   if (!p.allowanceSet || p.remainingDays == null || p.allowanceDays == null) {
@@ -28,6 +57,48 @@ function restLine(p: LeavePerson): string {
     return 'Rest 0 · kein Jahresurlaub'
   }
   return `Rest ${p.remainingDays} von ${p.allowanceDays}`
+}
+
+function parseIsoStrict(iso: string): Date | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || '').trim())
+  if (!m) return null
+  const y = Number(m[1])
+  const mo = Number(m[2]) - 1
+  const d = Number(m[3])
+  const dt = new Date(y, mo, d, 12, 0, 0, 0)
+  if (dt.getFullYear() !== y || dt.getMonth() !== mo || dt.getDate() !== d) return null
+  return dt
+}
+
+function countWeekdays(fromIso: string, toIso: string, year?: number): number {
+  const start = parseIsoStrict(fromIso)
+  const end = parseIsoStrict(toIso)
+  if (!start || !end || end < start) return 0
+  let n = 0
+  const cur = new Date(start.getTime())
+  let guard = 0
+  while (cur <= end && guard < 400) {
+    const wd = cur.getDay()
+    const isWeekday = wd !== 0 && wd !== 6
+    if (isWeekday && (year == null || cur.getFullYear() === year)) n += 1
+    cur.setDate(cur.getDate() + 1)
+    guard += 1
+  }
+  return n
+}
+
+function rangeLabel(fromDate: string, toDate: string): string {
+  const a = formatDateDe(fromDate)
+  const b = formatDateDe(toDate)
+  if (a && b && a === b) return a
+  if (a && b) return `${a}–${b}`
+  return a || b
+}
+
+function statusLabel(status: string): string {
+  if (status === 'approved') return 'Genehmigt'
+  if (status === 'rejected') return 'Abgelehnt'
+  return 'Offen'
 }
 
 export function LeavePage() {
@@ -40,14 +111,22 @@ export function LeavePage() {
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(true)
 
-  async function load() {
+  const [reqEmployeeId, setReqEmployeeId] = useState('')
+  const [fromDate, setFromDate] = useState('')
+  const [toDate, setToDate] = useState('')
+  const [reqBusy, setReqBusy] = useState(false)
+  const [reqMsg, setReqMsg] = useState('')
+
+  async function load(opts?: { keepDrafts?: boolean }) {
     const r = await api<LeaveOverview>('/api/leave')
     setData(r)
-    const next: Record<string, string> = {}
-    for (const p of r.people || []) {
-      next[p.employeeId] = p.allowanceSet && p.allowanceDays != null ? String(p.allowanceDays) : ''
+    if (!opts?.keepDrafts) {
+      const next: Record<string, string> = {}
+      for (const p of r.people || []) {
+        next[p.employeeId] = p.allowanceSet && p.allowanceDays != null ? String(p.allowanceDays) : ''
+      }
+      setDrafts(next)
     }
-    setDrafts(next)
   }
 
   useEffect(() => {
@@ -61,11 +140,39 @@ export function LeavePage() {
   const people = data?.people ?? []
   const year = data?.year
   const selfId = data?.selfEmployeeId
+  const openRequests = data?.openRequests ?? []
+  const blocks = data?.blocks ?? []
+
+  useEffect(() => {
+    if (!data) return
+    if (isCompanyOwner && !reqEmployeeId && data.people.length) {
+      setReqEmployeeId(data.people[0]!.employeeId)
+    }
+    if (!isCompanyOwner && data.selfEmployeeId) {
+      setReqEmployeeId(data.selfEmployeeId)
+    }
+  }, [isCompanyOwner, data, reqEmployeeId])
 
   const subtitle = useMemo(() => {
     if (!year) return 'Jahresurlaub pro Mitarbeiter.'
     return `Kalenderjahr ${year} · Jahresurlaub pro Mitarbeiter`
   }, [year])
+
+  const targetPerson = people.find((p) => p.employeeId === reqEmployeeId) || null
+  const weekdayCount = fromDate && toDate ? countWeekdays(fromDate, toDate) : 0
+  const yearDays = fromDate && toDate && year ? countWeekdays(fromDate, toDate, year) : 0
+  const dateOrderOk = Boolean(fromDate && toDate && fromDate <= toDate)
+  const overlaps = useMemo(() => {
+    if (!fromDate || !toDate || fromDate > toDate) return []
+    return blocks.filter((b) => b.fromDate <= toDate && fromDate <= b.toDate)
+  }, [blocks, fromDate, toDate])
+
+  const remainingAfter =
+    targetPerson?.allowanceSet && targetPerson.remainingDays != null
+      ? targetPerson.remainingDays - yearDays
+      : null
+
+  const canRequest = isCompanyOwner ? people.length > 0 : Boolean(selfId)
 
   async function save(p: LeavePerson) {
     if (!isCompanyOwner || writeBlocked) return
@@ -95,12 +202,163 @@ export function LeavePage() {
     }
   }
 
+  async function submitRequest(e: React.FormEvent) {
+    e.preventDefault()
+    if (writeBlocked || !canRequest) return
+    setReqMsg('')
+    if (!fromDate || !toDate) {
+      setReqMsg('Bitte Von und Bis wählen.')
+      return
+    }
+    if (fromDate > toDate) {
+      setReqMsg('Von muss vor oder gleich Bis liegen.')
+      return
+    }
+    if (weekdayCount <= 0) {
+      setReqMsg('Keine Werktage (Mo–Fr) in diesem Zeitraum.')
+      return
+    }
+    setReqBusy(true)
+    try {
+      await api('/api/leave/requests', {
+        method: 'POST',
+        body: JSON.stringify({
+          employeeId: isCompanyOwner ? reqEmployeeId : selfId,
+          fromDate,
+          toDate,
+        }),
+      })
+      setFromDate('')
+      setToDate('')
+      await load({ keepDrafts: true })
+      setReqMsg('Antrag ist offen. Resttage ändern sich erst nach der Genehmigung.')
+    } catch (ex) {
+      setReqMsg(ex instanceof Error ? ex.message : 'Antrag fehlgeschlagen.')
+    } finally {
+      setReqBusy(false)
+    }
+  }
+
   return (
     <div className="overflow-x-hidden">
       <PageTitle title="Urlaub" subtitle={subtitle} />
 
       {err ? <p className="mb-4 text-center text-sm text-red-400">{err}</p> : null}
       {loading ? <p className="text-center text-zinc-500">Laden…</p> : null}
+
+      {!loading && canRequest ? (
+        <Card className="mb-6 border-transparent bg-black/44 py-8 shadow-none ring-1 ring-white/[0.08]">
+          <form onSubmit={submitRequest} className="space-y-2.5">
+            <p className="text-sm font-medium text-zinc-200">Antrag</p>
+            {isCompanyOwner ? (
+              <label className="block min-w-0">
+                <span className="text-xs tracking-wide text-zinc-400">Mitarbeiter</span>
+                <select
+                  className={selectClass}
+                  value={reqEmployeeId}
+                  disabled={writeBlocked || reqBusy}
+                  onChange={(e) => setReqEmployeeId(e.target.value)}
+                >
+                  {people.map((p) => (
+                    <option key={p.employeeId} value={p.employeeId}>
+                      {p.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="block min-w-0">
+                <span className="text-xs tracking-wide text-zinc-400">Von</span>
+                <input
+                  type="date"
+                  lang="de-DE"
+                  className={dateInputClass}
+                  value={fromDate}
+                  disabled={writeBlocked || reqBusy}
+                  onChange={(e) => setFromDate(e.target.value)}
+                />
+              </label>
+              <label className="block min-w-0">
+                <span className="text-xs tracking-wide text-zinc-400">Bis</span>
+                <input
+                  type="date"
+                  lang="de-DE"
+                  className={dateInputClass}
+                  value={toDate}
+                  disabled={writeBlocked || reqBusy}
+                  onChange={(e) => setToDate(e.target.value)}
+                />
+              </label>
+            </div>
+            {fromDate && toDate && dateOrderOk && weekdayCount > 0 ? (
+              <p className="text-[0.82rem] leading-snug text-zinc-400">
+                {weekdayCount === 1 ? '1 Werktag' : `${weekdayCount} Werktage`}
+                {targetPerson?.allowanceSet && remainingAfter != null
+                  ? ` · Rest nach Genehmigung ${remainingAfter}`
+                  : ' · Jahresurlaub noch nicht gepflegt'}
+              </p>
+            ) : null}
+            {fromDate && toDate && dateOrderOk && weekdayCount === 0 ? (
+              <p className="text-[0.82rem] text-zinc-500">Keine Werktage (Mo–Fr) in diesem Zeitraum.</p>
+            ) : null}
+            {fromDate && toDate && !dateOrderOk ? (
+              <p className="text-[0.82rem] text-zinc-500">Von muss vor oder gleich Bis liegen.</p>
+            ) : null}
+            {overlaps.length > 0 ? (
+              <div className="rounded-2xl border border-orange-400/18 bg-orange-500/[0.06] px-3 py-2.5 ring-1 ring-orange-400/10">
+                <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-orange-300/90">
+                  Überschneidung
+                </p>
+                <ul className="mt-1.5 space-y-1">
+                  {overlaps.map((b) => (
+                    <li key={`${b.id}-${b.employeeId}-${b.fromDate}`} className="text-[0.8rem] text-zinc-300">
+                      {b.employeeName} · {rangeLabel(b.fromDate, b.toDate)} · {statusLabel(b.status)}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[0.7rem] text-zinc-500">Nur Hinweis — Antrag bleibt möglich.</p>
+              </div>
+            ) : null}
+            <BigButton type="submit" disabled={writeBlocked || reqBusy}>
+              {reqBusy ? '…' : 'Antrag senden'}
+            </BigButton>
+            {reqMsg ? <p className="text-center text-[0.78rem] text-zinc-400">{reqMsg}</p> : null}
+          </form>
+        </Card>
+      ) : null}
+
+      {!loading && !isCompanyOwner && !selfId ? (
+        <p className="mb-6 text-center text-sm text-zinc-500">
+          Urlaub beantragen geht, sobald der Chef euch als Mitarbeiter mit Zugang angelegt hat.
+        </p>
+      ) : null}
+
+      {!loading && openRequests.length > 0 ? (
+        <div className="mb-6 space-y-3">
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-zinc-500">Offene Anträge</p>
+          {openRequests.map((r) => (
+            <Card
+              key={r.id}
+              className="border-transparent bg-black/38 py-[1.05rem] shadow-none ring-1 ring-white/[0.06]"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[1.02rem] font-semibold text-white">{r.employeeName}</h3>
+                <span className="inline-flex items-center rounded-full border border-orange-400/35 bg-orange-500/[0.08] px-2.5 py-[0.22rem] text-[9px] font-semibold uppercase tracking-[0.14em] text-orange-200/90">
+                  Offen
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-zinc-400">
+                {rangeLabel(r.fromDate, r.toDate)}
+                <span className="text-zinc-500">
+                  {' '}
+                  · {r.weekdayCount === 1 ? '1 Werktag' : `${r.weekdayCount} Werktage`}
+                </span>
+              </p>
+            </Card>
+          ))}
+        </div>
+      ) : null}
 
       {!loading && people.length === 0 ? (
         <Card>

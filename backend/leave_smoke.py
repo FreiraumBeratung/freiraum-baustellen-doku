@@ -1,8 +1,7 @@
-"""Smoke fuer Urlaub Baustein 1 (Backend-only).
+"""Smoke fuer Urlaub Baustein 1+2 (Backend-only).
 
-Kontingent + Resttage, ungesetzt != 0, Worker darf lesen nicht schreiben,
-genehmigte Werktage zaehlen, offene Antraege nicht.
-Mitarbeiter-/Stunden-PATCH bleibt unberuehrt.
+Kontingent + Resttage, Antrag von–bis als pending, Rest unbewegt,
+Worker nur eigener Antrag, Ueberlappung sperrt nicht.
 
 Laeuft in-process mit isoliertem Temp-Verzeichnis; beruehrt keine echten Daten.
 """
@@ -66,6 +65,7 @@ _expect(res.status_code == 200, f"empty leave: {res.status_code} {res.text}")
 body = res.json()
 _expect(body.get("year") == year, f"year: {body.get('year')}")
 _expect(body.get("people") == [], "no people yet")
+_expect(body.get("openRequests") == [], "no open requests")
 _expect(body.get("selfEmployeeId") is None, "owner has no employeeId")
 
 # Mitarbeiter anlegen — ohne Kontingent
@@ -180,6 +180,77 @@ _expect(res.json().get("people")[0].get("employeeId") == uli_id, "self first")
 res = client.patch(f"/api/leave/employees/{uli_id}", headers=wh, json={"days": 10})
 _expect(res.status_code == 403, f"worker patch must 403, was {res.status_code}")
 
+# --- Baustein 2: Antrag von–bis, Rest bleibt ---
+rest_before = people[uli_id].get("remainingDays")
+_expect(rest_before == 25, f"precondition remaining: {rest_before}")
+
+later = friday + timedelta(days=3)
+later_end = later + timedelta(days=4)
+res = client.post(
+    "/api/leave/requests",
+    headers=wh,
+    json={"fromDate": later.isoformat(), "toDate": later_end.isoformat()},
+)
+_expect(res.status_code == 200, f"worker self request: {res.status_code} {res.text}")
+_expect(res.json().get("request", {}).get("status") == "pending", "must stay pending")
+_expect(res.json().get("person", {}).get("remainingDays") == rest_before, "pending must not change rest")
+_expect(res.json().get("request", {}).get("weekdayCount") == 5, "Mo–Fr = 5")
+
+res = client.post(
+    "/api/leave/requests",
+    headers=wh,
+    json={
+        "employeeId": matthias_id,
+        "fromDate": later.isoformat(),
+        "toDate": later_end.isoformat(),
+    },
+)
+_expect(res.status_code == 403, f"worker foreign request: {res.status_code}")
+
+res = client.post("/api/leave/requests", headers=hdrs, json={"fromDate": later.isoformat(), "toDate": later_end.isoformat()})
+_expect(res.status_code == 400, f"owner without employee: {res.status_code}")
+
+res = client.post(
+    "/api/leave/requests",
+    headers=hdrs,
+    json={"employeeId": matthias_id, "fromDate": later.isoformat(), "toDate": later_end.isoformat()},
+)
+_expect(res.status_code == 200, f"owner for employee: {res.status_code} {res.text}")
+_expect(res.json().get("person", {}).get("remainingDays") is None, "matthias rest still unset")
+
+res = client.get("/api/leave", headers=hdrs)
+ov = res.json()
+people = {p["employeeId"]: p for p in ov.get("people") or []}
+_expect(people[uli_id].get("remainingDays") == rest_before, "GET rest unchanged after pending")
+opens = ov.get("openRequests") or []
+_expect(len(opens) >= 3, f"open requests: {len(opens)}")
+_expect(all(x.get("status") == "pending" for x in opens), "open list only pending")
+
+res = client.post(
+    "/api/leave/requests",
+    headers=hdrs,
+    json={"employeeId": uli_id, "fromDate": friday.isoformat(), "toDate": monday.isoformat()},
+)
+_expect(res.status_code == 400, f"from after to: {res.status_code}")
+
+sat = date(year, 1, 1)
+while sat.weekday() != 5:
+    sat += timedelta(days=1)
+sun = sat + timedelta(days=1)
+res = client.post(
+    "/api/leave/requests",
+    headers=hdrs,
+    json={"employeeId": uli_id, "fromDate": sat.isoformat(), "toDate": sun.isoformat()},
+)
+_expect(res.status_code == 400, f"weekend only: {res.status_code} {res.text}")
+
+res = client.post(
+    "/api/leave/requests",
+    headers=hdrs,
+    json={"employeeId": uli_id, "fromDate": "kein-datum", "toDate": later_end.isoformat()},
+)
+_expect(res.status_code == 400, f"garbage date: {res.status_code}")
+
 # Anderer Mandant sieht nichts
 other_id = str(uuid.uuid4())
 main.save_users(
@@ -201,4 +272,4 @@ res = client.get("/api/leave", headers=oh)
 _expect(res.status_code == 200, f"other get: {res.status_code}")
 _expect(res.json().get("people") == [], "tenant isolation")
 
-print("LEAVE-SMOKE (B1): OK")
+print("LEAVE-SMOKE (B1+B2): OK")

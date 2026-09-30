@@ -634,6 +634,12 @@ class LeaveAllowanceBody(BaseModel):
     days: Any = None
 
 
+class LeaveRequestBody(BaseModel):
+    employeeId: str = ""
+    fromDate: str
+    toDate: str
+
+
 class TimeEntryCreate(BaseModel):
     employeeId: str
     date: str
@@ -2290,7 +2296,7 @@ def get_leave_overview(
     user_id: str = Depends(require_permission("leave")),
     store: TenantStore = Depends(get_tenant_store),
 ):
-    """Kontingent und Resttage im aktuellen Kalenderjahr. Antrag kommt in Baustein 2."""
+    """Kontingent, Resttage und offene Anträge im aktuellen Kalenderjahr."""
     _user, _owner, employee_id = _task_actor_context(user_id)
     return leave_service.build_overview(
         store,
@@ -2311,6 +2317,34 @@ def patch_leave_allowance(
         store,
         employee_id,
         body.days,
+        year=leave_service.current_leave_year(),
+    )
+
+
+@app.post("/api/leave/requests")
+def create_leave_request(
+    body: LeaveRequestBody,
+    user_id: str = Depends(require_permission("leave")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    """Antrag von–bis als offen. Resttage bleiben unberührt. Keine Genehmigung."""
+    _user, owner, self_employee_id = _task_actor_context(user_id)
+    target = str(body.employeeId or "").strip()
+    if owner:
+        if not target:
+            raise HTTPException(status_code=400, detail="Mitarbeiter fehlt")
+    else:
+        if not self_employee_id:
+            raise HTTPException(status_code=403, detail="Kein Mitarbeiterkonto für Urlaubsantrag")
+        if target and target != self_employee_id:
+            raise HTTPException(status_code=403, detail="Nur eigener Urlaub")
+        target = self_employee_id
+    return leave_service.create_request(
+        store,
+        employee_id=target,
+        from_raw=body.fromDate,
+        to_raw=body.toDate,
+        actor_user_id=user_id,
         year=leave_service.current_leave_year(),
     )
 

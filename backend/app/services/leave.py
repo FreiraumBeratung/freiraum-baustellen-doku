@@ -1,13 +1,14 @@
-"""Urlaub (Baustein 1): Jahreskontingent und Resttage — additiv.
+"""Urlaub: Jahreskontingent (Baustein 1) und Antrag von–bis (Baustein 2).
 
-Antraege liegen in derselben Datei (requests), zaehlen in V1 nur wenn status=approved.
+Antraege zaehlen Resttage nur wenn status=approved. Offene Antraege aendern Rest nicht.
 Ohne Kontingent bleibt Rest ungesetzt — nicht still 0.
 Tagesbericht, Stundenkonto und To-do bleiben unberuehrt.
 """
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+import uuid
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import HTTPException
@@ -18,6 +19,9 @@ LEAVE_FILE = "leave.json"
 LEAVE_STATUSES = frozenset({"pending", "approved", "rejected"})
 MAX_LEAVE_DAYS = 99
 MAX_RANGE_DAYS = 400
+MAX_REQUEST_WEEKDAYS = 40
+MAX_OPEN_REQUESTS = 80
+BUSY_STATUSES = frozenset({"pending", "approved"})
 
 
 def current_leave_year() -> int:
@@ -58,6 +62,72 @@ def parse_iso_date(raw: Any) -> date | None:
         return date.fromisoformat(s[:10])
     except ValueError:
         return None
+
+
+def _req_range(req: dict[str, Any]) -> tuple[date, date] | None:
+    start = parse_iso_date(req.get("fromDate") or req.get("from"))
+    end = parse_iso_date(req.get("toDate") or req.get("to"))
+    if start is None or end is None or end < start:
+        return None
+    return start, end
+
+
+def _req_status(req: dict[str, Any]) -> str:
+    return str(req.get("status") or "").strip().lower()
+
+
+def _employee_names(store: TenantStore) -> dict[str, str]:
+    out: dict[str, str] = {}
+    for emp in _employees(store):
+        eid = str(emp.get("id") or "").strip()
+        if eid:
+            out[eid] = str(emp.get("name") or "").strip() or eid
+    return out
+
+
+def list_blocks(doc: dict[str, Any], names: dict[str, str]) -> list[dict[str, Any]]:
+    """Pending + genehmigt — fuer Ueberlappung. Abgelehnte zaehlen nicht."""
+    out: list[dict[str, Any]] = []
+    for req in doc.get("requests") or []:
+        status = _req_status(req)
+        if status not in BUSY_STATUSES:
+            continue
+        span = _req_range(req)
+        if span is None:
+            continue
+        start, end = span
+        eid = str(req.get("employeeId") or "").strip()
+        out.append(
+            {
+                "id": str(req.get("id") or ""),
+                "employeeId": eid,
+                "employeeName": names.get(eid, eid),
+                "fromDate": start.isoformat(),
+                "toDate": end.isoformat(),
+                "status": status,
+            }
+        )
+    out.sort(key=lambda b: (str(b.get("fromDate") or ""), str(b.get("employeeName") or "")))
+    return out
+
+
+def request_public(req: dict[str, Any], names: dict[str, str], *, year: int) -> dict[str, Any]:
+    eid = str(req.get("employeeId") or "").strip()
+    span = _req_range(req)
+    start, end = span if span else (None, None)
+    weekdays = count_weekdays(start, end) if start and end else 0
+    year_days = count_weekdays(start, end, year=year) if start and end else 0
+    return {
+        "id": str(req.get("id") or ""),
+        "employeeId": eid,
+        "employeeName": names.get(eid, eid),
+        "fromDate": start.isoformat() if start else "",
+        "toDate": end.isoformat() if end else "",
+        "status": _req_status(req) or "pending",
+        "weekdayCount": weekdays,
+        "yearDays": year_days,
+        "createdAt": str(req.get("createdAt") or ""),
+    }
 
 
 def count_weekdays(start: date, end: date, *, year: int | None = None) -> int:
@@ -203,10 +273,19 @@ def build_overview(
             str(p.get("name") or "").casefold(),
         )
     )
+    names = {str(p.get("employeeId") or ""): str(p.get("name") or "") for p in people}
+    open_requests = [
+        request_public(req, names, year=year)
+        for req in doc.get("requests") or []
+        if _req_status(req) == "pending" and _req_range(req) is not None
+    ]
+    open_requests.sort(key=lambda r: (str(r.get("fromDate") or ""), str(r.get("employeeName") or "")))
     return {
         "year": year,
         "selfEmployeeId": self_id or None,
         "people": people,
+        "openRequests": open_requests,
+        "blocks": list_blocks(doc, names),
     }
 
 
@@ -239,3 +318,60 @@ def set_allowance(
     doc["allowances"] = kept
     write_doc(store, doc)
     return person_payload(emp, doc, year=year)
+
+
+def _parse_request_dates(from_raw: Any, to_raw: Any) -> tuple[date, date]:
+    start = parse_iso_date(from_raw)
+    end = parse_iso_date(to_raw)
+    if start is None or end is None:
+        raise HTTPException(status_code=400, detail="Ungültiges Datum (YYYY-MM-DD)")
+    if end < start:
+        raise HTTPException(status_code=400, detail="Von muss vor oder gleich Bis liegen")
+    span_days = (end - start).days + 1
+    if span_days > MAX_RANGE_DAYS:
+        raise HTTPException(status_code=400, detail="Zeitraum ist zu lang")
+    weekdays = count_weekdays(start, end)
+    if weekdays <= 0:
+        raise HTTPException(status_code=400, detail="Keine Werktage (Mo–Fr) in diesem Zeitraum")
+    if weekdays > MAX_REQUEST_WEEKDAYS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Höchstens {MAX_REQUEST_WEEKDAYS} Werktage pro Antrag",
+        )
+    return start, end
+
+
+def create_request(
+    store: TenantStore,
+    *,
+    employee_id: str,
+    from_raw: Any,
+    to_raw: Any,
+    actor_user_id: str,
+    year: int,
+) -> dict[str, Any]:
+    emp = _find_employee(store, employee_id)
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+    start, end = _parse_request_dates(from_raw, to_raw)
+    doc = read_doc(store)
+    pending = sum(1 for r in doc.get("requests") or [] if _req_status(r) == "pending")
+    if pending >= MAX_OPEN_REQUESTS:
+        raise HTTPException(status_code=400, detail="Zu viele offene Anträge")
+    req = {
+        "id": str(uuid.uuid4()),
+        "employeeId": str(emp.get("id") or "").strip(),
+        "fromDate": start.isoformat(),
+        "toDate": end.isoformat(),
+        "status": "pending",
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "createdByUserId": str(actor_user_id or "").strip(),
+    }
+    doc.setdefault("requests", []).append(req)
+    write_doc(store, doc)
+    names = _employee_names(store)
+    person = person_payload(emp, doc, year=year)
+    return {
+        "request": request_public(req, names, year=year),
+        "person": person,
+    }
