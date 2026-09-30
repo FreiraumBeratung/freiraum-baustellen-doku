@@ -6,6 +6,7 @@ export type AppPermission =
   | 'report'
   | 'protocol'
   | 'tasks'
+  | 'leave'
   | 'projects'
   | 'reports_list'
   | 'time_accounts'
@@ -25,6 +26,7 @@ const OWNER_ALL: AppPermission[] = [
   'report',
   'protocol',
   'tasks',
+  'leave',
   'projects',
   'reports_list',
   'time_accounts',
@@ -46,7 +48,7 @@ export function hasAppPermission(
   if (isOwnerRole(role)) return true
   const set = new Set((permissions || []).map(String))
   // Basisrechte für Worker immer
-  if (needed === 'report' || needed === 'protocol' || needed === 'tasks') return true
+  if (needed === 'report' || needed === 'protocol' || needed === 'tasks' || needed === 'leave') return true
   return set.has(needed)
 }
 
@@ -69,6 +71,8 @@ export function tilePermission(path: string): AppPermission | null {
       return 'reports_list'
     case '/stunden':
       return 'time_accounts'
+    case '/urlaub':
+      return 'leave'
     case '/baustellen':
       return 'projects'
     case '/mitarbeiter':

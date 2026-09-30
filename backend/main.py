@@ -138,6 +138,7 @@ from app.services.site_spot import (
 from app.services.speech_telemetry import record_unmatched_speech
 from app.services import collective_report as collective
 from app.services import collective_protocol as collective_proto
+from app.services import leave as leave_service
 from services.trade_language_service import (
     build_professional_summary,
     extract_activity_hints,
@@ -627,6 +628,10 @@ class EmployeePatch(BaseModel):
     active: bool | None = None
     hoursBalanceStart: float | None = None
     hoursBalanceStartDate: str | None = None
+
+
+class LeaveAllowanceBody(BaseModel):
+    days: Any = None
 
 
 class TimeEntryCreate(BaseModel):
@@ -2278,6 +2283,36 @@ def patch_employee_access(
 
     save_users(users)
     return {"ok": True, "access": access_public_view(worker)}
+
+
+@app.get("/api/leave")
+def get_leave_overview(
+    user_id: str = Depends(require_permission("leave")),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    """Kontingent und Resttage im aktuellen Kalenderjahr. Antrag kommt in Baustein 2."""
+    _user, _owner, employee_id = _task_actor_context(user_id)
+    return leave_service.build_overview(
+        store,
+        year=leave_service.current_leave_year(),
+        self_employee_id=employee_id,
+    )
+
+
+@app.patch("/api/leave/employees/{employee_id}")
+def patch_leave_allowance(
+    employee_id: str,
+    body: LeaveAllowanceBody,
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    """Jahresurlaub setzen oder leeren. Nur Geschäftsführer. Mitarbeiter-PATCH unberührt."""
+    return leave_service.set_allowance(
+        store,
+        employee_id,
+        body.days,
+        year=leave_service.current_leave_year(),
+    )
 
 
 @app.get("/api/time-entries")

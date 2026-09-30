@@ -29,6 +29,7 @@ const allTiles: Tile[] = [
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
   { to: '/stunden', title: 'Stundenkonto', emoji: '⏱️' },
+  { to: '/urlaub', title: 'Urlaub', emoji: '☀️' },
   { to: '/baustellen', title: 'Baustellen', emoji: '🏗️' },
   { to: '/mitarbeiter', title: 'Mitarbeiter', emoji: '👷' },
   { to: '/profil', title: 'Firmenprofil', emoji: '⚙️' },
@@ -185,7 +186,7 @@ export function DashboardPage() {
         </Link>
       ) : null}
 
-      {/* 3 + 3 + 1 Kacheln — ans untere Ende geschoben */}
+      {/* 3 × 3 Kacheln — ans untere Ende geschoben */}
       <nav aria-label="Schnellzugriff" className="mt-auto grid grid-cols-3 gap-2.5 pb-1 pt-8">
         {tiles.map((t, i) => (
           <Link

@@ -31,6 +31,7 @@ TENANT_JSON_FILES = (
     "tasks.json",
     "push_subscriptions.json",
     "time_entries.json",
+    "leave.json",
     "audio_uploads.json",
     "trade_intelligence_cases.json",
 )

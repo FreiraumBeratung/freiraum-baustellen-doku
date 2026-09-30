@@ -26,6 +26,7 @@ import { AdminRoute } from './components/AdminRoute'
 import { FeedbackPage } from './pages/Feedback'
 import { DeliveryNoteScanPage } from './pages/DeliveryNoteScan'
 import { TasksPage } from './pages/Tasks'
+import { LeavePage } from './pages/Leave'
 
 function ProtectedOutlet() {
   const { token, ready } = useRequireAuth()
@@ -133,6 +134,14 @@ export default function App() {
               element={
                 <RequirePermission permission="time_accounts">
                   <TimeAccountsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/urlaub"
+              element={
+                <RequirePermission permission="leave">
+                  <LeavePage />
                 </RequirePermission>
               }
             />
