@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import { BigButton, Card, PageTitle } from '../components/ui'
+import { BigButton, Card, PageTitle, Switch } from '../components/ui'
 import { useAuth } from '../context/AuthContext'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { formatDateDe } from '../utils/formatDateDe'
@@ -40,6 +40,7 @@ type LeaveOverview = {
   selfEmployeeId: string | null
   people: LeavePerson[]
   openRequests?: LeaveOpenRequest[]
+  approvedRequests?: LeaveOpenRequest[]
   blocks?: LeaveBlock[]
 }
 
@@ -116,6 +117,9 @@ export function LeavePage() {
   const [toDate, setToDate] = useState('')
   const [reqBusy, setReqBusy] = useState(false)
   const [reqMsg, setReqMsg] = useState('')
+  const [immediate, setImmediate] = useState(false)
+  const [decideBusy, setDecideBusy] = useState<string | null>(null)
+  const [decideMsg, setDecideMsg] = useState<Record<string, string>>({})
 
   async function load(opts?: { keepDrafts?: boolean }) {
     const r = await api<LeaveOverview>('/api/leave')
@@ -141,6 +145,7 @@ export function LeavePage() {
   const year = data?.year
   const selfId = data?.selfEmployeeId
   const openRequests = data?.openRequests ?? []
+  const approvedRequests = data?.approvedRequests ?? []
   const blocks = data?.blocks ?? []
 
   useEffect(() => {
@@ -226,16 +231,41 @@ export function LeavePage() {
           employeeId: isCompanyOwner ? reqEmployeeId : selfId,
           fromDate,
           toDate,
+          immediate: isCompanyOwner ? immediate : false,
         }),
       })
       setFromDate('')
       setToDate('')
       await load({ keepDrafts: true })
-      setReqMsg('Antrag ist offen. Resttage ändern sich erst nach der Genehmigung.')
+      setReqMsg(
+        isCompanyOwner && immediate
+          ? 'Eingetragen und genehmigt. Resttage sind angepasst.'
+          : 'Antrag ist offen. Resttage ändern sich erst nach der Genehmigung.',
+      )
     } catch (ex) {
       setReqMsg(ex instanceof Error ? ex.message : 'Antrag fehlgeschlagen.')
     } finally {
       setReqBusy(false)
+    }
+  }
+
+  async function decide(id: string, status: 'approved' | 'rejected') {
+    if (!isCompanyOwner || writeBlocked) return
+    setDecideBusy(id)
+    setDecideMsg((m) => ({ ...m, [id]: '' }))
+    try {
+      await api(`/api/leave/requests/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      })
+      await load({ keepDrafts: true })
+    } catch (ex) {
+      setDecideMsg((m) => ({
+        ...m,
+        [id]: ex instanceof Error ? ex.message : 'Entscheidung fehlgeschlagen.',
+      }))
+    } finally {
+      setDecideBusy(null)
     }
   }
 
@@ -320,8 +350,31 @@ export function LeavePage() {
                 <p className="mt-1.5 text-[0.7rem] text-zinc-500">Nur Hinweis — Antrag bleibt möglich.</p>
               </div>
             ) : null}
+            {isCompanyOwner ? (
+              <div className="rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <span className="text-sm text-zinc-300">Sofort eintragen</span>
+                    <p className="mt-0.5 text-[0.72rem] leading-snug text-zinc-600">
+                      An: schon genehmigt, Rest wird abgezogen. Aus: Antrag bleibt offen.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={immediate}
+                    onChange={setImmediate}
+                    disabled={writeBlocked || reqBusy}
+                    label="Sofort eintragen"
+                  />
+                </div>
+              </div>
+            ) : null}
+            {isCompanyOwner && immediate && remainingAfter != null && remainingAfter < 0 ? (
+              <p className="text-[0.82rem] text-zinc-500">
+                Zu wenig Rest für direktes Eintragen — Antrag senden geht trotzdem.
+              </p>
+            ) : null}
             <BigButton type="submit" disabled={writeBlocked || reqBusy}>
-              {reqBusy ? '…' : 'Antrag senden'}
+              {reqBusy ? '…' : isCompanyOwner && immediate ? 'Direkt eintragen' : 'Antrag senden'}
             </BigButton>
             {reqMsg ? <p className="text-center text-[0.78rem] text-zinc-400">{reqMsg}</p> : null}
           </form>
@@ -355,6 +408,29 @@ export function LeavePage() {
                   · {r.weekdayCount === 1 ? '1 Werktag' : `${r.weekdayCount} Werktage`}
                 </span>
               </p>
+              {isCompanyOwner ? (
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={writeBlocked || decideBusy === r.id}
+                    onClick={() => decide(r.id, 'approved')}
+                    className="inline-flex flex-1 items-center justify-center rounded-[0.85rem] bg-orange-500/90 py-[0.5rem] text-[0.74rem] font-semibold text-zinc-950 transition hover:bg-orange-400 active:scale-[0.99] disabled:opacity-40"
+                  >
+                    {decideBusy === r.id ? '…' : 'Genehmigen'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={writeBlocked || decideBusy === r.id}
+                    onClick={() => decide(r.id, 'rejected')}
+                    className="inline-flex flex-1 items-center justify-center rounded-[0.85rem] bg-black/50 py-[0.5rem] text-[0.74rem] font-semibold text-zinc-300 ring-1 ring-white/[0.08] transition hover:bg-black/60 active:scale-[0.99] disabled:opacity-40"
+                  >
+                    Ablehnen
+                  </button>
+                </div>
+              ) : null}
+              {decideMsg[r.id] ? (
+                <p className="mt-2 text-[0.78rem] text-zinc-400">{decideMsg[r.id]}</p>
+              ) : null}
             </Card>
           ))}
         </div>
@@ -430,6 +506,32 @@ export function LeavePage() {
           )
         })}
       </div>
+
+      {!loading && approvedRequests.length > 0 ? (
+        <div className="mt-8 space-y-3">
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-zinc-500">Genehmigt</p>
+          {approvedRequests.map((r) => (
+            <Card
+              key={r.id}
+              className="border-transparent bg-black/38 py-[1.05rem] shadow-none ring-1 ring-white/[0.06]"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[1.02rem] font-semibold text-white">{r.employeeName}</h3>
+                <span className="inline-flex items-center rounded-full border border-emerald-400/30 bg-emerald-500/[0.08] px-2.5 py-[0.22rem] text-[9px] font-semibold uppercase tracking-[0.14em] text-emerald-200/90">
+                  Genehmigt
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-zinc-400">
+                {rangeLabel(r.fromDate, r.toDate)}
+                <span className="text-zinc-500">
+                  {' '}
+                  · {r.weekdayCount === 1 ? '1 Werktag' : `${r.weekdayCount} Werktage`}
+                </span>
+              </p>
+            </Card>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

@@ -1,7 +1,7 @@
-"""Smoke fuer Urlaub Baustein 1+2 (Backend-only).
+"""Smoke fuer Urlaub Baustein 1–3 (Backend-only).
 
-Kontingent + Resttage, Antrag von–bis als pending, Rest unbewegt,
-Worker nur eigener Antrag, Ueberlappung sperrt nicht.
+Kontingent, Antrag, Genehmigen/Ablehnen, Direkt-Eintrag.
+Rest nur nach Genehmigung. Zu wenig Rest: 400, Antrag bleibt offen.
 
 Laeuft in-process mit isoliertem Temp-Verzeichnis; beruehrt keine echten Daten.
 """
@@ -66,6 +66,7 @@ body = res.json()
 _expect(body.get("year") == year, f"year: {body.get('year')}")
 _expect(body.get("people") == [], "no people yet")
 _expect(body.get("openRequests") == [], "no open requests")
+_expect(body.get("approvedRequests") == [], "no approved yet")
 _expect(body.get("selfEmployeeId") is None, "owner has no employeeId")
 
 # Mitarbeiter anlegen — ohne Kontingent
@@ -251,6 +252,106 @@ res = client.post(
 )
 _expect(res.status_code == 400, f"garbage date: {res.status_code}")
 
+# --- Baustein 3: Genehmigen / Ablehnen / Direkt eintragen ---
+ov = client.get("/api/leave", headers=hdrs).json()
+opens = { (x.get("employeeId"), x.get("fromDate")): x for x in (ov.get("openRequests") or []) }
+uli_later_req = opens.get((uli_id, later.isoformat()))
+matt_later_req = opens.get((matthias_id, later.isoformat()))
+_expect(uli_later_req and matt_later_req, "later open requests missing")
+
+res = client.patch(
+    f"/api/leave/requests/{uli_later_req['id']}",
+    headers=wh,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 403, f"worker approve must 403, was {res.status_code}")
+
+res = client.post(
+    "/api/leave/requests",
+    headers=wh,
+    json={"fromDate": later.isoformat(), "toDate": later_end.isoformat(), "immediate": True},
+)
+_expect(res.status_code == 403, f"worker immediate: {res.status_code}")
+
+res = client.patch("/api/leave/requests/req-pending", headers=hdrs, json={"status": "rejected"})
+_expect(res.status_code == 200, f"reject pending: {res.status_code} {res.text}")
+_expect(res.json().get("request", {}).get("status") == "rejected", "rejected status")
+_expect(res.json().get("person", {}).get("remainingDays") == 25, "reject must not change rest")
+
+res = client.patch(
+    f"/api/leave/requests/{uli_later_req['id']}",
+    headers=hdrs,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 200, f"approve uli later: {res.status_code} {res.text}")
+_expect(res.json().get("request", {}).get("status") == "approved", "approved")
+_expect(res.json().get("person", {}).get("remainingDays") == 20, f"25-5: {res.json().get('person')}")
+
+res = client.patch(
+    f"/api/leave/requests/{uli_later_req['id']}",
+    headers=hdrs,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 400, f"double approve: {res.status_code}")
+
+res = client.patch(
+    f"/api/leave/requests/{matt_later_req['id']}",
+    headers=hdrs,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 400, f"unset allowance approve: {res.status_code} {res.text}")
+opens_after = client.get("/api/leave", headers=hdrs).json().get("openRequests") or []
+_expect(any(x.get("id") == matt_later_req["id"] for x in opens_after), "failed approve must stay open")
+
+res = client.patch(f"/api/leave/employees/{matthias_id}", headers=hdrs, json={"days": 3})
+_expect(res.status_code == 200, f"set 3: {res.text}")
+res = client.patch(
+    f"/api/leave/requests/{matt_later_req['id']}",
+    headers=hdrs,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 400, f"too few days: {res.status_code} {res.text}")
+opens_after = client.get("/api/leave", headers=hdrs).json().get("openRequests") or []
+_expect(any(x.get("id") == matt_later_req["id"] for x in opens_after), "too few must stay open")
+
+res = client.patch(f"/api/leave/employees/{matthias_id}", headers=hdrs, json={"days": 10})
+_expect(res.status_code == 200, "set 10")
+res = client.patch(
+    f"/api/leave/requests/{matt_later_req['id']}",
+    headers=hdrs,
+    json={"status": "approved"},
+)
+_expect(res.status_code == 200, f"approve matthias: {res.status_code} {res.text}")
+_expect(res.json().get("person", {}).get("remainingDays") == 0, "10 minus 5 already used minus 5 new")
+
+direct_start = later_end + timedelta(days=3)
+direct_end = direct_start + timedelta(days=4)
+res = client.post(
+    "/api/leave/requests",
+    headers=hdrs,
+    json={
+        "employeeId": uli_id,
+        "fromDate": direct_start.isoformat(),
+        "toDate": direct_end.isoformat(),
+        "immediate": True,
+    },
+)
+_expect(res.status_code == 200, f"direct enter: {res.status_code} {res.text}")
+_expect(res.json().get("request", {}).get("status") == "approved", "immediate is approved")
+_expect(res.json().get("person", {}).get("remainingDays") == 15, f"20-5 direct: {res.json().get('person')}")
+
+ov = client.get("/api/leave", headers=hdrs).json()
+approved = ov.get("approvedRequests") or []
+_expect(any(x.get("id") == uli_later_req["id"] for x in approved), "approved list has uli later")
+_expect(any(x.get("employeeId") == matthias_id for x in approved), "approved list has matthias")
+_expect(all(x.get("status") == "approved" for x in approved), "approved list only approved")
+people = {p["employeeId"]: p for p in ov.get("people") or []}
+_expect(people[uli_id].get("remainingDays") == 15, "uli rest after direct")
+_expect(people[matthias_id].get("remainingDays") == 0, "matthias rest")
+
+res = client.patch("/api/leave/requests/missing-id", headers=hdrs, json={"status": "approved"})
+_expect(res.status_code == 404, f"missing request: {res.status_code}")
+
 # Anderer Mandant sieht nichts
 other_id = str(uuid.uuid4())
 main.save_users(
@@ -272,4 +373,4 @@ res = client.get("/api/leave", headers=oh)
 _expect(res.status_code == 200, f"other get: {res.status_code}")
 _expect(res.json().get("people") == [], "tenant isolation")
 
-print("LEAVE-SMOKE (B1+B2): OK")
+print("LEAVE-SMOKE (B1+B2+B3): OK")

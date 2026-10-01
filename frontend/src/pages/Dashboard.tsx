@@ -19,6 +19,17 @@ type RecurringProject = {
   recurringNextDate?: string
 }
 
+type ProtocolReminderItem = {
+  id: string
+  title?: string
+  date?: string
+}
+
+type ProtocolReminder = {
+  due?: boolean
+  items?: ProtocolReminderItem[]
+}
+
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
 
 const RECURRING_DUE_DAYS = 14
@@ -41,6 +52,7 @@ export function DashboardPage() {
   const [company, setCompany] = useState<CompanyProfile | null>(null)
   const [todoOpen, setTodoOpen] = useState(false)
   const [recurringDue, setRecurringDue] = useState<RecurringProject[]>([])
+  const [protocolReminder, setProtocolReminder] = useState<ProtocolReminderItem[]>([])
 
   const tiles = useMemo(
     () =>
@@ -116,6 +128,32 @@ export function DashboardPage() {
     }
   }, [can])
 
+  useEffect(() => {
+    if (!can('protocol')) {
+      setProtocolReminder([])
+      return
+    }
+    let cancelled = false
+    api<ProtocolReminder>('/api/reminders/protocol')
+      .then((r) => {
+        if (cancelled) return
+        if (!r?.due) {
+          setProtocolReminder([])
+          return
+        }
+        const list = Array.isArray(r.items) ? r.items : []
+        setProtocolReminder(
+          list.filter((item) => item && typeof item.id === 'string' && item.id).slice(0, 5),
+        )
+      })
+      .catch(() => {
+        if (!cancelled) setProtocolReminder([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [can])
+
   return (
     <div className="flex min-h-full flex-col">
       {/* Dominanter Kopf: großes Logo schafft das „meine App"-Gefühl */}
@@ -182,6 +220,33 @@ export function DashboardPage() {
                 </li>
               )
             })}
+          </ul>
+        </Link>
+      ) : null}
+
+      {protocolReminder.length > 0 ? (
+        <Link
+          to="/protokolle"
+          className="relative mt-6 block rounded-[1.25rem] border border-orange-400/18 bg-orange-500/[0.06] px-4 py-3 ring-1 ring-orange-400/10 transition hover:bg-orange-500/[0.09] active:scale-[0.99]"
+        >
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-orange-300/90">
+            Protokoll
+          </p>
+          <p className="mt-1 text-[0.78rem] text-zinc-400">Noch nicht ans Büro gesendet</p>
+          <ul className="mt-2 space-y-1.5">
+            {protocolReminder.map((item) => (
+              <li
+                key={item.id}
+                className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+              >
+                <span className="min-w-0 truncate text-zinc-200">
+                  {item.title?.trim() || 'Protokoll'}
+                </span>
+                {item.date ? (
+                  <span className="shrink-0 tabular-nums text-zinc-500">{formatDateDe(item.date)}</span>
+                ) : null}
+              </li>
+            ))}
           </ul>
         </Link>
       ) : null}

@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 from zoneinfo import ZoneInfo
 
@@ -16,6 +17,9 @@ PROTOCOL_MODES = frozenset({"quick", "signed", "thoughts"})
 THOUGHTS_PROJECT_ID = "__gedankensammlung__"
 THOUGHTS_PROJECT_NAME = "Gedankensammlung"
 BERLIN = ZoneInfo("Europe/Berlin")
+DEFAULT_PROTOCOL_REMINDER_TIME = "21:00"
+PROTOCOL_REMINDER_LOOKBACK_DAYS = 7
+MAX_PROTOCOL_REMINDER_ITEMS = 5
 
 
 def is_thoughts_mode(mode: str | None) -> bool:
@@ -321,3 +325,102 @@ def update_protocol_polished(store: TenantStore, protocol_id: str, polished_text
             write_protocols(store, protocols)
             return item
     raise HTTPException(status_code=404, detail="Protokoll nicht gefunden")
+
+
+def normalize_reminder_hhmm(raw: Any) -> str:
+    s = str(raw or "").strip()
+    if len(s) >= 8 and s[2] == ":" and s[5] == ":":
+        s = s[:5]
+    m = re.match(r"^(\d{1,2}):(\d{2})$", s)
+    if not m:
+        return ""
+    hour, minute = int(m.group(1)), int(m.group(2))
+    if hour > 23 or minute > 59:
+        return ""
+    return f"{hour:02d}:{minute:02d}"
+
+
+def reminder_clock_due(enabled: bool, time_hhmm: str, *, now: datetime | None = None) -> bool:
+    if not enabled:
+        return False
+    stamp = normalize_reminder_hhmm(time_hhmm) or DEFAULT_PROTOCOL_REMINDER_TIME
+    current = now or datetime.now(BERLIN)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=BERLIN)
+    else:
+        current = current.astimezone(BERLIN)
+    return current.strftime("%H:%M") >= stamp
+
+
+def _protocol_is_unsent(protocol: dict[str, Any]) -> bool:
+    return not str(protocol.get("officeSentAt") or "").strip()
+
+
+def collect_unsent_protocol_items(
+    store: TenantStore,
+    *,
+    today: date | None = None,
+    lookback_days: int = PROTOCOL_REMINDER_LOOKBACK_DAYS,
+) -> list[dict[str, Any]]:
+    """Ungesendete Protokoll-Stücke (Gedanken, Schnellnotiz, unterschrieben) — ohne Rohtext."""
+    day = today or datetime.now(BERLIN).date()
+    earliest = day - timedelta(days=max(0, int(lookback_days)))
+    out: list[dict[str, Any]] = []
+    for item in read_protocols(store):
+        if not isinstance(item, dict):
+            continue
+        mode = str(item.get("mode") or "").strip().lower()
+        if mode not in PROTOCOL_MODES:
+            continue
+        if not _protocol_is_unsent(item):
+            continue
+        if not protocol_display_text(item):
+            continue
+        raw_date = parse_iso_date_safe(item.get("date"))
+        if raw_date is None or raw_date < earliest or raw_date > day:
+            continue
+        out.append(
+            {
+                "id": str(item.get("id") or ""),
+                "mode": mode,
+                "title": protocol_kind_label(item),
+                "date": raw_date.isoformat(),
+            }
+        )
+    out.sort(key=lambda r: (str(r.get("date") or ""), str(r.get("title") or "")), reverse=True)
+    return out[:MAX_PROTOCOL_REMINDER_ITEMS]
+
+
+def parse_iso_date_safe(raw: Any) -> date | None:
+    s = str(raw or "").strip()[:10]
+    if not s:
+        return None
+    try:
+        return date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def build_protocol_reminder(
+    store: TenantStore,
+    profile: dict[str, Any],
+    *,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    enabled = bool(profile.get("protocolReminderEnabled"))
+    time_hhmm = normalize_reminder_hhmm(profile.get("protocolReminderTime")) or DEFAULT_PROTOCOL_REMINDER_TIME
+    clock = reminder_clock_due(enabled, time_hhmm, now=now)
+    items: list[dict[str, Any]] = []
+    if clock:
+        current = now or datetime.now(BERLIN)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=BERLIN)
+        else:
+            current = current.astimezone(BERLIN)
+        items = collect_unsent_protocol_items(store, today=current.date())
+    return {
+        "enabled": enabled,
+        "time": time_hhmm,
+        "due": bool(clock and items),
+        "items": items,
+    }

@@ -54,10 +54,12 @@ from app.services.delivery_note import (
     save_delivery_note_photos,
 )
 from app.services.site_protocol import (
+    build_protocol_reminder,
     create_protocol_doc,
     find_protocol,
     is_thoughts_mode,
     mark_protocol_office_sent,
+    normalize_reminder_hhmm,
     protocol_entrepreneur_display_name,
     protocol_partner_display_name,
     protocol_photos_list,
@@ -561,6 +563,8 @@ def _normalize_company_profile(prof: dict[str, Any]) -> dict[str, Any]:
         "defaultRecipientEmail": str(prof.get("defaultRecipientEmail") or ""),
         "logoFilename": prof.get("logoFilename"),
         "includePhotosInPdf": bool(prof.get("includePhotosInPdf")),
+        "protocolReminderEnabled": bool(prof.get("protocolReminderEnabled")),
+        "protocolReminderTime": normalize_reminder_hhmm(prof.get("protocolReminderTime")) or "21:00",
     }
 
 
@@ -594,6 +598,8 @@ class CompanyProfileBody(BaseModel):
     defaultExportFormat: str = "PDF"
     defaultRecipientEmail: str = ""
     includePhotosInPdf: bool | None = None
+    protocolReminderEnabled: bool | None = None
+    protocolReminderTime: str | None = None
 
 
 def _validate_company_profile_body(body: CompanyProfileBody) -> None:
@@ -638,6 +644,11 @@ class LeaveRequestBody(BaseModel):
     employeeId: str = ""
     fromDate: str
     toDate: str
+    immediate: bool = False
+
+
+class LeaveDecisionBody(BaseModel):
+    status: str
 
 
 class TimeEntryCreate(BaseModel):
@@ -1936,6 +1947,17 @@ def post_company_profile(
         payload["includePhotosInPdf"] = bool(existing.get("includePhotosInPdf"))
     else:
         payload["includePhotosInPdf"] = bool(payload["includePhotosInPdf"])
+    if payload.get("protocolReminderEnabled") is None:
+        payload["protocolReminderEnabled"] = bool(existing.get("protocolReminderEnabled"))
+    else:
+        payload["protocolReminderEnabled"] = bool(payload["protocolReminderEnabled"])
+    if payload.get("protocolReminderTime") is None:
+        payload["protocolReminderTime"] = str(existing.get("protocolReminderTime") or "21:00")
+    else:
+        stamp = normalize_reminder_hhmm(payload.get("protocolReminderTime"))
+        if not stamp:
+            raise HTTPException(status_code=400, detail="Ungültige Erinnerungsuhrzeit (HH:MM)")
+        payload["protocolReminderTime"] = stamp
     merged = {**existing, **payload}
     # logoFilename kommt nicht aus dem Profil-Formular (separater Upload-Endpoint).
     # Bestehenden Dateinamen bewahren, damit ein vorher hochgeladenes Logo nicht verloren geht.
@@ -2327,9 +2349,12 @@ def create_leave_request(
     user_id: str = Depends(require_permission("leave")),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
-    """Antrag von–bis als offen. Resttage bleiben unberührt. Keine Genehmigung."""
+    """Antrag von–bis. Standard offen; Chef darf sofort genehmigen (immediate)."""
     _user, owner, self_employee_id = _task_actor_context(user_id)
     target = str(body.employeeId or "").strip()
+    immediate = bool(body.immediate)
+    if immediate and not owner:
+        raise HTTPException(status_code=403, detail="Nur der Geschäftsführer kann direkt eintragen")
     if owner:
         if not target:
             raise HTTPException(status_code=400, detail="Mitarbeiter fehlt")
@@ -2344,6 +2369,24 @@ def create_leave_request(
         employee_id=target,
         from_raw=body.fromDate,
         to_raw=body.toDate,
+        actor_user_id=user_id,
+        year=leave_service.current_leave_year(),
+        as_approved=immediate,
+    )
+
+
+@app.patch("/api/leave/requests/{request_id}")
+def decide_leave_request(
+    request_id: str,
+    body: LeaveDecisionBody,
+    user_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
+    """Chef genehmigt oder lehnt ab. Zu wenig Rest: 400, Antrag bleibt offen."""
+    return leave_service.decide_request(
+        store,
+        request_id,
+        body.status,
         actor_user_id=user_id,
         year=leave_service.current_leave_year(),
     )
@@ -3920,6 +3963,17 @@ def polish_protocol_text(body: ProtocolPolishBody) -> dict[str, Any]:
     if polished:
         return {"polishedText": polished, "polishedBy": "openai"}
     return {"polishedText": body.rawText.strip(), "polishedBy": "local"}
+
+
+@app.get("/api/reminders/protocol")
+def get_protocol_reminders(
+    _perm: str = Depends(require_permission("protocol")),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    """Home-Hinweis: nach eingestellter Uhr, wenn Protokoll-Stücke noch nicht ans Büro gingen."""
+    raw = store.read_json("company_profile.json", {})
+    prof = _normalize_company_profile(raw if isinstance(raw, dict) else {})
+    return build_protocol_reminder(store, prof)
 
 
 @app.get("/api/protocols")

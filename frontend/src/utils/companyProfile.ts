@@ -9,6 +9,8 @@ export type CompanyProfileResponse = {
   defaultExportFormat?: string
   defaultRecipientEmail?: string
   includePhotosInPdf?: boolean
+  protocolReminderEnabled?: boolean
+  protocolReminderTime?: string
   logoUrl?: string | null
 }
 

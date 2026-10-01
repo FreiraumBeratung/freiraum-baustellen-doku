@@ -1,7 +1,7 @@
-"""Urlaub: Jahreskontingent (Baustein 1) und Antrag von–bis (Baustein 2).
+"""Urlaub: Kontingent, Antrag, Genehmigung — additiv.
 
 Antraege zaehlen Resttage nur wenn status=approved. Offene Antraege aendern Rest nicht.
-Ohne Kontingent bleibt Rest ungesetzt — nicht still 0.
+Zu wenig Rest: Genehmigung 400, Antrag bleibt offen. Kein stilles Minus.
 Tagesbericht, Stundenkonto und To-do bleiben unberuehrt.
 """
 
@@ -280,11 +280,26 @@ def build_overview(
         if _req_status(req) == "pending" and _req_range(req) is not None
     ]
     open_requests.sort(key=lambda r: (str(r.get("fromDate") or ""), str(r.get("employeeName") or "")))
+    approved_requests = [
+        request_public(req, names, year=year)
+        for req in doc.get("requests") or []
+        if _req_status(req) == "approved" and _req_range(req) is not None
+    ]
+    year_prefix = f"{year}-"
+    approved_requests = [
+        r
+        for r in approved_requests
+        if int(r.get("yearDays") or 0) > 0
+        or str(r.get("fromDate") or "").startswith(year_prefix)
+        or str(r.get("toDate") or "").startswith(year_prefix)
+    ]
+    approved_requests.sort(key=lambda r: (str(r.get("fromDate") or ""), str(r.get("employeeName") or "")))
     return {
         "year": year,
         "selfEmployeeId": self_id or None,
         "people": people,
         "openRequests": open_requests,
+        "approvedRequests": approved_requests,
         "blocks": list_blocks(doc, names),
     }
 
@@ -349,24 +364,34 @@ def create_request(
     to_raw: Any,
     actor_user_id: str,
     year: int,
+    as_approved: bool = False,
 ) -> dict[str, Any]:
     emp = _find_employee(store, employee_id)
     if emp is None:
         raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
     start, end = _parse_request_dates(from_raw, to_raw)
     doc = read_doc(store)
-    pending = sum(1 for r in doc.get("requests") or [] if _req_status(r) == "pending")
-    if pending >= MAX_OPEN_REQUESTS:
-        raise HTTPException(status_code=400, detail="Zu viele offene Anträge")
-    req = {
+    if as_approved:
+        _assert_enough_days(person_payload(emp, doc, year=year), start, end, year)
+    else:
+        pending = sum(1 for r in doc.get("requests") or [] if _req_status(r) == "pending")
+        if pending >= MAX_OPEN_REQUESTS:
+            raise HTTPException(status_code=400, detail="Zu viele offene Anträge")
+    if len(doc.get("requests") or []) >= 400:
+        raise HTTPException(status_code=400, detail="Zu viele Urlaubseinträge")
+    now = datetime.now(timezone.utc).isoformat()
+    req: dict[str, Any] = {
         "id": str(uuid.uuid4()),
         "employeeId": str(emp.get("id") or "").strip(),
         "fromDate": start.isoformat(),
         "toDate": end.isoformat(),
-        "status": "pending",
-        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "status": "approved" if as_approved else "pending",
+        "createdAt": now,
         "createdByUserId": str(actor_user_id or "").strip(),
     }
+    if as_approved:
+        req["decidedAt"] = now
+        req["decidedByUserId"] = str(actor_user_id or "").strip()
     doc.setdefault("requests", []).append(req)
     write_doc(store, doc)
     names = _employee_names(store)
@@ -374,4 +399,63 @@ def create_request(
     return {
         "request": request_public(req, names, year=year),
         "person": person,
+    }
+
+
+def _assert_enough_days(person: dict[str, Any], start: date, end: date, year: int) -> None:
+    if not person.get("allowanceSet") or person.get("remainingDays") is None:
+        raise HTTPException(status_code=400, detail="Jahresurlaub noch nicht gepflegt")
+    need = count_weekdays(start, end, year=year)
+    rem = int(person["remainingDays"])
+    if need > rem:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Zu wenig Resttage ({rem} übrig, {need} beantragt)",
+        )
+
+
+def _find_request(doc: dict[str, Any], request_id: str) -> dict[str, Any] | None:
+    rid = str(request_id or "").strip()
+    if not rid:
+        return None
+    for req in doc.get("requests") or []:
+        if str(req.get("id") or "") == rid:
+            return req
+    return None
+
+
+def decide_request(
+    store: TenantStore,
+    request_id: str,
+    raw_status: Any,
+    *,
+    actor_user_id: str,
+    year: int,
+) -> dict[str, Any]:
+    want = str(raw_status or "").strip().lower()
+    if want not in {"approved", "rejected"}:
+        raise HTTPException(status_code=400, detail="Status muss genehmigt oder abgelehnt sein")
+    doc = read_doc(store)
+    req = _find_request(doc, request_id)
+    if req is None:
+        raise HTTPException(status_code=404, detail="Antrag nicht gefunden")
+    if _req_status(req) != "pending":
+        raise HTTPException(status_code=400, detail="Antrag ist nicht mehr offen")
+    span = _req_range(req)
+    if span is None:
+        raise HTTPException(status_code=400, detail="Antrag hat kein gültiges Datum")
+    start, end = span
+    emp = _find_employee(store, str(req.get("employeeId") or ""))
+    if emp is None:
+        raise HTTPException(status_code=404, detail="Mitarbeiter nicht gefunden")
+    if want == "approved":
+        _assert_enough_days(person_payload(emp, doc, year=year), start, end, year)
+    req["status"] = want
+    req["decidedAt"] = datetime.now(timezone.utc).isoformat()
+    req["decidedByUserId"] = str(actor_user_id or "").strip()
+    write_doc(store, doc)
+    names = _employee_names(store)
+    return {
+        "request": request_public(req, names, year=year),
+        "person": person_payload(emp, doc, year=year),
     }

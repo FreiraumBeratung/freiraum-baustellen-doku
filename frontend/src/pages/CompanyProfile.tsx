@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { Shield } from 'lucide-react'
+import { Settings, Shield, X } from 'lucide-react'
 import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { BigButton, Card, PageTitle, PoweredBy } from '../components/ui'
+import { BigButton, Card, PageTitle, PoweredBy, Switch } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 
 type CompanyProfile = {
@@ -15,7 +15,15 @@ type CompanyProfile = {
   defaultExportFormat: string
   defaultRecipientEmail: string
   includePhotosInPdf: boolean
+  protocolReminderEnabled: boolean
+  protocolReminderTime: string
   logoUrl: string | null
+}
+
+type SettingsSlice = {
+  includePhotosInPdf: boolean
+  protocolReminderEnabled: boolean
+  protocolReminderTime: string
 }
 
 export function CompanyProfilePage() {
@@ -25,36 +33,89 @@ export function CompanyProfilePage() {
   const [prof, setProf] = useState<CompanyProfile | null>(null)
   const [msg, setMsg] = useState('')
   const [loading, setLoading] = useState(true)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const settingsSnap = useRef<SettingsSlice | null>(null)
+  const profRef = useRef(prof)
+  profRef.current = prof
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')
-      .then((p) => setProf({ ...p, includePhotosInPdf: Boolean(p.includePhotosInPdf) }))
+      .then((p) =>
+        setProf({
+          ...p,
+          includePhotosInPdf: Boolean(p.includePhotosInPdf),
+          protocolReminderEnabled: Boolean(p.protocolReminderEnabled),
+          protocolReminderTime: p.protocolReminderTime || '21:00',
+        }),
+      )
       .finally(() => setLoading(false))
   }, [])
 
-  async function save(e: React.FormEvent) {
-    e.preventDefault()
-    if (!prof || writeBlocked) return
+  useEffect(() => {
+    if (!settingsOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeSettings(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [settingsOpen])
+
+  function openSettings() {
+    if (!prof) return
+    settingsSnap.current = {
+      includePhotosInPdf: Boolean(prof.includePhotosInPdf),
+      protocolReminderEnabled: Boolean(prof.protocolReminderEnabled),
+      protocolReminderTime: prof.protocolReminderTime || '21:00',
+    }
+    setSettingsOpen(true)
+  }
+
+  function closeSettings(keep: boolean) {
+    if (!keep && settingsSnap.current) {
+      const snap = settingsSnap.current
+      setProf((p) => (p ? { ...p, ...snap } : p))
+    }
+    settingsSnap.current = null
+    setSettingsOpen(false)
+  }
+
+  async function persist(): Promise<boolean> {
+    const current = profRef.current
+    if (!current || writeBlocked) return false
     setMsg('')
     try {
       const next = await api<CompanyProfile>('/api/company-profile', {
         method: 'POST',
         body: JSON.stringify({
-          companyName: prof.companyName,
-          contactPerson: prof.contactPerson,
-          officeEmail: prof.officeEmail,
-          phone: prof.phone,
-          address: prof.address,
-          defaultExportFormat: prof.defaultExportFormat,
-          defaultRecipientEmail: prof.defaultRecipientEmail,
-          includePhotosInPdf: Boolean(prof.includePhotosInPdf),
+          companyName: current.companyName,
+          contactPerson: current.contactPerson,
+          officeEmail: current.officeEmail,
+          phone: current.phone,
+          address: current.address,
+          defaultExportFormat: current.defaultExportFormat,
+          defaultRecipientEmail: current.defaultRecipientEmail,
+          includePhotosInPdf: Boolean(current.includePhotosInPdf),
+          protocolReminderEnabled: Boolean(current.protocolReminderEnabled),
+          protocolReminderTime: current.protocolReminderTime || '21:00',
         }),
       })
-      setProf(next)
+      setProf({
+        ...next,
+        includePhotosInPdf: Boolean(next.includePhotosInPdf),
+        protocolReminderEnabled: Boolean(next.protocolReminderEnabled),
+        protocolReminderTime: next.protocolReminderTime || '21:00',
+      })
       setMsg('Gespeichert.')
+      return true
     } catch {
       setMsg('Speichern fehlgeschlagen.')
+      return false
     }
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault()
+    await persist()
   }
 
   async function onLogo(f: FileList | null) {
@@ -142,33 +203,6 @@ export function CompanyProfilePage() {
               <option value="Word">Word</option>
             </select>
           </label>
-          <div className="rounded-2xl border border-white/[0.06] bg-black/30 px-3 py-3">
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-sm text-zinc-300">Fotos in der Tagesbericht-PDF</span>
-              <button
-                type="button"
-                role="switch"
-                aria-checked={Boolean(prof.includePhotosInPdf)}
-                aria-label="Fotos in der Tagesbericht-PDF"
-                disabled={writeBlocked}
-                onClick={() => setProf({ ...prof, includePhotosInPdf: !prof.includePhotosInPdf })}
-                className={`relative h-7 w-12 shrink-0 rounded-full transition ${
-                  prof.includePhotosInPdf ? 'bg-orange-500' : 'bg-zinc-700'
-                } disabled:opacity-50`}
-              >
-                <span
-                  className={`absolute top-0.5 h-6 w-6 rounded-full bg-white transition ${
-                    prof.includePhotosInPdf ? 'left-5' : 'left-0.5'
-                  }`}
-                />
-              </button>
-            </div>
-            <p className="mt-2 text-[0.72rem] leading-snug text-zinc-600">
-              {prof.includePhotosInPdf
-                ? 'An: die Bilder stehen im PDF. In der Mail dann kein extra Foto-Anhang.'
-                : 'Aus: Fotos bleiben in der App und gehen wie bisher extra mit der Mail.'}
-            </p>
-          </div>
 
           <label className="block">
             <span className="text-sm text-zinc-400">Firmenlogo</span>
@@ -198,6 +232,22 @@ export function CompanyProfilePage() {
           <BigButton type="submit" disabled={writeBlocked}>Speichern</BigButton>
         </form>
       </Card>
+
+      <div className="mt-6">
+        <button
+          type="button"
+          onClick={openSettings}
+          className="flex min-h-12 w-full items-center justify-between gap-3 rounded-[1rem] border border-white/[0.08] bg-black/35 px-4 py-3 text-sm font-medium text-zinc-200 ring-1 ring-white/[0.05] transition hover:bg-white/[0.05] active:scale-[0.99]"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-orange-500/12 ring-1 ring-orange-400/20">
+              <Settings strokeWidth={1.85} className="h-5 w-5 text-orange-300" aria-hidden />
+            </span>
+            Einstellungen
+          </span>
+          <span className="text-zinc-500">›</span>
+        </button>
+      </div>
 
       {isAdmin ? (
         <div className="mt-6">
@@ -231,6 +281,106 @@ export function CompanyProfilePage() {
           Abmelden
         </BigButton>
       </div>
+
+      {settingsOpen ? (
+        <div
+          className="fixed inset-0 z-[80] flex flex-col justify-end bg-black/62 backdrop-blur-[3px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="company-settings-title"
+          onClick={() => closeSettings(false)}
+        >
+          <div
+            className="freiraum-sheet-up mx-auto w-full max-w-[390px] rounded-t-[1.75rem] border border-white/[0.08] border-b-0 bg-zinc-950 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-18px_50px_-28px_rgba(0,0,0,0.9)] ring-1 ring-white/[0.06]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/18" aria-hidden />
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <h2 id="company-settings-title" className="text-[1.05rem] font-semibold tracking-tight text-white">
+                Einstellungen
+              </h2>
+              <button
+                type="button"
+                onClick={() => closeSettings(false)}
+                aria-label="Schließen"
+                className="rounded-full p-1.5 text-zinc-500 transition hover:bg-white/[0.06] hover:text-zinc-300"
+              >
+                <X strokeWidth={2} className="h-5 w-5" aria-hidden />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="rounded-2xl border border-white/[0.06] bg-black/40 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-zinc-300">Fotos in der Tagesbericht-PDF</span>
+                  <Switch
+                    checked={Boolean(prof.includePhotosInPdf)}
+                    onChange={(next) =>
+                      setProf((p) => (p ? { ...p, includePhotosInPdf: next } : p))
+                    }
+                    disabled={writeBlocked}
+                    label="Fotos in der Tagesbericht-PDF"
+                  />
+                </div>
+                <p className="mt-2 text-[0.72rem] leading-snug text-zinc-600">
+                  {prof.includePhotosInPdf
+                    ? 'An: die Bilder stehen im PDF. In der Mail dann kein extra Foto-Anhang.'
+                    : 'Aus: Fotos bleiben in der App und gehen wie bisher extra mit der Mail.'}
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.06] bg-black/40 px-3 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm text-zinc-300">Erinnerung für Protokoll</span>
+                  <Switch
+                    checked={Boolean(prof.protocolReminderEnabled)}
+                    onChange={(next) =>
+                      setProf((p) => (p ? { ...p, protocolReminderEnabled: next } : p))
+                    }
+                    disabled={writeBlocked}
+                    label="Erinnerung für Protokoll"
+                  />
+                </div>
+                <p className="mt-2 text-[0.72rem] leading-snug text-zinc-600">
+                  {prof.protocolReminderEnabled
+                    ? 'An: ab dieser Uhr auf Home, wenn Gedankensammlung, Schnellnotiz oder Protokoll noch nicht ans Büro ging.'
+                    : 'Aus: keine Erinnerung. Senden ans Büro bleibt wie bisher.'}
+                </p>
+                {prof.protocolReminderEnabled ? (
+                  <label className="mt-3 block">
+                    <span className="text-xs tracking-wide text-zinc-400">Uhrzeit</span>
+                    <input
+                      type="time"
+                      lang="de-DE"
+                      className="mt-1 w-full min-w-0 rounded-[1rem] border border-white/[0.1] bg-black/55 px-3 py-[0.65rem] text-white outline-none ring-1 ring-transparent focus:border-orange-500/47 focus:ring-orange-500/42 [color-scheme:dark] disabled:opacity-50"
+                      value={prof.protocolReminderTime || '21:00'}
+                      disabled={writeBlocked}
+                      onChange={(e) => {
+                        const stamp = e.target.value || '21:00'
+                        setProf((p) => (p ? { ...p, protocolReminderTime: stamp } : p))
+                      }}
+                    />
+                  </label>
+                ) : null}
+              </div>
+            </div>
+
+            {msg ? <p className="mt-3 text-sm text-orange-300">{msg}</p> : null}
+            <div className="mt-5">
+              <BigButton
+                type="button"
+                disabled={writeBlocked}
+                onClick={async () => {
+                  const ok = await persist()
+                  if (ok) closeSettings(true)
+                }}
+              >
+                Speichern
+              </BigButton>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

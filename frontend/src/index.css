@@ -144,3 +144,25 @@ body[data-photo-upload-busy='1'] nav[aria-label='Hauptnavigation'] {
     animation: none;
   }
 }
+
+/* Firmenprofil: Einstellungen-Sheet von unten, ohne Layout-Shift. */
+@keyframes freiraum-sheet-up {
+  from {
+    transform: translateY(1.15rem);
+    opacity: 0.72;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.freiraum-sheet-up {
+  animation: freiraum-sheet-up 0.28s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .freiraum-sheet-up {
+    animation: none;
+  }
+}
