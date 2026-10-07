@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from app.services.site_tasks import read_tasks
 from app.services.tenant_storage import TenantStore
 from app.services.time_account import resolve_report_employees
 
@@ -33,6 +34,23 @@ def _normalize_report_date(raw: Any) -> str:
         except ValueError:
             return ""
     return ""
+
+
+def _todo_counts(store: TenantStore, day: str) -> dict[str, int]:
+    """Offene To-dos: heute faellig vs. ueberfaellig. Keine Titel, kein Rohtext."""
+    open_today = 0
+    overdue = 0
+    for raw in read_tasks(store):
+        if str(raw.get("status") or "open").strip().lower() != "open":
+            continue
+        due = _normalize_report_date(raw.get("dueDate"))
+        if not due:
+            continue
+        if due == day:
+            open_today += 1
+        elif due < day:
+            overdue += 1
+    return {"openToday": open_today, "overdue": overdue}
 
 
 def _is_active_employee(emp: dict[str, Any]) -> bool:
@@ -85,4 +103,5 @@ def build_today_presence(
         "due": bool(missing),
         "missing": missing,
         "present": present,
+        "todos": _todo_counts(store, day),
     }

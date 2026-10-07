@@ -173,6 +173,30 @@ body = res.json()
 _expect(body.get("due") is False, "all present => not due")
 _expect(body.get("missing") == [], "no missing")
 _expect({p["id"] for p in body.get("present") or []} == {uli_id, matthias_id}, "both present")
+_expect((body.get("todos") or {}).get("openToday") == 0, "no todos yet")
+_expect((body.get("todos") or {}).get("overdue") == 0, "no overdue yet")
+
+# To-do heute / ueberfaellig / erledigt / Zukunft — nur Zaehler, kein Titel
+tomorrow_iso = (today + timedelta(days=1)).isoformat()
+store.write_json(
+    "tasks.json",
+    {
+        "tasks": [
+            {"id": str(uuid.uuid4()), "status": "open", "dueDate": today_iso, "title": "HEUTE GEHEIM"},
+            {"id": str(uuid.uuid4()), "status": "open", "dueDate": today_iso, "title": "Noch eine"},
+            {"id": str(uuid.uuid4()), "status": "open", "dueDate": yesterday_iso, "title": "ALT"},
+            {"id": str(uuid.uuid4()), "status": "done", "dueDate": today_iso, "title": "fertig"},
+            {"id": str(uuid.uuid4()), "status": "open", "dueDate": tomorrow_iso, "title": "spaeter"},
+        ]
+    },
+)
+res = client.get("/api/reminders/today", headers=hdrs)
+body = res.json()
+todos = body.get("todos") or {}
+_expect(todos.get("openToday") == 2, f"openToday: {todos}")
+_expect(todos.get("overdue") == 1, f"overdue: {todos}")
+_expect("HEUTE GEHEIM" not in res.text, "todo title must not leak")
+_expect(body.get("due") is False, "todos must not flip report-due")
 
 # Worker darf den Chef-Blick nicht sehen
 worker_id = str(uuid.uuid4())

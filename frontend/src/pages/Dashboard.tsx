@@ -38,6 +38,10 @@ type TodayPerson = {
 type TodayPresence = {
   due?: boolean
   missing?: TodayPerson[]
+  todos?: {
+    openToday?: number
+    overdue?: number
+  }
 }
 
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
@@ -64,6 +68,7 @@ export function DashboardPage() {
   const [recurringDue, setRecurringDue] = useState<RecurringProject[]>([])
   const [protocolReminder, setProtocolReminder] = useState<ProtocolReminderItem[]>([])
   const [todayMissing, setTodayMissing] = useState<TodayPerson[]>([])
+  const [todayTodos, setTodayTodos] = useState({ openToday: 0, overdue: 0 })
 
   const tiles = useMemo(
     () =>
@@ -80,6 +85,17 @@ export function DashboardPage() {
         ),
     [can, isCompanyOwner],
   )
+
+  const todayTodoCount = todayTodos.openToday + todayTodos.overdue
+  const showHeute = todayMissing.length > 0 || todayTodoCount > 0
+  const todayTodoLabel =
+    todayTodos.openToday > 0 && todayTodos.overdue > 0
+      ? `${todayTodos.openToday} offen · ${todayTodos.overdue} überfällig`
+      : todayTodos.overdue > 0
+        ? `${todayTodos.overdue} überfällig`
+        : todayTodos.openToday > 0
+          ? `${todayTodos.openToday} offen`
+          : ''
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')
@@ -168,6 +184,7 @@ export function DashboardPage() {
   useEffect(() => {
     if (!isCompanyOwner) {
       setTodayMissing([])
+      setTodayTodos({ openToday: 0, overdue: 0 })
       return
     }
     let cancelled = false
@@ -175,7 +192,10 @@ export function DashboardPage() {
       .then((r) => {
         if (cancelled) return
         const missing = Array.isArray(r?.missing) ? r.missing : []
-        if (!r?.due || missing.length === 0) {
+        const openToday = Math.max(0, Number(r?.todos?.openToday) || 0)
+        const overdue = Math.max(0, Number(r?.todos?.overdue) || 0)
+        setTodayTodos({ openToday, overdue })
+        if (missing.length === 0) {
           setTodayMissing([])
           return
         }
@@ -186,7 +206,10 @@ export function DashboardPage() {
         )
       })
       .catch(() => {
-        if (!cancelled) setTodayMissing([])
+        if (!cancelled) {
+          setTodayMissing([])
+          setTodayTodos({ openToday: 0, overdue: 0 })
+        }
       })
     return () => {
       cancelled = true
@@ -198,14 +221,14 @@ export function DashboardPage() {
       {/* Dominanter Kopf: großes Logo schafft das „meine App"-Gefühl */}
       <header
         className={`relative -mx-4 overflow-hidden rounded-b-[2rem] border-b border-white/[0.05] px-5 pt-10 text-center ${
-          todayMissing.length > 0 ? 'pb-6' : 'pb-12'
+          showHeute ? 'pb-6' : 'pb-12'
         }`}
       >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_-12%,rgba(249,115,22,0.17),transparent_64%)]"
         />
-        <div className={`relative flex flex-col items-center ${todayMissing.length > 0 ? 'gap-3' : 'gap-5'}`}>
+        <div className={`relative flex flex-col items-center ${showHeute ? 'gap-3' : 'gap-5'}`}>
           <p className="text-[0.72rem] font-medium uppercase tracking-[0.3em] text-orange-300/85">
             Freiraum · Baustellen-Doku
           </p>
@@ -215,7 +238,7 @@ export function DashboardPage() {
                 src={resolveBackendPublicUrl(company.logoUrl) ?? company.logoUrl}
                 alt="Firmenlogo"
                 className={`w-auto object-contain ${
-                  todayMissing.length > 0 ? 'h-[4.75rem] max-w-[200px]' : 'h-[6.25rem] max-w-[260px]'
+                  showHeute ? 'h-[4.75rem] max-w-[200px]' : 'h-[6.25rem] max-w-[260px]'
                 }`}
               />
             </div>
@@ -223,7 +246,7 @@ export function DashboardPage() {
             <div
               aria-hidden
               className={`flex items-center justify-center rounded-[1.6rem] bg-white/[0.05] ring-1 ring-white/[0.08] ${
-                todayMissing.length > 0 ? 'h-[5.25rem] w-[5.25rem] text-[2.1rem]' : 'h-[7rem] w-[7rem] text-[2.8rem]'
+                showHeute ? 'h-[5.25rem] w-[5.25rem] text-[2.1rem]' : 'h-[7rem] w-[7rem] text-[2.8rem]'
               }`}
             >
               🏢
@@ -232,26 +255,47 @@ export function DashboardPage() {
           <p className="text-[1.55rem] font-semibold tracking-tight text-white/96">
             {company?.companyName?.trim() || 'Ihre Firma'}
           </p>
-          {todayMissing.length > 0 ? (
-            <Link
-              to="/berichte"
-              className="mt-1 w-full rounded-[1.15rem] border border-white/[0.1] bg-black/45 px-3.5 py-2.5 text-left ring-1 ring-white/[0.04] transition hover:bg-black/55 active:scale-[0.99]"
-            >
+          {showHeute ? (
+            <div className="mt-1 w-full rounded-[1.15rem] border border-white/[0.1] bg-black/45 px-3.5 py-2.5 text-left ring-1 ring-white/[0.04]">
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
                 Heute
               </p>
-              <ul className="mt-1.5 space-y-1">
-                {todayMissing.map((p) => (
-                  <li
-                    key={p.id}
-                    className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+              {todayMissing.length > 0 ? (
+                <Link
+                  to="/berichte"
+                  className="mt-1.5 block rounded-lg transition hover:bg-white/[0.03] active:scale-[0.99]"
+                >
+                  <ul className="space-y-1">
+                    {todayMissing.map((p) => (
+                      <li
+                        key={p.id}
+                        className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+                      >
+                        <span className="min-w-0 truncate text-zinc-100">{p.name}</span>
+                        <span className="shrink-0 text-orange-300">fehlt</span>
+                      </li>
+                    ))}
+                  </ul>
+                </Link>
+              ) : null}
+              {todayTodoCount > 0 && todayTodoLabel ? (
+                <Link
+                  to="/aufgaben"
+                  className={`flex items-baseline justify-between gap-3 text-[0.82rem] transition hover:bg-white/[0.03] active:scale-[0.99] ${
+                    todayMissing.length > 0 ? 'mt-1.5 border-t border-white/[0.06] pt-1.5' : 'mt-1.5'
+                  }`}
+                >
+                  <span className="min-w-0 truncate text-zinc-100">To-do</span>
+                  <span
+                    className={`shrink-0 ${
+                      todayTodos.overdue > 0 ? 'text-orange-300' : 'text-zinc-400'
+                    }`}
                   >
-                    <span className="min-w-0 truncate text-zinc-100">{p.name}</span>
-                    <span className="shrink-0 text-orange-300">fehlt</span>
-                  </li>
-                ))}
-              </ul>
-            </Link>
+                    {todayTodoLabel}
+                  </span>
+                </Link>
+              ) : null}
+            </div>
           ) : null}
         </div>
       </header>
