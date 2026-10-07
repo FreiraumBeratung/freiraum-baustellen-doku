@@ -197,6 +197,71 @@ _expect(todos.get("openToday") == 2, f"openToday: {todos}")
 _expect(todos.get("overdue") == 1, f"overdue: {todos}")
 _expect("HEUTE GEHEIM" not in res.text, "todo title must not leak")
 _expect(body.get("due") is False, "todos must not flip report-due")
+_expect((body.get("leave") or {}).get("pending") == 0, "no leave yet")
+
+# Urlaub: nur pending, genehmigt/abgelehnt raus
+store.write_json(
+    "leave.json",
+    {
+        "allowances": [],
+        "requests": [
+            {
+                "id": str(uuid.uuid4()),
+                "employeeId": uli_id,
+                "fromDate": "2026-11-10",
+                "toDate": "2026-11-14",
+                "status": "pending",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "employeeId": matthias_id,
+                "fromDate": "2026-12-01",
+                "toDate": "2026-12-05",
+                "status": "approved",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "employeeId": matthias_id,
+                "fromDate": "2026-08-01",
+                "toDate": "2026-08-02",
+                "status": "rejected",
+            },
+        ],
+    },
+)
+res = client.get("/api/reminders/today", headers=hdrs)
+leave = (res.json().get("leave") or {})
+_expect(leave.get("pending") == 1, f"pending: {leave}")
+_expect(leave.get("name") == "Uli", leave.get("name"))
+_expect(leave.get("fromDate") == "2026-11-10", leave.get("fromDate"))
+_expect(leave.get("toDate") == "2026-11-14", leave.get("toDate"))
+_expect(res.json().get("due") is False, "leave must not flip report-due")
+
+store.write_json(
+    "leave.json",
+    {
+        "allowances": [],
+        "requests": [
+            {
+                "id": str(uuid.uuid4()),
+                "employeeId": matthias_id,
+                "fromDate": "2026-10-20",
+                "toDate": "2026-10-22",
+                "status": "pending",
+            },
+            {
+                "id": str(uuid.uuid4()),
+                "employeeId": uli_id,
+                "fromDate": "2026-11-10",
+                "toDate": "2026-11-14",
+                "status": "pending",
+            },
+        ],
+    },
+)
+leave = client.get("/api/reminders/today", headers=hdrs).json().get("leave") or {}
+_expect(leave.get("pending") == 2, f"two pending: {leave}")
+_expect(leave.get("name") == "Matthias", "earlier date first")
 
 # Worker darf den Chef-Blick nicht sehen
 worker_id = str(uuid.uuid4())

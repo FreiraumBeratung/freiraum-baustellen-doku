@@ -42,6 +42,12 @@ type TodayPresence = {
     openToday?: number
     overdue?: number
   }
+  leave?: {
+    pending?: number
+    name?: string
+    fromDate?: string
+    toDate?: string
+  }
 }
 
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
@@ -69,6 +75,12 @@ export function DashboardPage() {
   const [protocolReminder, setProtocolReminder] = useState<ProtocolReminderItem[]>([])
   const [todayMissing, setTodayMissing] = useState<TodayPerson[]>([])
   const [todayTodos, setTodayTodos] = useState({ openToday: 0, overdue: 0 })
+  const [todayLeave, setTodayLeave] = useState({
+    pending: 0,
+    name: '',
+    fromDate: '',
+    toDate: '',
+  })
 
   const tiles = useMemo(
     () =>
@@ -87,7 +99,18 @@ export function DashboardPage() {
   )
 
   const todayTodoCount = todayTodos.openToday + todayTodos.overdue
-  const showHeute = todayMissing.length > 0 || todayTodoCount > 0
+  const todayLeavePending = todayLeave.pending
+  const showHeute = todayMissing.length > 0 || todayTodoCount > 0 || todayLeavePending > 0
+  const todayLeaveLabel = (() => {
+    if (todayLeavePending <= 0) return ''
+    if (todayLeavePending > 1) return `${todayLeavePending} Anträge`
+    const from = formatDateDe(todayLeave.fromDate)
+    const to = formatDateDe(todayLeave.toDate)
+    const span = from && to && from !== to ? `${from} – ${to}` : from || to
+    const name = todayLeave.name.trim()
+    if (name && span) return `${name} · ${span}`
+    return name || span || 'Antrag'
+  })()
   const todayTodoLabel =
     todayTodos.openToday > 0 && todayTodos.overdue > 0
       ? `${todayTodos.openToday} offen · ${todayTodos.overdue} überfällig`
@@ -185,6 +208,7 @@ export function DashboardPage() {
     if (!isCompanyOwner) {
       setTodayMissing([])
       setTodayTodos({ openToday: 0, overdue: 0 })
+      setTodayLeave({ pending: 0, name: '', fromDate: '', toDate: '' })
       return
     }
     let cancelled = false
@@ -195,6 +219,12 @@ export function DashboardPage() {
         const openToday = Math.max(0, Number(r?.todos?.openToday) || 0)
         const overdue = Math.max(0, Number(r?.todos?.overdue) || 0)
         setTodayTodos({ openToday, overdue })
+        setTodayLeave({
+          pending: Math.max(0, Number(r?.leave?.pending) || 0),
+          name: String(r?.leave?.name || '').trim(),
+          fromDate: String(r?.leave?.fromDate || '').trim(),
+          toDate: String(r?.leave?.toDate || '').trim(),
+        })
         if (missing.length === 0) {
           setTodayMissing([])
           return
@@ -209,6 +239,7 @@ export function DashboardPage() {
         if (!cancelled) {
           setTodayMissing([])
           setTodayTodos({ openToday: 0, overdue: 0 })
+          setTodayLeave({ pending: 0, name: '', fromDate: '', toDate: '' })
         }
       })
     return () => {
@@ -293,6 +324,19 @@ export function DashboardPage() {
                   >
                     {todayTodoLabel}
                   </span>
+                </Link>
+              ) : null}
+              {todayLeavePending > 0 && todayLeaveLabel ? (
+                <Link
+                  to="/urlaub"
+                  className={`flex items-baseline justify-between gap-3 text-[0.82rem] transition hover:bg-white/[0.03] active:scale-[0.99] ${
+                    todayMissing.length > 0 || todayTodoCount > 0
+                      ? 'mt-1.5 border-t border-white/[0.06] pt-1.5'
+                      : 'mt-1.5'
+                  }`}
+                >
+                  <span className="min-w-0 truncate text-zinc-100">Urlaub</span>
+                  <span className="min-w-0 shrink truncate text-orange-300">{todayLeaveLabel}</span>
                 </Link>
               ) : null}
             </div>

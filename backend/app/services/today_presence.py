@@ -9,6 +9,7 @@ from datetime import date, datetime
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from app.services import leave as leave_service
 from app.services.site_tasks import read_tasks
 from app.services.tenant_storage import TenantStore
 from app.services.time_account import resolve_report_employees
@@ -51,6 +52,39 @@ def _todo_counts(store: TenantStore, day: str) -> dict[str, int]:
         elif due < day:
             overdue += 1
     return {"openToday": open_today, "overdue": overdue}
+
+
+def _leave_pending(store: TenantStore, employees: list[dict[str, Any]]) -> dict[str, Any]:
+    """Offene Urlaubsantraege — nur Zaehler plus erster Name/Zeitraum, kein Resttage-Kram."""
+    names = {
+        str(e.get("id") or "").strip(): str(e.get("name") or "").strip()
+        for e in employees
+        if str(e.get("id") or "").strip()
+    }
+    pending: list[dict[str, str]] = []
+    for req in leave_service.read_doc(store).get("requests") or []:
+        if str(req.get("status") or "").strip().lower() != "pending":
+            continue
+        start = leave_service.parse_iso_date(req.get("fromDate") or req.get("from"))
+        end = leave_service.parse_iso_date(req.get("toDate") or req.get("to") or req.get("fromDate"))
+        if start is None or end is None or end < start:
+            continue
+        eid = str(req.get("employeeId") or "").strip()
+        pending.append(
+            {
+                "name": names.get(eid) or "Mitarbeiter",
+                "fromDate": start.isoformat(),
+                "toDate": end.isoformat(),
+            }
+        )
+    pending.sort(key=lambda r: (r["fromDate"], r["name"].casefold()))
+    first = pending[0] if pending else None
+    return {
+        "pending": len(pending),
+        "name": first["name"] if first else "",
+        "fromDate": first["fromDate"] if first else "",
+        "toDate": first["toDate"] if first else "",
+    }
 
 
 def _is_active_employee(emp: dict[str, Any]) -> bool:
@@ -104,4 +138,5 @@ def build_today_presence(
         "missing": missing,
         "present": present,
         "todos": _todo_counts(store, day),
+        "leave": _leave_pending(store, employees),
     }
