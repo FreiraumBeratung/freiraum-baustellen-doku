@@ -81,6 +81,7 @@ export function DashboardPage() {
     fromDate: '',
     toDate: '',
   })
+  const [reportsOpen, setReportsOpen] = useState(false)
 
   const tiles = useMemo(
     () =>
@@ -119,6 +120,19 @@ export function DashboardPage() {
         : todayTodos.openToday > 0
           ? `${todayTodos.openToday} offen`
           : ''
+  const reportMissingLabel =
+    todayMissing.length === 1
+      ? '1 Mitarbeiter fehlt'
+      : todayMissing.length > 1
+        ? `${todayMissing.length} Mitarbeiter fehlen`
+        : ''
+  const heuteRowClass =
+    'flex min-h-[1.75rem] w-full items-baseline justify-between gap-3 text-[0.82rem] transition hover:bg-white/[0.03] active:scale-[0.99]'
+  const heuteSepClass = 'mt-1.5 border-t border-white/[0.06] pt-1.5'
+
+  useEffect(() => {
+    if (todayMissing.length === 0) setReportsOpen(false)
+  }, [todayMissing.length])
 
   useEffect(() => {
     api<CompanyProfile>('/api/company-profile')
@@ -291,29 +305,38 @@ export function DashboardPage() {
               <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
                 Heute
               </p>
-              {todayMissing.length > 0 ? (
-                <Link
-                  to="/berichte"
-                  className="mt-1.5 block rounded-lg transition hover:bg-white/[0.03] active:scale-[0.99]"
-                >
-                  <ul className="space-y-1">
-                    {todayMissing.map((p) => (
-                      <li
-                        key={p.id}
-                        className="flex items-baseline justify-between gap-3 text-[0.82rem]"
-                      >
-                        <span className="min-w-0 truncate text-zinc-100">{p.name}</span>
-                        <span className="shrink-0 text-orange-300">fehlt</span>
-                      </li>
-                    ))}
-                  </ul>
-                </Link>
+              {todayMissing.length > 0 && reportMissingLabel ? (
+                <div className="mt-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setReportsOpen((open) => !open)}
+                    className={heuteRowClass}
+                    aria-expanded={reportsOpen}
+                  >
+                    <span className="min-w-0 truncate text-zinc-100">Tagesbericht</span>
+                    <span className="shrink-0 text-orange-300">{reportMissingLabel}</span>
+                  </button>
+                  {reportsOpen ? (
+                    <Link
+                      to="/berichte"
+                      className="mt-1 block rounded-lg px-0 py-0.5 transition hover:bg-white/[0.03] active:scale-[0.99]"
+                    >
+                      <ul className="space-y-0.5">
+                        {todayMissing.map((p) => (
+                          <li key={p.id} className="truncate text-[0.78rem] text-zinc-400">
+                            {p.name}
+                          </li>
+                        ))}
+                      </ul>
+                    </Link>
+                  ) : null}
+                </div>
               ) : null}
               {todayTodoCount > 0 && todayTodoLabel ? (
                 <Link
                   to="/aufgaben"
-                  className={`flex items-baseline justify-between gap-3 text-[0.82rem] transition hover:bg-white/[0.03] active:scale-[0.99] ${
-                    todayMissing.length > 0 ? 'mt-1.5 border-t border-white/[0.06] pt-1.5' : 'mt-1.5'
+                  className={`${heuteRowClass} ${
+                    todayMissing.length > 0 ? heuteSepClass : 'mt-1.5'
                   }`}
                 >
                   <span className="min-w-0 truncate text-zinc-100">To-do</span>
@@ -329,10 +352,8 @@ export function DashboardPage() {
               {todayLeavePending > 0 && todayLeaveLabel ? (
                 <Link
                   to="/urlaub"
-                  className={`flex items-baseline justify-between gap-3 text-[0.82rem] transition hover:bg-white/[0.03] active:scale-[0.99] ${
-                    todayMissing.length > 0 || todayTodoCount > 0
-                      ? 'mt-1.5 border-t border-white/[0.06] pt-1.5'
-                      : 'mt-1.5'
+                  className={`${heuteRowClass} ${
+                    todayMissing.length > 0 || todayTodoCount > 0 ? heuteSepClass : 'mt-1.5'
                   }`}
                 >
                   <span className="min-w-0 truncate text-zinc-100">Urlaub</span>
