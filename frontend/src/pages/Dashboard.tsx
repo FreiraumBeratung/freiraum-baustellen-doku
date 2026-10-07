@@ -38,7 +38,6 @@ type TodayPerson = {
 type TodayPresence = {
   due?: boolean
   missing?: TodayPerson[]
-  present?: TodayPerson[]
 }
 
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
@@ -65,7 +64,6 @@ export function DashboardPage() {
   const [recurringDue, setRecurringDue] = useState<RecurringProject[]>([])
   const [protocolReminder, setProtocolReminder] = useState<ProtocolReminderItem[]>([])
   const [todayMissing, setTodayMissing] = useState<TodayPerson[]>([])
-  const [todayPresent, setTodayPresent] = useState<TodayPerson[]>([])
 
   const tiles = useMemo(
     () =>
@@ -170,7 +168,6 @@ export function DashboardPage() {
   useEffect(() => {
     if (!isCompanyOwner) {
       setTodayMissing([])
-      setTodayPresent([])
       return
     }
     let cancelled = false
@@ -178,22 +175,18 @@ export function DashboardPage() {
       .then((r) => {
         if (cancelled) return
         const missing = Array.isArray(r?.missing) ? r.missing : []
-        const present = Array.isArray(r?.present) ? r.present : []
         if (!r?.due || missing.length === 0) {
           setTodayMissing([])
-          setTodayPresent([])
           return
         }
-        const clean = (list: TodayPerson[]) =>
-          list.filter((p) => p && typeof p.id === 'string' && p.id && String(p.name || '').trim())
-        setTodayMissing(clean(missing).slice(0, 12))
-        setTodayPresent(clean(present).slice(0, 8))
+        setTodayMissing(
+          missing
+            .filter((p) => p && typeof p.id === 'string' && p.id && String(p.name || '').trim())
+            .slice(0, 12),
+        )
       })
       .catch(() => {
-        if (!cancelled) {
-          setTodayMissing([])
-          setTodayPresent([])
-        }
+        if (!cancelled) setTodayMissing([])
       })
     return () => {
       cancelled = true
@@ -203,12 +196,16 @@ export function DashboardPage() {
   return (
     <div className="flex min-h-full flex-col">
       {/* Dominanter Kopf: großes Logo schafft das „meine App"-Gefühl */}
-      <header className="relative -mx-4 overflow-hidden rounded-b-[2rem] border-b border-white/[0.05] px-6 pb-12 pt-12 text-center">
+      <header
+        className={`relative -mx-4 overflow-hidden rounded-b-[2rem] border-b border-white/[0.05] px-5 pt-10 text-center ${
+          todayMissing.length > 0 ? 'pb-6' : 'pb-12'
+        }`}
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_100%_at_50%_-12%,rgba(249,115,22,0.17),transparent_64%)]"
         />
-        <div className="relative flex flex-col items-center gap-5">
+        <div className={`relative flex flex-col items-center ${todayMissing.length > 0 ? 'gap-3' : 'gap-5'}`}>
           <p className="text-[0.72rem] font-medium uppercase tracking-[0.3em] text-orange-300/85">
             Freiraum · Baustellen-Doku
           </p>
@@ -217,13 +214,17 @@ export function DashboardPage() {
               <img
                 src={resolveBackendPublicUrl(company.logoUrl) ?? company.logoUrl}
                 alt="Firmenlogo"
-                className="h-[6.25rem] w-auto max-w-[260px] object-contain"
+                className={`w-auto object-contain ${
+                  todayMissing.length > 0 ? 'h-[4.75rem] max-w-[200px]' : 'h-[6.25rem] max-w-[260px]'
+                }`}
               />
             </div>
           ) : (
             <div
               aria-hidden
-              className="flex h-[7rem] w-[7rem] items-center justify-center rounded-[1.6rem] bg-white/[0.05] text-[2.8rem] ring-1 ring-white/[0.08]"
+              className={`flex items-center justify-center rounded-[1.6rem] bg-white/[0.05] ring-1 ring-white/[0.08] ${
+                todayMissing.length > 0 ? 'h-[5.25rem] w-[5.25rem] text-[2.1rem]' : 'h-[7rem] w-[7rem] text-[2.8rem]'
+              }`}
             >
               🏢
             </div>
@@ -231,39 +232,29 @@ export function DashboardPage() {
           <p className="text-[1.55rem] font-semibold tracking-tight text-white/96">
             {company?.companyName?.trim() || 'Ihre Firma'}
           </p>
+          {todayMissing.length > 0 ? (
+            <Link
+              to="/berichte"
+              className="mt-1 w-full rounded-[1.15rem] border border-white/[0.1] bg-black/45 px-3.5 py-2.5 text-left ring-1 ring-white/[0.04] transition hover:bg-black/55 active:scale-[0.99]"
+            >
+              <p className="text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                Heute
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {todayMissing.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+                  >
+                    <span className="min-w-0 truncate text-zinc-100">{p.name}</span>
+                    <span className="shrink-0 text-orange-300">fehlt</span>
+                  </li>
+                ))}
+              </ul>
+            </Link>
+          ) : null}
         </div>
       </header>
-
-      {todayMissing.length > 0 ? (
-        <Link
-          to="/berichte"
-          className="relative mt-6 block rounded-[1.25rem] border border-white/[0.08] bg-black/35 px-4 py-3 ring-1 ring-white/[0.05] transition hover:bg-white/[0.04] active:scale-[0.99]"
-        >
-          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-zinc-400">
-            Heute
-          </p>
-          <ul className="mt-2 space-y-1.5">
-            {todayMissing.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-baseline justify-between gap-3 text-[0.82rem]"
-              >
-                <span className="min-w-0 truncate text-zinc-200">{p.name}</span>
-                <span className="shrink-0 text-orange-300">fehlt</span>
-              </li>
-            ))}
-            {todayPresent.map((p) => (
-              <li
-                key={p.id}
-                className="flex items-baseline justify-between gap-3 text-[0.82rem]"
-              >
-                <span className="min-w-0 truncate text-zinc-200">{p.name}</span>
-                <span className="shrink-0 text-zinc-500">da</span>
-              </li>
-            ))}
-          </ul>
-        </Link>
-      ) : null}
 
       {recurringDue.length > 0 ? (
         <Link
