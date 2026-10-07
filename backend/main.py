@@ -74,6 +74,7 @@ from app.services import push_send
 from app.services import push_subscriptions
 from app.services import site_tasks
 from app.services.quality_filter import apply_quality_filter
+from app.services.today_presence import build_today_presence
 from app.services.mail_autodiscover import (
     provider_hint_for,
     verify_smtp_credentials,
@@ -3963,6 +3964,15 @@ def polish_protocol_text(body: ProtocolPolishBody) -> dict[str, Any]:
     if polished:
         return {"polishedText": polished, "polishedBy": "openai"}
     return {"polishedText": body.rawText.strip(), "polishedBy": "local"}
+
+
+@app.get("/api/reminders/today")
+def get_today_presence(
+    _owner_id: str = Depends(require_company_owner),
+    store: TenantStore = Depends(get_tenant_store),
+):
+    """Home Heute-Blick: wer aus dem Team heute im Tagesbericht steht — ohne Rohtext."""
+    return build_today_presence(store)
 
 
 @app.get("/api/reminders/protocol")

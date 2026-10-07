@@ -30,6 +30,17 @@ type ProtocolReminder = {
   items?: ProtocolReminderItem[]
 }
 
+type TodayPerson = {
+  id: string
+  name: string
+}
+
+type TodayPresence = {
+  due?: boolean
+  missing?: TodayPerson[]
+  present?: TodayPerson[]
+}
+
 type Tile = { to: string; title: string; emoji: string; primary?: boolean; accent?: boolean }
 
 const RECURRING_DUE_DAYS = 14
@@ -53,6 +64,8 @@ export function DashboardPage() {
   const [todoOpen, setTodoOpen] = useState(false)
   const [recurringDue, setRecurringDue] = useState<RecurringProject[]>([])
   const [protocolReminder, setProtocolReminder] = useState<ProtocolReminderItem[]>([])
+  const [todayMissing, setTodayMissing] = useState<TodayPerson[]>([])
+  const [todayPresent, setTodayPresent] = useState<TodayPerson[]>([])
 
   const tiles = useMemo(
     () =>
@@ -154,6 +167,39 @@ export function DashboardPage() {
     }
   }, [can])
 
+  useEffect(() => {
+    if (!isCompanyOwner) {
+      setTodayMissing([])
+      setTodayPresent([])
+      return
+    }
+    let cancelled = false
+    api<TodayPresence>('/api/reminders/today')
+      .then((r) => {
+        if (cancelled) return
+        const missing = Array.isArray(r?.missing) ? r.missing : []
+        const present = Array.isArray(r?.present) ? r.present : []
+        if (!r?.due || missing.length === 0) {
+          setTodayMissing([])
+          setTodayPresent([])
+          return
+        }
+        const clean = (list: TodayPerson[]) =>
+          list.filter((p) => p && typeof p.id === 'string' && p.id && String(p.name || '').trim())
+        setTodayMissing(clean(missing).slice(0, 12))
+        setTodayPresent(clean(present).slice(0, 8))
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTodayMissing([])
+          setTodayPresent([])
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [isCompanyOwner])
+
   return (
     <div className="flex min-h-full flex-col">
       {/* Dominanter Kopf: großes Logo schafft das „meine App"-Gefühl */}
@@ -187,6 +233,37 @@ export function DashboardPage() {
           </p>
         </div>
       </header>
+
+      {todayMissing.length > 0 ? (
+        <Link
+          to="/berichte"
+          className="relative mt-6 block rounded-[1.25rem] border border-white/[0.08] bg-black/35 px-4 py-3 ring-1 ring-white/[0.05] transition hover:bg-white/[0.04] active:scale-[0.99]"
+        >
+          <p className="text-[0.72rem] font-semibold uppercase tracking-[0.12em] text-zinc-400">
+            Heute
+          </p>
+          <ul className="mt-2 space-y-1.5">
+            {todayMissing.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+              >
+                <span className="min-w-0 truncate text-zinc-200">{p.name}</span>
+                <span className="shrink-0 text-orange-300">fehlt</span>
+              </li>
+            ))}
+            {todayPresent.map((p) => (
+              <li
+                key={p.id}
+                className="flex items-baseline justify-between gap-3 text-[0.82rem]"
+              >
+                <span className="min-w-0 truncate text-zinc-200">{p.name}</span>
+                <span className="shrink-0 text-zinc-500">da</span>
+              </li>
+            ))}
+          </ul>
+        </Link>
+      ) : null}
 
       {recurringDue.length > 0 ? (
         <Link

@@ -1,0 +1,88 @@
+"""Heute-Blick: wer aus dem aktiven Team in einem Tagesbericht von heute steht.
+
+Rein lesend. Kein neuer Speicher, kein Rohtext, Buchung unangetastet.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any
+from zoneinfo import ZoneInfo
+
+from app.services.tenant_storage import TenantStore
+from app.services.time_account import resolve_report_employees
+
+BERLIN = ZoneInfo("Europe/Berlin")
+
+
+def _normalize_report_date(raw: Any) -> str:
+    s = str(raw or "").strip()
+    if not s:
+        return ""
+    iso = s[:10]
+    if len(iso) == 10 and iso[4] == "-" and iso[7] == "-":
+        try:
+            return date.fromisoformat(iso).isoformat()
+        except ValueError:
+            pass
+    parts = s.replace(" ", "").split(".")
+    if len(parts) == 3 and all(parts):
+        try:
+            day, month, year = int(parts[0]), int(parts[1]), int(parts[2])
+            return date(year, month, day).isoformat()
+        except ValueError:
+            return ""
+    return ""
+
+
+def _is_active_employee(emp: dict[str, Any]) -> bool:
+    if "active" in emp and emp.get("active") is False:
+        return False
+    return True
+
+
+def build_today_presence(
+    store: TenantStore,
+    *,
+    today: date | None = None,
+) -> dict[str, Any]:
+    day = (today or datetime.now(BERLIN).date()).isoformat()
+    raw_emps = store.read_json("employees.json", {"employees": []}).get("employees") or []
+    employees = [e for e in raw_emps if isinstance(e, dict)]
+    active = [
+        e
+        for e in employees
+        if _is_active_employee(e) and str(e.get("id") or "").strip() and str(e.get("name") or "").strip()
+    ]
+
+    present_ids: set[str] = set()
+    reports = store.read_json("reports.json", {"reports": []}).get("reports") or []
+    for item in reports:
+        if not isinstance(item, dict):
+            continue
+        if _normalize_report_date(item.get("date")) != day:
+            continue
+        matched, _, _ = resolve_report_employees(item, employees)
+        for emp, _label in matched:
+            eid = str(emp.get("id") or "").strip()
+            if eid:
+                present_ids.add(eid)
+
+    missing: list[dict[str, str]] = []
+    present: list[dict[str, str]] = []
+    for emp in active:
+        eid = str(emp.get("id") or "").strip()
+        row = {"id": eid, "name": str(emp.get("name") or "").strip()}
+        if eid in present_ids:
+            present.append(row)
+        else:
+            missing.append(row)
+
+    missing.sort(key=lambda r: r["name"].casefold())
+    present.sort(key=lambda r: r["name"].casefold())
+    return {
+        "date": day,
+        "due": bool(missing),
+        "missing": missing,
+        "present": present,
+    }
