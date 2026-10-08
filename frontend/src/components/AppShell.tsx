@@ -3,14 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { useShellMaxClass } from '../hooks/useShellMaxClass'
 import { LicenseSuspendedBanner } from './LicenseSuspendedBanner'
-import { isTabletDevice } from '../utils/isTabletDevice'
 
 export function AppShell() {
   const { can, isCompanyOwner, token } = useAuth()
   const location = useLocation()
-  // Nur echte Tablets breiter — Handys bleiben bei 390px (auch Querformat).
-  const shellMax = useMemo(() => (isTabletDevice() ? 'max-w-[720px]' : 'max-w-[390px]'), [])
+  const shellMax = useShellMaxClass()
   const [openTaskCount, setOpenTaskCount] = useState(0)
 
   const refreshBadge = useCallback(() => {

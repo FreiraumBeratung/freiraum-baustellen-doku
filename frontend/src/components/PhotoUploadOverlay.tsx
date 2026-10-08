@@ -1,5 +1,4 @@
-import { useMemo } from 'react'
-import { isTabletDevice } from '../utils/isTabletDevice'
+import { useShellMaxClass } from '../hooks/useShellMaxClass'
 
 export type PhotoUploadOverlayMode = 'off' | 'active' | 'success' | 'closing'
 
@@ -13,8 +12,7 @@ type PhotoUploadOverlayProps = {
  * Halbtransparent, unten als Karte: weniger dominant, iOS composited die Seite darunter mit.
  */
 export function PhotoUploadOverlay({ mode, message }: PhotoUploadOverlayProps) {
-  // Nur Tablet breiter — Handy-Overlay bleibt max-w-[390px].
-  const cardMax = useMemo(() => (isTabletDevice() ? 'max-w-[720px]' : 'max-w-[390px]'), [])
+  const cardMax = useShellMaxClass()
 
   if (mode === 'off') return null
 

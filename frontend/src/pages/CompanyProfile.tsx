@@ -5,6 +5,7 @@ import { api, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { BigButton, Card, PageTitle, PoweredBy, Switch } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
+import { useShellMaxClass } from '../hooks/useShellMaxClass'
 
 type CompanyProfile = {
   companyName: string
@@ -27,6 +28,7 @@ type SettingsSlice = {
 }
 
 export function CompanyProfilePage() {
+  const shellMax = useShellMaxClass()
   const nav = useNavigate()
   const { logout, isAdmin } = useAuth()
   const { writeBlocked } = useWriteBlocked()
@@ -291,7 +293,7 @@ export function CompanyProfilePage() {
           onClick={() => closeSettings(false)}
         >
           <div
-            className="freiraum-sheet-up mx-auto w-full max-w-[390px] rounded-t-[1.75rem] border border-white/[0.08] border-b-0 bg-zinc-950 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-18px_50px_-28px_rgba(0,0,0,0.9)] ring-1 ring-white/[0.06]"
+            className={`freiraum-sheet-up mx-auto w-full ${shellMax} rounded-t-[1.75rem] border border-white/[0.08] border-b-0 bg-zinc-950 px-4 pb-[calc(1.25rem+env(safe-area-inset-bottom,0px))] pt-2 shadow-[0_-18px_50px_-28px_rgba(0,0,0,0.9)] ring-1 ring-white/[0.06]`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-white/18" aria-hidden />
