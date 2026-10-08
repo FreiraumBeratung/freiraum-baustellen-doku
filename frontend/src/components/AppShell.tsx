@@ -7,14 +7,14 @@ import { LicenseSuspendedBanner } from './LicenseSuspendedBanner'
 import { isTabletDevice } from '../utils/isTabletDevice'
 
 export function AppShell() {
-  const { isCompanyOwner, token } = useAuth()
+  const { can, isCompanyOwner, token } = useAuth()
   const location = useLocation()
   // Nur echte Tablets breiter — Handys bleiben bei 390px (auch Querformat).
   const shellMax = useMemo(() => (isTabletDevice() ? 'max-w-[720px]' : 'max-w-[390px]'), [])
   const [openTaskCount, setOpenTaskCount] = useState(0)
 
   const refreshBadge = useCallback(() => {
-    if (!token) {
+    if (!token || !can('tasks')) {
       setOpenTaskCount(0)
       return
     }
@@ -26,7 +26,7 @@ export function AppShell() {
         setOpenTaskCount(Math.max(0, n))
       })
       .catch(() => setOpenTaskCount(0))
-  }, [token, isCompanyOwner])
+  }, [token, isCompanyOwner, can])
 
   useEffect(() => {
     refreshBadge()
@@ -64,8 +64,13 @@ export function AppShell() {
   )
 
   const visibleNav = useMemo(
-    () => navItems.filter((item) => (item.ownerOnly ? isCompanyOwner : true)),
-    [isCompanyOwner, navItems],
+    () =>
+      navItems.filter((item) => {
+        if (item.ownerOnly && !isCompanyOwner) return false
+        if (item.to === '/aufgaben' && !can('tasks')) return false
+        return true
+      }),
+    [can, isCompanyOwner, navItems],
   )
 
   return (

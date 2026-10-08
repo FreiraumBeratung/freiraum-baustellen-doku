@@ -96,6 +96,7 @@ from app.services.admin_users import (
     delete_user_account,
     is_user_admin,
     list_users_public,
+    set_user_firm_modules,
     set_user_license,
 )
 from app.services.account_roles import (
@@ -113,6 +114,11 @@ from app.services.account_roles import (
     owner_email_for_smtp,
     username_taken_in_tenant,
     worker_login_active,
+)
+from app.services.firm_modules import (
+    MODULE_DISABLED_DETAIL,
+    firm_module_allows,
+    firm_modules_for_user,
 )
 from app.services.license import LICENSE_SUSPENDED_DETAIL, is_license_active
 from app.services.tenant_storage import (
@@ -409,6 +415,7 @@ def _auth_session_fields(user: dict[str, Any]) -> dict[str, Any]:
         "isAdmin": is_user_admin(user),
         "accountRole": "owner" if owner else "worker",
         "permissions": sorted(effective_permissions(user)),
+        "firmModules": firm_modules_for_user(get_users(), user),
         "tenantId": str(user.get("tenantId") or user.get("id") or "").strip(),
         "displayName": (
             str(user.get("entrepreneurName") or user.get("companyName") or user.get("email") or "")
@@ -458,11 +465,47 @@ def require_company_owner(user_id: str = Depends(require_active_license)) -> str
     return user_id
 
 
+def require_firm_module(permission: str):
+    def _dep(user_id: str = Depends(require_bearer)) -> str:
+        user = find_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="Ungültiges Token")
+        if not firm_module_allows(get_users(), user, permission):
+            raise HTTPException(status_code=403, detail=MODULE_DISABLED_DETAIL)
+        return user_id
+
+    return _dep
+
+
 def require_permission(permission: str):
     def _dep(user_id: str = Depends(require_active_license)) -> str:
         user = find_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=401, detail="Ungültiges Token")
+        if not firm_module_allows(get_users(), user, permission):
+            raise HTTPException(status_code=403, detail=MODULE_DISABLED_DETAIL)
+        if is_company_owner(user):
+            return user_id
+        if has_permission(user, permission):
+            return user_id
+        raise HTTPException(status_code=403, detail="Keine Berechtigung für diese Funktion.")
+
+    return _dep
+
+
+def require_permission_read(permission: str):
+    """Wie require_permission, aber Lizenz-Pause darf weiterlesen."""
+    def _dep(user_id: str = Depends(require_bearer)) -> str:
+        user = find_user_by_id(user_id)
+        if not user:
+            raise HTTPException(status_code=401, detail="Ungültiges Token")
+        if is_worker(user) and not worker_login_active(user):
+            raise HTTPException(
+                status_code=403,
+                detail="Zugang gesperrt. Bitte den Geschäftsführer kontaktieren.",
+            )
+        if not firm_module_allows(get_users(), user, permission):
+            raise HTTPException(status_code=403, detail=MODULE_DISABLED_DETAIL)
         if is_company_owner(user):
             return user_id
         if has_permission(user, permission):
@@ -1064,6 +1107,7 @@ def list_tasks(
     projectId: str | None = None,
     employeeId: str | None = None,
     user_id: str = Depends(require_active_license),
+    _mod: str = Depends(require_firm_module("tasks")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     _user, owner, employee_id = _task_actor_context(user_id)
@@ -1083,6 +1127,7 @@ def list_tasks(
 @app.get("/api/tasks/badge")
 def tasks_badge(
     user_id: str = Depends(require_active_license),
+    _mod: str = Depends(require_firm_module("tasks")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     _user, owner, employee_id = _task_actor_context(user_id)
@@ -1153,6 +1198,7 @@ def ack_done_tasks(
 def create_tasks_batch(
     body: TaskBatchCreateBody,
     user_id: str = Depends(require_company_owner),
+    _mod: str = Depends(require_firm_module("tasks")),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
     tasks = site_tasks.create_tasks_batch(
@@ -1172,6 +1218,7 @@ def create_tasks_batch(
 def create_task(
     body: TaskCreateBody,
     user_id: str = Depends(require_company_owner),
+    _mod: str = Depends(require_firm_module("tasks")),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
     task = site_tasks.create_task(
@@ -1890,6 +1937,10 @@ class AdminLicenseBody(BaseModel):
     licenseActive: bool
 
 
+class AdminFirmModulesBody(BaseModel):
+    firmModules: dict[str, Any] = Field(default_factory=dict)
+
+
 @app.get("/api/admin/users")
 def admin_list_users(_admin_id: str = Depends(require_admin)):
     return {"users": list_users_public(get_users())}
@@ -1908,6 +1959,21 @@ def admin_set_user_license(
         )
     users = get_users()
     updated = set_user_license(users, target_user_id, body.licenseActive)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    save_users(users)
+    return {"ok": True, "user": updated}
+
+
+@app.patch("/api/admin/users/{target_user_id}/modules")
+def admin_set_user_modules(
+    target_user_id: str,
+    body: AdminFirmModulesBody,
+    _admin_id: str = Depends(require_admin),
+):
+    """Paket-Haken pro Firma. Fehlende Keys bleiben (None-means-leave)."""
+    users = get_users()
+    updated = set_user_firm_modules(users, target_user_id, body.firmModules)
     if updated is None:
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     save_users(users)
@@ -2333,6 +2399,7 @@ def patch_leave_allowance(
     employee_id: str,
     body: LeaveAllowanceBody,
     _owner_id: str = Depends(require_company_owner),
+    _mod: str = Depends(require_firm_module("leave")),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
     """Jahresurlaub setzen oder leeren. Nur Geschäftsführer. Mitarbeiter-PATCH unberührt."""
@@ -2381,6 +2448,7 @@ def decide_leave_request(
     request_id: str,
     body: LeaveDecisionBody,
     user_id: str = Depends(require_company_owner),
+    _mod: str = Depends(require_firm_module("leave")),
     store: TenantStore = Depends(get_tenant_store_write),
 ):
     """Chef genehmigt oder lehnt ab. Zu wenig Rest: 400, Antrag bleibt offen."""
@@ -3101,7 +3169,7 @@ def api_structure_report(body: StructureReportBody, store: TenantStore = Depends
 def list_reports(
     projectId: str | None = None,
     month: str | None = None,
-    _perm: str = Depends(require_permission("reports_list")),
+    _perm: str = Depends(require_permission_read("reports_list")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     data = store.read_json("reports.json", {"reports": []})
@@ -3990,6 +4058,7 @@ def get_protocol_reminders(
 def list_protocols(
     projectId: str | None = None,
     month: str | None = None,
+    _mod: str = Depends(require_firm_module("protocol")),
     store: TenantStore = Depends(get_tenant_store),
 ):
     protocols = read_protocols(store)
@@ -4003,7 +4072,11 @@ def list_protocols(
 
 
 @app.post("/api/protocols")
-def create_protocol(body: ProtocolCreateBody, store: TenantStore = Depends(get_tenant_store_write)):
+def create_protocol(
+    body: ProtocolCreateBody,
+    _mod: str = Depends(require_firm_module("protocol")),
+    store: TenantStore = Depends(get_tenant_store_write),
+):
     prof = store.read_json("company_profile.json", {})
     logo_fn = prof.get("logoFilename")
     company_logo_url = _logo_public_url(store, logo_fn) if logo_fn else None

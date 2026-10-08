@@ -3,12 +3,14 @@ import {
   LICENSE_REACTIVATED_EVENT,
   LICENSE_SUSPENDED_EVENT,
 } from '../constants/license'
+import { normalizeFirmModules, type FirmModules } from '../utils/accountPermissions'
 
 const TOKEN_KEY = 'freiraum_baustellen_token'
 const LICENSE_ACTIVE_KEY = 'freiraum_baustellen_license_active'
 const IS_ADMIN_KEY = 'freiraum_baustellen_is_admin'
 const ACCOUNT_ROLE_KEY = 'freiraum_baustellen_account_role'
 const PERMISSIONS_KEY = 'freiraum_baustellen_permissions'
+const FIRM_MODULES_KEY = 'freiraum_baustellen_firm_modules'
 const TENANT_ID_KEY = 'freiraum_baustellen_tenant_id'
 
 function viteApiBaseOverride(): string | undefined {
@@ -81,6 +83,7 @@ export function clearToken() {
   clearIsAdmin()
   clearAccountRole()
   clearPermissions()
+  clearFirmModules()
   clearTenantId()
 }
 
@@ -127,6 +130,24 @@ export function setPermissions(perms: string[] | null | undefined) {
 
 export function clearPermissions() {
   localStorage.removeItem(PERMISSIONS_KEY)
+}
+
+export function getFirmModules(): FirmModules {
+  try {
+    const raw = localStorage.getItem(FIRM_MODULES_KEY)
+    if (!raw) return normalizeFirmModules(null)
+    return normalizeFirmModules(JSON.parse(raw) as unknown)
+  } catch {
+    return normalizeFirmModules(null)
+  }
+}
+
+export function setFirmModules(raw: unknown) {
+  localStorage.setItem(FIRM_MODULES_KEY, JSON.stringify(normalizeFirmModules(raw)))
+}
+
+export function clearFirmModules() {
+  localStorage.removeItem(FIRM_MODULES_KEY)
 }
 
 export function getTenantId(): string {
@@ -177,6 +198,7 @@ export type AuthSessionResponse = {
   isAdmin: boolean
   accountRole?: 'owner' | 'worker'
   permissions?: string[]
+  firmModules?: FirmModules
   tenantId?: string
 }
 
@@ -191,6 +213,7 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
     setIsAdmin(data.isAdmin === true)
     setAccountRole(data.accountRole)
     setPermissions(data.permissions)
+    setFirmModules(data.firmModules)
     if (typeof data.tenantId === 'string' && data.tenantId.trim()) {
       setTenantId(data.tenantId)
     }
@@ -243,6 +266,7 @@ export type AuthLoginResponse = {
   isAdmin?: boolean
   accountRole?: 'owner' | 'worker'
   permissions?: string[]
+  firmModules?: FirmModules
   tenantId?: string
 }
 
@@ -261,6 +285,7 @@ export type AdminUserRow = {
   usedToday?: boolean
   /** Anzahl Mitarbeiter-Logins (Benutzername) in dieser Firma */
   workerCount?: number
+  firmModules?: FirmModules
 }
 
 export type FeedbackCategory = 'Problem' | 'Verbesserung' | 'Lob'
@@ -274,6 +299,19 @@ export async function setAdminUserLicense(userId: string, licenseActive: boolean
     method: 'PATCH',
     body: JSON.stringify({ licenseActive }),
   })
+}
+
+export async function setAdminUserModules(
+  userId: string,
+  firmModules: Partial<FirmModules>,
+): Promise<{ ok: boolean; user: AdminUserRow }> {
+  return api<{ ok: boolean; user: AdminUserRow }>(
+    `/api/admin/users/${encodeURIComponent(userId)}/modules`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ firmModules }),
+    },
+  )
 }
 
 export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> {
@@ -326,6 +364,7 @@ export async function postAuthLogin(email: string, password: string): Promise<Au
     setIsAdmin(data.isAdmin === true)
     setAccountRole(data.accountRole)
     setPermissions(data.permissions)
+    setFirmModules(data.firmModules)
     return data
   }
 

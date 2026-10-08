@@ -5,6 +5,7 @@ import { BigButton, Card, PageTitle } from '../components/ui'
 import { PasswordField } from '../components/PasswordField'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { EXTRA_PERMISSION_OPTIONS, type AppPermission } from '../utils/accountPermissions'
+import { useAuth } from '../context/AuthContext'
 
 type EmployeeAccess = {
   hasAccess?: boolean
@@ -26,7 +27,9 @@ const emptyPerms = (): Record<string, boolean> =>
   Object.fromEntries(EXTRA_PERMISSION_OPTIONS.map((o) => [o.key, false]))
 
 export function EmployeesPage() {
+  const { can } = useAuth()
   const { writeBlocked } = useWriteBlocked()
+  const extraPermissionOptions = EXTRA_PERMISSION_OPTIONS.filter((o) => can(o.key))
   const [rows, setRows] = useState<Employee[]>([])
   const [name, setName] = useState('')
   const [role, setRole] = useState('')
@@ -145,7 +148,7 @@ export function EmployeesPage() {
   }
 
   function selectedPermissions(): AppPermission[] {
-    return EXTRA_PERMISSION_OPTIONS.map((o) => o.key).filter((k) => accessPerms[k])
+    return extraPermissionOptions.map((o) => o.key).filter((k) => accessPerms[k])
   }
 
   async function saveAccess(emp: Employee) {
@@ -312,9 +315,10 @@ export function EmployeesPage() {
                   value={accessPassword}
                   onChange={(e) => setAccessPassword(e.target.value)}
                 />
+                {extraPermissionOptions.length > 0 ? (
                 <div className="space-y-2">
                   <span className="text-xs text-zinc-400">Extra-Rechte</span>
-                  {EXTRA_PERMISSION_OPTIONS.map((opt) => (
+                  {extraPermissionOptions.map((opt) => (
                     <label
                       key={opt.key}
                       className="flex cursor-pointer items-center gap-2 rounded-xl bg-black/40 px-3 py-2 ring-1 ring-white/[0.08]"
@@ -332,6 +336,7 @@ export function EmployeesPage() {
                     </label>
                   ))}
                 </div>
+                ) : null}
                 {accessErr ? <p className="text-sm text-red-400">{accessErr}</p> : null}
                 {accessMsg ? <p className="text-sm text-emerald-400/90">{accessMsg}</p> : null}
                 <div className="flex flex-wrap items-center gap-2">

@@ -98,12 +98,54 @@ export default function App() {
                 </RequirePermission>
               }
             />
-            <Route path="/protokoll" element={<ProtocolModePage />} />
-            <Route path="/protokoll/neu" element={<ProtocolNewPage />} />
-            <Route path="/protokoll/vorschau" element={<ProtocolPreviewPage />} />
-            <Route path="/protokolle" element={<ProtocolsListPage />} />
-            <Route path="/protokolle/baustelle/:projectId" element={<ProtocolSeriesPage />} />
-            <Route path="/protokolle/:id" element={<ProtocolDetailPage />} />
+            <Route
+              path="/protokoll"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolModePage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/protokoll/neu"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolNewPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/protokoll/vorschau"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolPreviewPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/protokolle"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolsListPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/protokolle/baustelle/:projectId"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolSeriesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/protokolle/:id"
+              element={
+                <RequirePermission permission="protocol">
+                  <ProtocolDetailPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="/lieferschein"
               element={

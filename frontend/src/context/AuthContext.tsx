@@ -4,6 +4,7 @@ import {
   clearToken,
   fetchAuthSession,
   getAccountRole,
+  getFirmModules,
   getIsAdmin,
   getLicenseActive,
   getPermissions,
@@ -11,6 +12,7 @@ import {
   getToken,
   postAuthLogin,
   setAccountRole,
+  setFirmModules,
   setIsAdmin,
   setLicenseActive,
   setPermissions,
@@ -21,8 +23,10 @@ import { LICENSE_REACTIVATED_EVENT, LICENSE_SUSPENDED_EVENT } from '../constants
 import {
   hasAppPermission,
   isOwnerRole,
+  normalizeFirmModules,
   type AccountRole,
   type AppPermission,
+  type FirmModules,
 } from '../utils/accountPermissions'
 
 type AuthState = {
@@ -31,6 +35,7 @@ type AuthState = {
   isAdmin: boolean
   accountRole: AccountRole
   permissions: string[]
+  firmModules: FirmModules
   tenantId: string
   ready: boolean
   can: (permission: AppPermission) => boolean
@@ -52,13 +57,16 @@ function applySessionFields(r: {
   isAdmin?: boolean
   accountRole?: string
   permissions?: string[]
+  firmModules?: FirmModules
   tenantId?: string
 }) {
   const active = r.licenseActive !== false
+  const modules = normalizeFirmModules(r.firmModules)
   setLicenseActive(active)
   setIsAdmin(r.isAdmin === true)
   setAccountRole(r.accountRole)
   setPermissions(r.permissions)
+  setFirmModules(modules)
   if (typeof r.tenantId === 'string' && r.tenantId.trim()) {
     setTenantId(r.tenantId)
   }
@@ -67,6 +75,7 @@ function applySessionFields(r: {
     admin: r.isAdmin === true,
     role: (r.accountRole === 'worker' ? 'worker' : 'owner') as AccountRole,
     perms: Array.isArray(r.permissions) ? r.permissions.map(String) : [],
+    firmModules: modules,
     tenantId: (typeof r.tenantId === 'string' && r.tenantId.trim() ? r.tenantId.trim() : getTenantId()),
   }
 }
@@ -77,6 +86,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAdmin, setIsAdminState] = useState(false)
   const [accountRole, setAccountRoleState] = useState<AccountRole>('owner')
   const [permissions, setPermissionsState] = useState<string[]>([])
+  const [firmModules, setFirmModulesState] = useState<FirmModules>(() => getFirmModules())
   const [tenantId, setTenantIdState] = useState('')
   const [ready, setReady] = useState(false)
 
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(getIsAdmin())
     setAccountRoleState(getAccountRole())
     setPermissionsState(getPermissions())
+    setFirmModulesState(getFirmModules())
     setTenantIdState(getTenantId())
     setReady(true)
 
@@ -95,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdminState(getIsAdmin())
       setAccountRoleState(getAccountRole())
       setPermissionsState(getPermissions())
+      setFirmModulesState(getFirmModules())
       setTenantIdState(getTenantId())
     }
     window.addEventListener(LICENSE_SUSPENDED_EVENT, onSuspended)
@@ -108,6 +120,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdminState(applied.admin)
         setAccountRoleState(applied.role)
         setPermissionsState(applied.perms)
+        setFirmModulesState(applied.firmModules)
         setTenantIdState(applied.tenantId)
       })
     }
@@ -121,6 +134,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setIsAdminState(applied.admin)
         setAccountRoleState(applied.role)
         setPermissionsState(applied.perms)
+        setFirmModulesState(applied.firmModules)
         setTenantIdState(applied.tenantId)
       })
     }
@@ -144,6 +158,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(applied.admin)
     setAccountRoleState(applied.role)
     setPermissionsState(applied.perms)
+    setFirmModulesState(applied.firmModules)
     setTenantIdState(applied.tenantId)
   }, [])
 
@@ -160,6 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isAdmin?: boolean
         accountRole?: string
         permissions?: string[]
+        firmModules?: FirmModules
         tenantId?: string
       }>('/api/auth/register', {
         method: 'POST',
@@ -175,6 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAdminState(applied.admin)
       setAccountRoleState(applied.role)
       setPermissionsState(applied.perms)
+      setFirmModulesState(applied.firmModules)
       setTenantIdState(applied.tenantId)
     },
     [],
@@ -187,12 +204,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setIsAdminState(false)
     setAccountRoleState('owner')
     setPermissionsState([])
+    setFirmModulesState(normalizeFirmModules(null))
     setTenantIdState('')
   }, [])
 
   const can = useCallback(
-    (permission: AppPermission) => hasAppPermission(accountRole, permissions, permission),
-    [accountRole, permissions],
+    (permission: AppPermission) => hasAppPermission(accountRole, permissions, permission, firmModules),
+    [accountRole, permissions, firmModules],
   )
 
   const isCompanyOwner = isOwnerRole(accountRole)
@@ -204,6 +222,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       accountRole,
       permissions,
+      firmModules,
       tenantId,
       ready,
       can,
@@ -218,6 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       isAdmin,
       accountRole,
       permissions,
+      firmModules,
       tenantId,
       ready,
       can,

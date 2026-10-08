@@ -2,7 +2,7 @@ import { Navigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import type { AppPermission } from '../utils/accountPermissions'
 
-/** Leitet Worker ohne Recht auf Home um — Owner immer durch. */
+/** Leitet ohne Recht oder ohne Firmen-Modul auf Home um. */
 export function RequirePermission({
   permission,
   children,

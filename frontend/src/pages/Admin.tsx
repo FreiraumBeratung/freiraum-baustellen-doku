@@ -4,10 +4,16 @@ import {
   deleteAdminUser,
   listAdminUsers,
   setAdminUserLicense,
+  setAdminUserModules,
   type AdminUserRow,
 } from '../api/client'
 import { useAuth } from '../context/AuthContext'
-import { Card, PageTitle } from '../components/ui'
+import { Card, PageTitle, Switch } from '../components/ui'
+import {
+  FIRM_MODULE_OPTIONS,
+  normalizeFirmModules,
+  type FirmModuleKey,
+} from '../utils/accountPermissions'
 
 function fmtDate(iso: string): string {
   const s = iso.trim()
@@ -94,6 +100,23 @@ export function AdminPage() {
     } catch (ex) {
       const m = ex instanceof Error ? ex.message : ''
       setErr(m || 'Account konnte nicht gelöscht werden.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function toggleModule(row: AdminUserRow, key: FirmModuleKey, next: boolean) {
+    setBusyId(row.id)
+    setMsg('')
+    setErr('')
+    try {
+      const r = await setAdminUserModules(row.id, { [key]: next })
+      setUsers((prev) => prev.map((u) => (u.id === row.id ? r.user : u)))
+      setMsg('Paket gespeichert.')
+      window.setTimeout(() => setMsg(''), 3000)
+    } catch (ex) {
+      const m = ex instanceof Error ? ex.message : ''
+      setErr(m || 'Paket konnte nicht geändert werden.')
     } finally {
       setBusyId(null)
     }
@@ -217,6 +240,29 @@ export function AdminPage() {
                         {typeof row.workerCount === 'number' ? row.workerCount : 0}
                       </p>
                     ) : null}
+                    <div className="space-y-2 pt-2">
+                      <p className="text-xs font-medium text-zinc-300">Paket dieser Firma</p>
+                      <p className="text-[0.72rem] leading-snug text-zinc-500">
+                        Tagesbericht bleibt immer. Haken gelten für Chef und Team.
+                      </p>
+                      {FIRM_MODULE_OPTIONS.map((opt) => {
+                        const mods = normalizeFirmModules(row.firmModules)
+                        return (
+                          <div
+                            key={opt.key}
+                            className="flex items-center justify-between gap-3 py-0.5"
+                          >
+                            <span className="text-sm text-zinc-200">{opt.label}</span>
+                            <Switch
+                              label={opt.label}
+                              checked={mods[opt.key]}
+                              disabled={busy}
+                              onChange={(v) => void toggleModule(row, opt.key, v)}
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
                     <p className="break-all font-mono text-[11px] leading-snug text-zinc-600">
                       ID: {row.id}
                       <br />

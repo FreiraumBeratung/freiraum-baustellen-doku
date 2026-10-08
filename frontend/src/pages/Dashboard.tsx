@@ -58,6 +58,7 @@ const allTiles: Tile[] = [
   { to: '/bericht', title: 'Tagesbericht', emoji: '📝', primary: true },
   { to: '/aufgaben', title: 'To-do / Aufgaben', emoji: '✅', accent: true },
   { to: '/protokoll', title: 'Protokoll', emoji: '📄' },
+  { to: '/lieferschein', title: 'Lieferschein', emoji: '📦' },
   { to: '/berichte', title: 'Berichte', emoji: '📋' },
   { to: '/stunden', title: 'Stundenkonto', emoji: '⏱️' },
   { to: '/urlaub', title: 'Urlaub', emoji: '☀️' },
@@ -99,8 +100,8 @@ export function DashboardPage() {
     [can, isCompanyOwner],
   )
 
-  const todayTodoCount = todayTodos.openToday + todayTodos.overdue
-  const todayLeavePending = todayLeave.pending
+  const todayTodoCount = can('tasks') ? todayTodos.openToday + todayTodos.overdue : 0
+  const todayLeavePending = can('leave') ? todayLeave.pending : 0
   const showHeute = todayMissing.length > 0 || todayTodoCount > 0 || todayLeavePending > 0
   const todayLeaveLabel = (() => {
     if (todayLeavePending <= 0) return ''

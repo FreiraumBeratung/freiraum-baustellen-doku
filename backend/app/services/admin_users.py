@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from app.services.account_roles import is_company_owner, is_worker
 from app.services.admin_activity import activity_public_fields
+from app.services.firm_modules import merge_firm_modules, normalize_firm_modules
 from app.services.license import is_license_active
 from app.services.mail_store import delete_mail_config
 from app.services.tenant_storage import BASE_DIR, tenant_data_dir
@@ -51,6 +52,7 @@ def user_public_row(
         "licenseActive": is_license_active(user),
         "isAdmin": is_user_admin(user),
         "workerCount": int(worker_count) if worker_count is not None else 0,
+        "firmModules": normalize_firm_modules(user.get("firmModules")),
     }
     if include_activity:
         row.update(activity_public_fields(tid))
@@ -140,6 +142,24 @@ def set_user_license(
         if is_worker(u):
             return None
         u["licenseActive"] = bool(license_active)
+        tid = str(u.get("tenantId") or u.get("id") or "")
+        return user_public_row(u, worker_count=_worker_count_for_tenant(users, tid))
+    return None
+
+
+def set_user_firm_modules(
+    users: list[dict[str, Any]],
+    user_id: str,
+    patch: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Paket-Haken nur am Firmen-Owner. Worker erben über Mandant."""
+    for u in users:
+        if str(u.get("id") or "") != user_id:
+            continue
+        if is_worker(u) or not is_company_owner(u):
+            return None
+        merged = merge_firm_modules(u.get("firmModules"), patch)
+        u["firmModules"] = merged
         tid = str(u.get("tenantId") or u.get("id") or "")
         return user_public_row(u, worker_count=_worker_count_for_tenant(users, tid))
     return None
