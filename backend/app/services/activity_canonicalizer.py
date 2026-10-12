@@ -131,6 +131,17 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bgarage\s+wand\b", "garagenwand", t, flags=re.IGNORECASE)
     t = re.sub(r"\bschnittwaren\b", "schnittware", t, flags=re.IGNORECASE)
     t = re.sub(r"\bmit\s+mit\b", "mit", t, flags=re.IGNORECASE)
+    t = re.sub(r"\broller[\s-]*st(?:ä|ae|a)nder(?:n)?\b", "rollerständer", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bfahrrad[\s-]*st(?:ä|ae|a)nder(?:n)?\b", "fahrradständer", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bzusammen[\s-]*gebaut\b", "zusammengebaut", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bzusammen[\s-]*bauen\b", "zusammengebaut", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(die|der|den|das)\s+\1\b", r"\1", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(angebracht|montiert|befestigt|zusammengebaut)\s+hab\b",
+        r"\1",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\bdicht\s*schl(?:ä|ae)mme\b", "dichtschlämme", t, flags=re.IGNORECASE)
     t = re.sub(r"\bfrei\s+gelegt\b", "freigelegt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bf(ü|ue|u)ll\s*boden\b", "füllboden", t, flags=re.IGNORECASE)
@@ -1419,6 +1430,11 @@ def _split_chunks(text: str) -> list[str]:
     )
     t = re.sub(r"\bwir haben\b", ".", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaben wir\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bich habe\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bich hab\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bhabe ich\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bhab ich\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\baber\s+musste\b", ". musste", t, flags=re.IGNORECASE)
     t = re.sub(
         r"\b(?:dann noch|dann|denn|danach|anschließend|anschliessend|sowie|und dann|zwischendurch)\b",
         ".",
@@ -1875,6 +1891,8 @@ _TRANSITION_VERBS = (
     "abgezogen",
     "behandelt",
     "verkleidet",
+    "zusammengebaut",
+    "zusammenbauen",
 )
 
 _FOLLOW_NOUNS = (
@@ -2081,6 +2099,15 @@ _FOLLOW_NOUNS = (
     "dämmplatte",
     "daemmplatte",
     "ecke",
+    "rollerständer",
+    "rollerstaender",
+    "fahrradständer",
+    "fahrradstaender",
+    "schilder",
+    "schild",
+    "bäcker",
+    "baecker",
+    "edeka",
 )
 
 
@@ -2171,6 +2198,11 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bdrainage\s*split\b", "drainagesplitt", out)
     out = re.sub(r"\bdrainage\s+spielt\b", "drainagesplitt", out)
     out = re.sub(r"\bhaus\s*wand\b", "hauswand", out)
+    out = re.sub(r"\bgarage\s+wand\b", "garagenwand", out)
+    out = re.sub(r"\broller[\s-]*st(?:ä|ae|a)nder(?:n)?\b", "rollerständer", out)
+    out = re.sub(r"\bfahrrad[\s-]*st(?:ä|ae|a)nder(?:n)?\b", "fahrradständer", out)
+    out = re.sub(r"\bzusammen[\s-]*gebaut\b", "zusammengebaut", out)
+    out = re.sub(r"\bzusammen[\s-]*bauen\b", "zusammengebaut", out)
     out = re.sub(r"\bfrei\s+gelegt\b", "freigelegt", out)
     out = re.sub(r"\bf(ü|ue|u)ll\s*boden\b", "füllboden", out)
     out = re.sub(r"\bein\s+gesandelt\b", "eingesandelt", out)
@@ -2640,6 +2672,31 @@ def _extract_qty_cm_depth(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _extract_piece_count(noun: str, text: str) -> str | None:
+    probe = str(text or "")
+    m = re.search(rf"\b(\d+)\s+{noun}\b", probe, flags=re.IGNORECASE)
+    if m:
+        return m.group(1)
+    m = re.search(
+        rf"\b(ein|eine|eins|zwei|drei|vier|fünf|fuenf|sechs|sieben|acht|neun|zehn)\s+{noun}\b",
+        probe,
+        flags=re.IGNORECASE,
+    )
+    return _word_to_number(m.group(1)) if m else None
+
+
+def _edeka_site_label(text: str) -> str | None:
+    m = re.search(r"\bedeka(?:\s+essen(?:\s+markt)?)?", str(text or ""), flags=re.IGNORECASE)
+    if not m:
+        return None
+    low = re.sub(r"\s+", " ", m.group(0)).casefold()
+    if "essen" in low and "markt" in low:
+        return "Edeka Essen Markt"
+    if "essen" in low:
+        return "Edeka Essen"
+    return "Edeka"
+
+
 def _extract_qty_lfm(text: str) -> str | None:
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(lfm|laufende meter|meter)\b", text, flags=re.IGNORECASE)
     if m:
@@ -2727,6 +2784,8 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     base = apply_trade_phrase_memory(humanize_activity(chunk), raw_text=raw_text)
     t = _normalize_for_match(base)
     if not t:
+        return None
+    if re.match(r"(?:und\s+)?genau das war alles\b", t):
         return None
 
     # GaLaBau Keramikterrasse vor generischem Fliesen-Match (Terrasse + Keramikplatten).
@@ -3280,6 +3339,42 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
 
     if re.search(r"\bstelzlager\b", t) and re.search(r"\b(gesetzt|montiert|verlegt|eingebaut)\b", t):
         return CanonicalActivity("stelzlager_gesetzt", "Stelzlager gesetzt", 71.0, False)
+    if re.search(r"\brollerst(?:ä|ae)nder\b", t) and re.search(
+        r"\b(zusammengebaut|zusammenbauen)\b",
+        t,
+    ):
+        return CanonicalActivity("rollerstaender_zusammengebaut", "Rollerständer zusammengebaut", 101.0, False)
+    if re.search(r"\brollerst(?:ä|ae)nder\b", t) and re.search(r"\bmontiert\b", t):
+        probe = f"{t} {raw_text}".casefold()
+        parts = ["Rollerständer"]
+        if re.search(r"\bvorhanden(?:en|e)?\s+fundament", probe):
+            parts.append("auf vorhandenen Fundamenten")
+        parts.append("montiert")
+        site = _edeka_site_label(probe)
+        text = " ".join(parts)
+        if site:
+            text = f"{text} ({site})"
+        return CanonicalActivity("rollerstaender_montiert", text, 100.0, False)
+    if re.search(r"\bschild(?:er)?\b", t) and re.search(r"\b(angebracht|montiert|befestigt)\b", t):
+        qty = _extract_piece_count(r"schild(?:er)?", t) or _extract_piece_count(
+            r"schild(?:er)?",
+            str(raw_text or ""),
+        )
+        if qty:
+            label = f"{qty} Schilder angebracht" if qty != "1" else "Schild angebracht"
+        else:
+            label = "Schilder angebracht"
+        return CanonicalActivity("schilder_angebracht", label, 98.0, False)
+    if re.search(r"\bfahrradst(?:ä|ae)nder\b", t) and re.search(
+        r"\b(befestigt|montiert|angebracht|gesetzt)\b",
+        t,
+    ):
+        probe = f"{t} {raw_text}".casefold()
+        if re.search(r"\b(?:vor\s+dem\s+)?b(?:ä|ae)cker\b", probe):
+            label = "Fahrradständer vor dem Bäcker befestigt"
+        else:
+            label = "Fahrradständer befestigt"
+        return CanonicalActivity("fahrradstaender_befestigt", label, 97.0, False)
     if re.search(r"\b(zaun|sichtschutzzaun|sichtschutz)\b", t) and re.search(
         r"\b(gesetzt|montiert|gestellt|aufgebaut|eingebaut|verlegt)\b",
         t,
@@ -3376,7 +3471,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     ) and re.search(
         r"\b(gebaut|montiert|gestellt|eingebaut|gemacht|geschraubt|festgeschraubt|angebaut|gesetzt|eingesetzt)\b",
         t,
-    ):
+    ) and not re.search(r"\b(rollerst(?:ä|ae)nder|fahrradst(?:ä|ae)nder)\b", t):
         return CanonicalActivity("staenderwerk_montiert", "Ständerwerk montiert", 79.0, False)
     if "trockenbauwand" in t or "schließen einer trockenbauwand" in t or re.search(r"\brigipswand\b", t):
         if re.search(r"\b(geschlossen|fertiggestellt|fertig|gemacht|zugemacht)\b", t):
@@ -4053,6 +4148,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("naehte_hergestellt", "Nähte hergestellt", 78.5, False)
 
     catalog_match = match_catalog_activity(t)
+    if catalog_match and catalog_match.intent == "fundament_erstellt" and re.search(
+        r"\bvorhanden",
+        t,
+    ):
+        catalog_match = None
     if catalog_match and not (
         catalog_match.intent == "strassenbau_ausgefuehrt" and "asphalt" in t
     ):

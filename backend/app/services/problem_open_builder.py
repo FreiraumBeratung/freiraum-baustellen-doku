@@ -39,7 +39,8 @@ _PROBLEM_SUBSTANCE = re.compile(
     r"schrauben|mörtel|moertel|genehmigung|leitungs|kran|anlegeplatz|profil|"
     r"abpumpen|verspät|verspaet|lotrecht|schnitt|zuschnitt|verlaufen|dichtband|strom|"
     r"untergrund|uneben|abbrechen|unterbrochen|regnen|geregnet|staub|lieferung|pressfitting|"
-    r"kleber|hitze|anschluss|eng|grundwasser|probleme?"
+    r"kleber|hitze|anschluss|eng|grundwasser|probleme?|"
+    r"zusammengebaut|zusammenbauen|nicht\s+bekannt"
     r")\b",
     re.IGNORECASE,
 )
@@ -91,6 +92,8 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|arbeit\s+stopp"
     r"|(?:halbverband|drittelverband)[^.!?]{0,160}?zuschnitt[^.!?]{0,80}?verlaufen"
     r"|da\s+sonst\s+der\s+zuschnitt[^.!?]{0,80}?verlaufen"
+    r"|musste\s+vorher[^.!?]{0,80}zusammen(?:ge)?bauen"
+    r"|zusammen(?:ge)?bauen[^.!?]{0,80}wusste\s+ich\s+vorher\s+nicht"
     r")",
     re.IGNORECASE,
 )
@@ -462,6 +465,12 @@ def _implicit_problem_clause(match_text: str) -> str:
         re.search(r"zu\s+problemen", low) and re.search(r"(?:untergrund|wand)", low)
     ):
         return _polish_problem_clause("Untergrund sehr uneben")
+    if re.search(r"zusammengebaut|zusammenbauen", low) and (
+        re.search(r"vorher\s+nicht|wusste", low) or re.search(r"musste\s+vorher", low)
+    ):
+        return _polish_problem_clause(
+            "Rollerständer musste vorher zusammengebaut werden (war vorher nicht bekannt)"
+        )
     if re.search(r"zuschnitt", low) and re.search(r"verlaufen", low):
         cm = re.search(r"(\d+(?:[.,]\d+)?)\s*cm", low)
         side = " an einer Seite" if re.search(r"seite", low) else ""

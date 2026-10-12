@@ -801,6 +801,12 @@ def _priority(activity: str, *, raw_text: str = "") -> float:
         score += 2.0
     if "freigelegt" in a or "dichtschlämme" in a or "dichtschlaemme" in a or "verkleidet" in a:
         score += 2.0
+    if "zusammengebaut" in a:
+        score += 5.0
+    if "rollerständer" in a or "rollerstaender" in a or "fahrradständer" in a or "fahrradstaender" in a:
+        score += 2.0
+    if "schilder angebracht" in a or "schild angebracht" in a:
+        score += 3.0
     if "," in activity:
         score -= 1.5
     score += phrase_priority_boost(activity, raw_text=raw_text)
@@ -924,6 +930,9 @@ _ACTIVITY_VERB_TOKENS = (
     "aufgepumpt",
     "freigestellt",
     "abgebaut",
+    "zusammengebaut",
+    "befestigt",
+    "angebracht",
 )
 
 
