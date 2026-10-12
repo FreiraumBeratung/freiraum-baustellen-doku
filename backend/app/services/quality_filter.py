@@ -207,6 +207,7 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Füllboden"),
     (r"\bspritzschutz[\s-]*kantenstein", "Kantensteine"),
     (r"\bl-steine?n?\b|\blsteine?n?\b", "L-Steine"),
+    (r"einkehrmaterial", "Einkehrmaterial"),
     (r"\brasen[\s-]*kanten[\s-]*stein(?:e|en)?\b|\brasen[\s-]*kanten\b", "Rasenkantensteine"),
     (r"\brandstein(?:e|en)?\b|\bkantenstein(?:e|en)?\b|\bbordstein(?:e|en)?\b", "Rasenkantensteine"),
     (r"\bfliesen\b", "Fliesen"),
@@ -352,7 +353,7 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         (
             ("Splitt benutzt?", r"\bsplitt\b|\bsplit\b"),
             ("Schotter benutzt?", r"\bschotter\b|frostschutz"),
-            ("Fugensand benutzt?", r"\bfugensand\b|\bfugenmaterial\b"),
+            ("Fugensand benutzt?", r"\bfugensand\b|\bfugenmaterial\b|einkehrmaterial"),
         ),
     ),
     (
@@ -822,6 +823,16 @@ def _priority(activity: str, *, raw_text: str = "") -> float:
     if "podest" in a or "wassertonne" in a:
         score += 4.0
     if "l-steine" in a:
+        score += 2.0
+    if "aufgenommen" in a:
+        score += 6.0
+    if "gestapelt" in a:
+        score += 5.0
+    if "handstampfer" in a or "einkehrmaterial" in a:
+        score += 3.0
+    if "holzleisten" in a or "ilex" in a:
+        score += 3.0
+    if "bauschutt" in a or "stegplatten" in a:
         score += 2.0
     if "," in activity:
         score -= 1.5

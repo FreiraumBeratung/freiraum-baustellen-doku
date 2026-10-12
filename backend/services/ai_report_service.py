@@ -545,6 +545,12 @@ def _polished_summary_is_safe(
         t.casefold(),
     ):
         return False
+    if re.search(r"\bholzleisten\b", acts_join) and not re.search(r"\bholzleisten\b", t.casefold()):
+        return False
+    if re.search(r"\bilex\b", acts_join) and not re.search(r"\bilex\b", t.casefold()):
+        return False
+    if re.search(r"\baufgenommen\b", acts_join) and not re.search(r"\baufgenommen\b", t.casefold()):
+        return False
     try:
         from app.services.summary_material_guard import summary_has_material_echo
 

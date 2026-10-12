@@ -82,6 +82,21 @@ def build_deterministic_summary(
     )
     if l_line and not re.search(r"\bl-stein|\blstein|\bl stein", text, flags=re.IGNORECASE):
         text = f"{text.rstrip('.')}. Zusätzlich wurden {l_line}."
+    for item_pat, sum_pat in (
+        (r"\baufgenommen\b", r"\baufgenommen\b"),
+        (r"\bgestapelt\b", r"\bgestapelt\b"),
+        (r"\bholzleisten\b", r"\bholzleisten\b"),
+        (r"zurechtgeschnitten und montiert", r"zurechtgeschnitten|neue holzleisten"),
+        (r"\bilex\b", r"\bilex\b"),
+        (r"\bbauschutt\b|\bstegplatten\b", r"\bbauschutt\b|\bstegplatten\b"),
+        (r"einkehrmaterial", r"einkehrmaterial"),
+    ):
+        fact_line = next(
+            (str(x) for x in items if re.search(item_pat, str(x), flags=re.IGNORECASE)),
+            "",
+        )
+        if fact_line and not re.search(sum_pat, text, flags=re.IGNORECASE):
+            text = f"{text.rstrip('.')}. Zusätzlich wurden {fact_line}."
     if closure_sentence:
         text = f"{text} {closure_sentence}".strip()
     return _prepend_date(text, date)

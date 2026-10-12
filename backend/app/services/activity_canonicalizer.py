@@ -64,6 +64,98 @@ def _repair_spritzschutz_lstein_asr(text: str) -> str:
     return out
 
 
+def _repair_pflaster_rehab_asr(text: str) -> str:
+    """Whisper/Diktat: Pflaster-Sanierung, Holzleisten, Ilex, Stegplatten."""
+    out = str(text or "")
+    out = re.sub(r"\bzurecht\s+geschlagen\b", "zurechtgeschlagen", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bzurecht\s+geschnitten\b", "zurechtgeschnitten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bholz\s+leisten\b", "holzleisten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgarten\s*h(ü|ue)tte\b", r"gartenh\1tte", out, flags=re.IGNORECASE)
+    out = re.sub(r"\beinkehr\s*material\b", "einkehrmaterial", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bilex\s+stamm\b", "ilex-stamm", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bplastik\s*stegplatten\b", "plastikstegplatten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bhand\s*stampfer\b", "handstampfer", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgummi\s*hammer\b", "gummihammer", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bkant\s*holz\b", "kantholz", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bketten\s*s(ä|ae)ge\b", r"kettens\1ge", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bboden\s*nah\b", "bodennah", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bh(ö|oe)hen\s*gerecht\b", r"h\1hengerecht", out, flags=re.IGNORECASE)
+    # Whisper-Matsch, kein belastbares Problem.
+    out = re.sub(
+        r"\bder\s+bruchgefahr\s+der\s+gro(?:ß|ss)en\s+scheibenfrontbestand\b",
+        " ",
+        out,
+        flags=re.IGNORECASE,
+    )
+    return out
+
+
+def _split_pflaster_rehab_runon(text: str) -> str:
+    """Lange Pflaster-Sanierungsdiktate in Arbeitsschritte trennen."""
+    t = str(text or "")
+    t = re.sub(
+        r"\b(aufgenommen(?:\s+im\s+abgesackten\s+bereich)?)\s+(?=pflaster\s+gestapelt)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(gestapelt(?:\s+seitlich)?)\s+(?=schotter\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(handstampfer)\s+(?=splitt\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(abgezogen)\s+(?=darauf|vorhandene\s+pflaster|pflaster\s+nach)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(neu\s+verlegt)\s+(?=auf\s+h(?:ö|oe)he|mittels\s+kantholz)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(zurechtgeschlagen)\s+(?=auf\s+h(?:ö|oe)he\s+einkehr|einkehrmaterial)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(eingearbeitet(?:\s+ein\s+sack)?)\s+(?=alte\s+holzleisten|holzleisten)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(demontiert)\s+(?=neue\s+holzleisten)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(zurechtgeschnitten_und_montiert|montiert)\s+(?=alten?\s+ilex|ilex)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(entsorgt)\s+(?=bauschutt\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    return t
+
+
 def canonicalize_activities(raw_activities: list[str], *, raw_text: str = "") -> list[str]:
     chunks: list[str] = []
     for item in raw_activities:
@@ -138,6 +230,7 @@ def _split_chunks(text: str) -> list[str]:
         return []
     t = _repair_tiefbordstein_asr(t)
     t = _repair_spritzschutz_lstein_asr(t)
+    t = _repair_pflaster_rehab_asr(t)
     # Whisper-Klebung vor dem strukturellen Splitten aufloesen, damit Verb-Uebergaenge
     # (z.B. "ausgeschachtet die KG-Rohre verlegt") sauber getrennt werden.
     t = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", t, flags=re.IGNORECASE)
@@ -1439,6 +1532,13 @@ def _split_chunks(text: str) -> list[str]:
     t = re.sub(r"\bgrundierung\s+drauf\b", "grundierung drauf. ", t, flags=re.IGNORECASE)
     t = re.sub(r"\binnen\s+und\s+außen\b", "innen_und_aussen", t, flags=re.IGNORECASE)
     t = re.sub(r"\binnen\s+und\s+aussen\b", "innen_und_aussen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bkantholz\s+und\s+gummihammer\b", "kantholz_und_gummihammer", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\bzurechtgeschnitten\s+und\s+montiert\b",
+        "zurechtgeschnitten_und_montiert",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = re.sub(r"\beingebettet\b", "eingebettet. ", t, flags=re.IGNORECASE)
     t = re.sub(r"\berdaushub\s+gemacht\b", "erdaushub gemacht. ", t, flags=re.IGNORECASE)
     t = re.sub(
@@ -1703,6 +1803,7 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(r"\bzudem\b", ".", t, flags=re.IGNORECASE)
+    t = _split_pflaster_rehab_runon(t)
     t = re.sub(
         r"\b(schotter\s+verteilt)\s+(?=zusätzlich|zusaetzlich|danach|anschließend|anschliessend)\b",
         r"\1. ",
@@ -1710,6 +1811,13 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(r"\binnen_und_aussen\b", "innen und außen", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bkantholz_und_gummihammer\b", "kantholz und gummihammer", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\bzurechtgeschnitten_und_montiert\b",
+        "zurechtgeschnitten und montiert",
+        t,
+        flags=re.IGNORECASE,
+    )
     parts = [p.strip(" ,.;") for p in re.split(r"[.]", t) if p.strip(" ,.;")]
     out: list[str] = []
     for part in parts:
@@ -1934,6 +2042,13 @@ _TRANSITION_VERBS = (
     "verkleidet",
     "zusammengebaut",
     "zusammenbauen",
+    "aufgenommen",
+    "gestapelt",
+    "demontiert",
+    "zurechtgeschnitten",
+    "zurechtgeschlagen",
+    "abgeschnitten",
+    "entsorgt",
 )
 
 _FOLLOW_NOUNS = (
@@ -2154,6 +2269,22 @@ _FOLLOW_NOUNS = (
     "l-steine",
     "podest",
     "wassertonne",
+    "holzleisten",
+    "holzleiste",
+    "gartenhütte",
+    "gartenhuette",
+    "ilex",
+    "bauschutt",
+    "stegplatten",
+    "plastikstegplatten",
+    "einkehrmaterial",
+    "pflasterfläche",
+    "pflasterflaeche",
+    "kantholz",
+    "gummihammer",
+    "handstampfer",
+    "kettensäge",
+    "kettensaege",
 )
 
 
@@ -2261,6 +2392,7 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\btief\s+bord\b", "tiefbord", out)
     out = _repair_tiefbordstein_asr(out)
     out = _repair_spritzschutz_lstein_asr(out)
+    out = _repair_pflaster_rehab_asr(out)
     out = re.sub(r"\bver\s+legt\b", "verlegt", out)
     out = re.sub(r"\bfrä\s+sen\b", "fräsen", out)
     out = re.sub(r"\basphalt\s+iert\b", "asphaltiert", out)
@@ -2813,6 +2945,38 @@ def _extract_stone_piece_count(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _ilex_stamm_label(chunk: str, raw_text: str) -> str:
+    probe = f"{chunk} {raw_text}".casefold()
+    parts = ["Ilex-Stamm"]
+    if re.search(r"\bbodennah\b", probe):
+        parts.append("bodennah")
+    if re.search(r"\bkettens(?:ä|ae)ge\b", probe):
+        parts.append("mit der Kettensäge")
+    if re.search(r"\babgeschnitten\b", probe):
+        if re.search(r"\bentsorgt\b", probe):
+            parts.append("abgeschnitten und entsorgt")
+        else:
+            parts.append("abgeschnitten")
+    else:
+        parts.append("entsorgt")
+    return " ".join(parts)
+
+
+def _bauschutt_entsorgt_label(chunk: str, raw_text: str) -> str:
+    probe = f"{chunk} {raw_text}".casefold()
+    if not re.search(r"\b(?:plastik)?stegplatten\b", probe):
+        return "Bauschutt entsorgt"
+    qty = None
+    m = re.search(r"\b(drei|\d+)\s+(?:plastik)?stegplatten\b", probe)
+    if m:
+        qty = m.group(1)
+    if qty == "drei" or qty == "3":
+        return "Bauschutt und drei Plastikstegplatten entsorgt"
+    if qty:
+        return f"Bauschutt und {qty} Plastikstegplatten entsorgt"
+    return "Bauschutt und Plastikstegplatten entsorgt"
+
+
 def _extract_l_stein_count(text: str) -> str | None:
     probe = str(text or "")
     if re.search(r"\blfm\b", probe, flags=re.IGNORECASE):
@@ -2845,6 +3009,25 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return None
     if re.match(r"(?:und\s+)?genau das war alles\b", t):
         return None
+
+    if "einkehrmaterial" in t and re.search(
+        r"\b(eingearbeitet|eingebracht|eingebaut|eingekehrt|verwendet|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("einkehrmaterial_eingearbeitet", "Einkehrmaterial eingearbeitet", 112.0, False)
+    if (
+        re.search(r"\bzurechtgeschlagen\b", t)
+        or (re.search(r"\bkantholz\b", t) and re.search(r"\bgummihammer\b", t))
+    ) and re.search(r"\bpflaster\b", f"{t} {raw_text}".casefold()) and not re.search(
+        r"holzleisten|ilex|einkehrmaterial",
+        t,
+    ):
+        return CanonicalActivity(
+            "pflaster_auf_hoehe",
+            "Pflaster mit Kantholz und Gummihammer auf Höhe zurechtgeschlagen",
+            113.0,
+            False,
+        )
 
     # GaLaBau Keramikterrasse vor generischem Fliesen-Match (Terrasse + Keramikplatten).
     # Wichtig: der Chunk selbst muss einen Keramik-/Terrassen-Hinweis tragen, damit
@@ -3309,7 +3492,80 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             else "Terrassenplatten verlegt"
         )
         return CanonicalActivity("terrassenplatten_verlegt", text, 101.0, bool(qty))
+    if re.search(r"\bpflasterfl(?:ä|ae)che\b", t) and re.search(r"\baufgenommen\b", t):
+        probe = f"{t} {raw_text}".casefold()
+        text = (
+            "Pflasterfläche im abgesackten Bereich aufgenommen"
+            if re.search(r"\babgesackt", probe)
+            else "Pflasterfläche aufgenommen"
+        )
+        return CanonicalActivity("pflasterflaeche_aufgenommen", text, 118.0, False)
+    if re.search(r"\bpflaster\b", t) and re.search(r"\bgestapelt\b", t):
+        probe = f"{t} {raw_text}".casefold()
+        text = "Pflaster seitlich gestapelt" if re.search(r"\bseitlich\b", probe) else "Pflaster gestapelt"
+        return CanonicalActivity("pflaster_gestapelt", text, 117.0, False)
+    if "einkehrmaterial" in t and re.search(
+        r"\b(eingearbeitet|eingebracht|eingebaut|eingekehrt|verwendet|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity("einkehrmaterial_eingearbeitet", "Einkehrmaterial eingearbeitet", 112.0, False)
+    if re.search(r"\bholzleisten\b", t) and re.search(r"\bdemontiert\b", t):
+        probe = f"{t} {raw_text}".casefold()
+        text = (
+            "Alte Holzleisten von der Gartenhütte demontiert"
+            if re.search(r"\bgartenh(?:ü|ue)tte\b", probe)
+            else "Alte Holzleisten demontiert"
+        )
+        return CanonicalActivity("holzleisten_demontiert", text, 111.0, False)
+    if re.search(r"\bholzleisten\b", t) and re.search(
+        r"\b(zurechtgeschnitten|zugeschnitten|geschnitten|montiert)\b",
+        t,
+    ) and not re.search(r"\bdemontiert\b", t):
+        return CanonicalActivity(
+            "holzleisten_montiert",
+            "Neue Holzleisten zurechtgeschnitten und montiert",
+            110.0,
+            False,
+        )
+    if (
+        re.search(r"\bdemontiert\b", t)
+        and re.search(r"\bgartenh(?:ü|ue)tte\b", t)
+        and re.search(r"\bholzleisten\b", str(raw_text or "").casefold())
+    ):
+        return CanonicalActivity(
+            "holzleisten_demontiert",
+            "Alte Holzleisten von der Gartenhütte demontiert",
+            111.0,
+            False,
+        )
+    if re.search(r"\bilex\b", t) and re.search(r"\b(abgeschnitten|geschnitten|entsorgt)\b", t):
+        return CanonicalActivity("ilex_stamm_entfernt", _ilex_stamm_label(t, raw_text), 109.0, False)
+    if re.search(r"\bstamm\b", t) and re.search(r"\bentsorgt\b", t) and re.search(
+        r"\bilex\b",
+        str(raw_text or "").casefold(),
+    ) and not re.search(r"\bbauschutt\b|\bstegplatten\b", t):
+        return CanonicalActivity("ilex_stamm_entfernt", _ilex_stamm_label(t, raw_text), 109.0, False)
+    if re.search(r"\bbauschutt\b", t) and re.search(r"\bentsorgt\b", t):
+        return CanonicalActivity("bauschutt_entsorgt", _bauschutt_entsorgt_label(t, raw_text), 108.0, False)
+    if re.search(r"\b(?:plastik)?stegplatten\b", t) and re.search(r"\bentsorgt\b", t):
+        if re.search(r"\bbauschutt\b", str(raw_text or "").casefold()):
+            return CanonicalActivity("bauschutt_entsorgt", _bauschutt_entsorgt_label(t, raw_text), 108.0, False)
+        return CanonicalActivity("stegplatten_entsorgt", "Plastikstegplatten entsorgt", 107.0, False)
     if "pflaster" in t:
+        if re.search(r"\bnach\s+muster\b", t) and re.search(r"\b(verlegt|gelegt|zugelegt)\b", t):
+            return CanonicalActivity(
+                "pflaster_verlegt",
+                "Pflaster nach Muster neu verlegt",
+                114.0,
+                False,
+            )
+        if re.search(r"\b(zurechtgeschlagen|kantholz|gummihammer)\b", t):
+            return CanonicalActivity(
+                "pflaster_auf_hoehe",
+                "Pflaster mit Kantholz und Gummihammer auf Höhe zurechtgeschlagen",
+                113.0,
+                False,
+            )
         _pflaster_planned = re.search(
             r"\b(anfangen|beginnen|wollten|wollen|wollte|möchten|moechten)\b",
             t,
@@ -3348,7 +3604,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("gartenmauer_gebaut", text, 95.0, bool(qty))
     if "schotter" in t and "schottertragschicht" not in t and (
         re.search(
-            r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt)\b",
+            r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt|eingearbeitet)\b",
             t,
         )
         or re.search(
@@ -3356,6 +3612,14 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             t,
         )
     ):
+        probe = f"{t} {raw_text}".casefold()
+        if re.search(r"\beingearbeitet\b", t) or re.search(r"\bhandstampfer\b", t):
+            text = (
+                "Schotter eingearbeitet und mit Handstampfer verdichtet"
+                if re.search(r"\bhandstampfer\b|\bverdichtet\b", probe)
+                else "Schotter eingearbeitet"
+            )
+            return CanonicalActivity("schotter_eingebaut", text, 116.0, False)
         qty = _extract_qty_m3(t)
         text = f"{qty} m³ Schotter eingebaut" if qty else "Schotter eingebaut"
         return CanonicalActivity("schotter_eingebaut", text, 82.0, bool(qty))
@@ -3377,7 +3641,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             t,
         )
         _splitt_install = re.search(
-            r"\b(eingebaut|verteilt|verdichtet|eingebracht|abgezogen|verarbeitet|aufgebracht|reingemacht|rein gemacht|verwendet|verlegt|gesetzt)\b",
+            r"\b(eingebaut|verteilt|verdichtet|eingebracht|abgezogen|verarbeitet|aufgebracht|aufgetragen|reingemacht|rein gemacht|verwendet|verlegt|gesetzt)\b",
             t,
         )
         if _splitt_delivery and not _splitt_install:
@@ -3406,6 +3670,13 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             size = size or _extract_splitt_size(raw_text or "")
             text = f"Drainagesplitt {size} eingebaut" if size else "Drainagesplitt eingebaut"
             return CanonicalActivity("drainagesplitt_eingebaut", text, 86.0, bool(size))
+        if re.search(r"\b(aufgetragen|h(?:ö|oe)hengerecht)\b", t):
+            text = (
+                "Splitt aufgetragen und höhengerecht abgezogen"
+                if re.search(r"\b(h(?:ö|oe)hengerecht|abgezogen)\b", t)
+                else "Splitt aufgetragen"
+            )
+            return CanonicalActivity("splitt_eingebaut", text, 115.0, False)
         if size and pulled:
             return CanonicalActivity("splitt_eingebaut", f"Splitt {size} eingebaut und abgezogen", 73.0, False)
         if size:

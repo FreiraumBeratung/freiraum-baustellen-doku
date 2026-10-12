@@ -80,6 +80,15 @@ def _sentence_reflects_activity(sentence: str, activities: list[str]) -> bool:
         "eingesandet",
         "verteilt",
         "ausgelegt",
+        "aufgenommen",
+        "gestapelt",
+        "eingearbeitet",
+        "abgezogen",
+        "zurechtgeschlagen",
+        "demontiert",
+        "entsorgt",
+        "abgeschnitten",
+        "zurechtgeschnitten",
     )
     for act in activities:
         a = str(act).casefold().strip()
