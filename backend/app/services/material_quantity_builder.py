@@ -396,7 +396,7 @@ def _attach_quantity_if_missing(material: str, raw_text: str) -> str:
         desc = mat if mat_key in _norm_key(m.group("desc") or "") else _clean_desc(m.group("desc") or mat)
         return MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc).display()
 
-    if mat_key in {"splitt", "split"}:
+    if mat_key in {"splitt", "split"} or mat_key.startswith("splitt"):
         wm = _WORD_KUBIK_MAT.search(probe)
         if wm:
             qty = _word_to_qty(wm.group("qty") or "")
@@ -421,6 +421,11 @@ def enrich_materials_list(materials: Iterable[str], raw_text: str) -> list[str]:
             return
         key = _material_key_from_display(val)
         if key in seen:
+            if re.match(r"^\d", val):
+                for i, prev in enumerate(out):
+                    if _material_key_from_display(prev) == key and not re.match(r"^\d", prev):
+                        out[i] = val
+                        return
             return
         seen.add(key)
         out.append(val)

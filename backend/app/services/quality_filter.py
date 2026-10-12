@@ -112,11 +112,15 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\babdichtung hergestellt\b", ("Abdichtung",), ("Dichtband",), ()),
     (r"\bpflaster(?:arbeiten)? (?:durchgeführt|verlegt|eingebaut)\b|\b\d+(?:[.,]\d+)?\s*m²\s*pflaster (?:verlegt|eingebaut)\b", ("Pflastersteine",), ("Splitt", "Schotter"), ()),
     (r"\bschotter eingebaut\b|\beinbau von\s+\d+(?:[.,]\d+)?\s*m³\s*schotter\b", ("Schotter",), (), ()),
+    (r"\bnachgeschottert\b|\bstellen nachgeschottert\b", ("Schotter",), (), ()),
+    (r"\bsplitt 2/5 mm\b|\bsplitt 2/5\b", ("Splitt 2/5",), (), ()),
     (r"\bsplitt\b", ("Splitt",), (), ()),
+    (r"\bpflasterfl(?:ä|ae)che komplett\b|\bim drittelverband verlegt\b", ("Pflastersteine",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?keramikterrasse verlegt\b", ("Keramikplatten",), ("Stelzlager", "Drainagemörtel", "Einkornmörtel"), ()),
+    (r"\bplatten verlegt\b|\b(?:ca\.\s*)?\d+(?:[.,]\d+)?\s*platten eingeschnitten\b|\bplatten eingeschnitten\b", ("Platten",), (), ()),
     (r"\bholz-/wpc-terrasse gebaut\b", ("WPC-Dielen",), ("Unterkonstruktion",), ()),
     (r"\brasen vertikutiert\b", (), ("Vertikutierer"), ()),
     (r"\brasen gedüngt\b", ("Dünger",), (), ()),
@@ -186,6 +190,8 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
 
 _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bschotter\b", "Schotter"),
+    (r"\bnachgeschottert\b", "Schotter"),
+    (r"\b2[,./]\s*5\s*k(?:ö|oe)rnung\s+splitt\b|\bsplitt\s+2/5\b", "Splitt 2/5"),
     (r"\bdrainagesplitt\b|\bdrainage[\s-]*splitt\b", "Drainagesplitt"),
     (r"\bsplitt\b", "Splitt"),
     (r"\bpflastersteine?\b", "Pflastersteine"),
@@ -786,7 +792,9 @@ def _priority(activity: str, *, raw_text: str = "") -> float:
         score -= 3.0
     if "splitt" in a or "silikonfugen" in a:
         score -= 1.5
-    if "pflaster verlegt" in a or "fliesen verlegt" in a or "trockenbauwand geschlossen" in a:
+    if "pflaster verlegt" in a or "fliesen verlegt" in a or "platten verlegt" in a or "trockenbauwand geschlossen" in a:
+        score += 2.0
+    if "abgerüttelt" in a or "nachgeschottert" in a or "drittelverband" in a:
         score += 2.0
     if "," in activity:
         score -= 1.5
@@ -905,6 +913,10 @@ _ACTIVITY_VERB_TOKENS = (
     "verteilt",
     "freigelegt",
     "abgedichtet",
+    "eingeschnitten",
+    "aufgepumpt",
+    "freigestellt",
+    "abgebaut",
 )
 
 
@@ -1003,6 +1015,10 @@ def _material_confidence_buckets(
     if "Mineralwolle" in high and "Dämmplatten" in high:
         high = [v for v in high if v not in ("Mineralwolle", "Dämmplatten")]
         high.append("Mineralwolle Dämmplatten")
+    if "Pflastersteine" in high and "Pflaster" in high:
+        high = [v for v in high if v != "Pflaster"]
+    if any(v.casefold().startswith("splitt 2/5") for v in high) and "Splitt" in high:
+        high = [v for v in high if v != "Splitt"]
 
     return {
         "high": _dedupe([x for x in high if x]),
@@ -1593,6 +1609,49 @@ def _apply_dn_to_pipe_fittings(materials: list[str], activities: list[str], raw_
     return _dedupe(out)
 
 
+_MACHINE_DETECT_NAMES: dict[str, str] = {
+    "bagger": r"(?:mini\s*)?bagger",
+    "radlader": r"radlader",
+    "dumper": r"dumper",
+    "ruettelplatte": r"r(?:ü|ue)ttelplatte|r(?:ü|ue)ttler",
+    "stampfer": r"stampfer",
+    "walze": r"walze(?:nzug)?|grabenwalze",
+    "kran": r"autokran|turmdrehkran|kran",
+    "lkw": r"lkw",
+    "putzmaschine": r"putzmaschine",
+    "kaltfraese": r"kaltfr(?:ä|ae)se",
+    "asphaltfertiger": r"asphaltfertiger",
+    "grader": r"grader",
+}
+
+
+def _machine_is_incidental_mention(raw_text: str, *, machine_key: str) -> bool:
+    """Maschine nur erwähnt (freigestellt / Reifen), nicht als Arbeit eingesetzt."""
+    raw = str(raw_text or "").casefold()
+    pat = _MACHINE_DETECT_NAMES.get(machine_key)
+    if not pat:
+        return False
+    if not re.search(rf"\b(?:{pat})\b", raw, flags=re.IGNORECASE):
+        return False
+    if _machine_hours_present(raw_text, machine_key=machine_key):
+        return False
+    if re.search(
+        rf"(?:mit\s+(?:dem\s+)?(?:{pat})\b|(?:{pat})\w*\s+(?:eingesetzt|gearbeitet|gelaufen|gefahren)|gebaggert)",
+        raw,
+        flags=re.IGNORECASE,
+    ):
+        return False
+    if re.search(
+        rf"(?:(?:{pat})[\s\w,]{{0,120}}freigestellt|freigestellt[\s\w,]{{0,120}}(?:{pat}))",
+        raw,
+        flags=re.IGNORECASE,
+    ):
+        return True
+    if machine_key == "radlader" and re.search(r"\breifen\b", raw) and re.search(r"\baufgepumpt\b", raw):
+        return True
+    return False
+
+
 def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
     raw = str(raw_text or "").casefold()
     machine_patterns: dict[str, str] = {
@@ -1674,6 +1733,8 @@ def _apply_machine_assistance(
     existing_probe = " | ".join(acts).casefold()
     for machine_key, detect_pattern, activity_text, suggestion_label in _MACHINE_RULES:
         if not re.search(detect_pattern, raw_probe, flags=re.IGNORECASE):
+            continue
+        if _machine_is_incidental_mention(raw_text, machine_key=machine_key):
             continue
         if activity_text.casefold() not in existing_probe:
             acts.append(activity_text)

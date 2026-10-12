@@ -71,6 +71,11 @@ def build_deterministic_summary(
         second_main=second_main,
     )
     text = first_sentence if not secondaries else f"{first_sentence} {_second_sentence(secondaries, hidden_count=hidden_count)}"
+    if re.search(
+        r"\bganz alleine auf der baustelle\b|\balleine auf der baustelle\b",
+        str(raw_text or "").casefold(),
+    ) and not re.search(r"\ballein\b", text.casefold()):
+        text = f"{text.rstrip('.')}. Die Arbeit erfolgte allein."
     if closure_sentence:
         text = f"{text} {closure_sentence}".strip()
     return _prepend_date(text, date)

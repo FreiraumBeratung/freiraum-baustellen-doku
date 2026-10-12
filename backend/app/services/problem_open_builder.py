@@ -14,7 +14,7 @@ _CUSTOMER_CUT = re.compile(
     r"(?:"
     r"\bmit\s+der\s+kundin\b|\bmit\s+dem\s+kunden?\b|\bmit\s+der\s+bauherrin\b|\bmit\s+dem\s+bauherr(?:in)?\b|"
     r"\bkundin\b|\bkunde\b|\bkunden\b|\bbauherrin\b|\bbauherr(?:in)?\b|\bbauleitung\b|\bauftraggeber\b|"
-    r"\bkundengespräch\b|\bkundengespraech\b|\bgesprochen\b|\bgred\b|\bunterhalten\b|\bzufrieden\b|\bhappy\b"
+    r"\bkundengespräch\b|\bkundengespraech\b|\bgesprochen\b|\bbesprochen\b|\bgred\b|\bunterhalten\b|\bzufrieden\b|\bhappy\b"
     r")",
     re.IGNORECASE,
 )
@@ -37,7 +37,7 @@ _PROBLEM_SUBSTANCE = re.compile(
     r"wasserdruck|armatur|undicht|leck|frost|grundwasser|betonpumpe|gerüst|geruest|"
     r"wind|staub|temperatur|gefälle|gefaelle|riss|dichtung|manometer|pressfitting|"
     r"schrauben|mörtel|moertel|genehmigung|leitungs|kran|anlegeplatz|profil|"
-    r"abpumpen|verspät|verspaet|lotrecht|schnitt|dichtband|strom|"
+    r"abpumpen|verspät|verspaet|lotrecht|schnitt|zuschnitt|verlaufen|dichtband|strom|"
     r"untergrund|uneben|abbrechen|unterbrochen|regnen|geregnet|staub|lieferung|pressfitting|"
     r"kleber|hitze|anschluss|eng|grundwasser|probleme?"
     r")\b",
@@ -89,6 +89,8 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|viel\s+geregnet"
     r"|geregnet[^.!?]{0,50}arbeit\s+stopp"
     r"|arbeit\s+stopp"
+    r"|(?:halbverband|drittelverband)[^.!?]{0,160}?zuschnitt[^.!?]{0,80}?verlaufen"
+    r"|da\s+sonst\s+der\s+zuschnitt[^.!?]{0,80}?verlaufen"
     r")",
     re.IGNORECASE,
 )
@@ -460,6 +462,14 @@ def _implicit_problem_clause(match_text: str) -> str:
         re.search(r"zu\s+problemen", low) and re.search(r"(?:untergrund|wand)", low)
     ):
         return _polish_problem_clause("Untergrund sehr uneben")
+    if re.search(r"zuschnitt", low) and re.search(r"verlaufen", low):
+        cm = re.search(r"(\d+(?:[.,]\d+)?)\s*cm", low)
+        side = " an einer Seite" if re.search(r"seite", low) else ""
+        qty = f" {cm.group(1).replace('.', ',')} cm" if cm else ""
+        clause = f"Zuschnitt hätte{side}{qty} verlaufen"
+        if re.search(r"drittelverband", low):
+            clause += " – Verband auf Drittelverband geändert"
+        return _polish_problem_clause(clause)
     if re.search(r"großes\s+problem|grosses\s+problem", low):
         if re.search(r"liefer", low):
             return _polish_problem_clause("Problem mit der Lieferung")

@@ -10,7 +10,7 @@ import re
 _CUSTOMER_MARKERS = re.compile(
     r"\b("
     r"kundin|kunde|kunden|bauherr|bauherrin|bauleitung|auftraggeber|"
-    r"kundengespräch|kundengespraech|unterhalten|gesprochen|gred|"
+    r"kundengespräch|kundengespraech|unterhalten|gesprochen|besprochen|gred|"
     r"zufrieden|freut\s+sich|weitere\s+aufträge|weitere\s+auftraege|"
     r"abgesprochen|abgestimmt|informiert|rücksprache|ruecksprache|"
     r"meckert|beschwert|einwand|einverstanden|happy"
@@ -22,6 +22,7 @@ _CUSTOMER_START = re.compile(
     r"(?:"
     r"mit\s+der\s+kundin|mit\s+dem\s+kunden|mit\s+der\s+bauherrin|mit\s+dem\s+bauherr|"
     r"mit\s+dem\s+auftraggeber|mit\s+der\s+bauleitung|"
+    r"mit\s+frau\s+\w+|mit\s+herrn\s+\w+|mit\s+herr\s+\w+|"
     r"kundengespräch|kundengespraech|"
     r"die\s+kundin|der\s+kunde|die\s+kunden|dem\s+kunden|"
     r"bauherr\s+war|bauherrin\s+war|bauleitung\s+war"
@@ -572,9 +573,38 @@ def _strip_trailing_work_from_customer(text: str) -> str:
     return t
 
 
+def _named_person_besprochen(raw_text: str) -> str:
+    """„dies ist mit Frau X besprochen worden“ inkl. Verband-Entscheidung."""
+    t = _normalize_customer_probe(raw_text)
+    m = re.search(
+        r"\bmit\s+(frau|herrn|herr)\s+([a-zäöüß\-]+)\s+besprochen\b",
+        t,
+        flags=re.IGNORECASE,
+    )
+    if not m:
+        return ""
+    title_raw = m.group(1).casefold()
+    title = "Frau" if title_raw == "frau" else "Herrn"
+    name = m.group(2).strip().title()
+    low = t.casefold()
+    if re.search(r"\bdrittelverband\b", low) and re.search(r"\bhalbverband\b", low):
+        reason = ""
+        cm = re.search(r"(\d+(?:[.,]\d+)?)\s*cm", low)
+        if re.search(r"zuschnitt", low) and cm:
+            reason = (
+                f", weil sonst der Zuschnitt an einer Seite "
+                f"{cm.group(1).replace('.', ',')} cm verlaufen wäre"
+            )
+        return f"Mit {title} {name} besprochen: Drittelverband statt Halbverband{reason}."
+    return f"Mit {title} {name} besprochen."
+
+
 def extract_customer_talk_from_text(raw_text: str) -> str:
     """Rohtext → isoliertes, professionelles Kundengespräch."""
     text = _normalize_customer_probe(raw_text)
+    named = _named_person_besprochen(text)
+    if named:
+        return _cleanup_customer_talk_text(named)
     if not text or not _has_customer_marker(text):
         return ""
 
