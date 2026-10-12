@@ -36,6 +36,8 @@ _ACTIVITY_MATERIAL_RULES: dict[str, list[str]] = {
     "platten eingeschnitten": ["Platten"],
     "stellen nachgeschottert": ["Schotter"],
     "splitt 2/5 mm eingebaut": ["Splitt 2/5"],
+    "dichtschlämme behandelt": ["Dichtschlämme"],
+    "dämmplatte verkleidet": ["Dämmplatten"],
     "fliesenarbeiten durchgeführt": ["Fliesen", "Fliesenkleber", "Fugenmörtel"],
     "rohrleitungen installiert": ["Rohrleitungen", "Fittings", "Befestigungsmaterial"],
     "heizungsanlage montiert": ["Rohrleitungen", "Fittings"],

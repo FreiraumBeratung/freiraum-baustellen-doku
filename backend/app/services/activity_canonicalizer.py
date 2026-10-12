@@ -128,6 +128,10 @@ def _split_chunks(text: str) -> list[str]:
     # Whisper: „Drainage spielt“ / „Drainage Split“ → Drainagesplitt
     t = re.sub(r"\bdrainage\s+spielt\b", "drainagesplitt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bhaus\s*wand\b", "hauswand", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bgarage\s+wand\b", "garagenwand", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bschnittwaren\b", "schnittware", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bmit\s+mit\b", "mit", t, flags=re.IGNORECASE)
+    t = re.sub(r"\bdicht\s*schl(?:ä|ae)mme\b", "dichtschlämme", t, flags=re.IGNORECASE)
     t = re.sub(r"\bfrei\s+gelegt\b", "freigelegt", t, flags=re.IGNORECASE)
     t = re.sub(r"\bf(ü|ue|u)ll\s*boden\b", "füllboden", t, flags=re.IGNORECASE)
     # Run-on-Diktat: Drainage-Arbeitskette in getrennte Chunks
@@ -1869,6 +1873,8 @@ _TRANSITION_VERBS = (
     "nachgeschottert",
     "zugelegt",
     "abgezogen",
+    "behandelt",
+    "verkleidet",
 )
 
 _FOLLOW_NOUNS = (
@@ -2066,6 +2072,15 @@ _FOLLOW_NOUNS = (
     "geruest",
     "platten",
     "balkon",
+    "garagenwand",
+    "stellfläche",
+    "stellflaeche",
+    "schnittware",
+    "dichtschlämme",
+    "dichtschlaemme",
+    "dämmplatte",
+    "daemmplatte",
+    "ecke",
 )
 
 
@@ -2231,6 +2246,10 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bjacuzzi\s+stellfl(?:ä|ae)che\b", "jacuzzi-stellfläche", out)
     out = re.sub(r"\bhalb[\s-]*verband\b", "halbverband", out)
     out = re.sub(r"\bdrittel[\s-]*verband\b", "drittelverband", out)
+    out = re.sub(r"\bgarage\s+wand\b", "garagenwand", out)
+    out = re.sub(r"\bschnittwaren\b", "schnittware", out)
+    out = re.sub(r"\bmit\s+mit\b", "mit", out)
+    out = re.sub(r"\bdicht\s*schl(?:ä|ae)mme\b", "dichtschlämme", out)
     # ASR: "Lock" statt "Loch" im Bagger-Kontext (gebrochenes Baustellen-Deutsch).
     out = re.sub(r"\bbagger\s+mit\s+lock\b", "bagger loch", out)
     out = re.sub(r"\bmit\s+lock\b(?=\s|$)", "loch", out)
@@ -2616,6 +2635,11 @@ def _extract_piece_count(text: str) -> str | None:
     return _word_to_number(w.group(1)) if w else None
 
 
+def _extract_qty_cm_depth(text: str) -> str | None:
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*cm(?:\s*tiefe)?\b", str(text or ""), flags=re.IGNORECASE)
+    return m.group(1) if m else None
+
+
 def _extract_qty_lfm(text: str) -> str | None:
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*(lfm|laufende meter|meter)\b", text, flags=re.IGNORECASE)
     if m:
@@ -2998,8 +3022,47 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("fuellboden_verfuellt", "Füllboden verfüllt", 83.0, False)
     if re.search(r"\b(mit\s+)?boden\b", t) and re.search(r"\bverf(?:ü|ue|u)llt\b", t):
         return CanonicalActivity("fuellboden_verfuellt", "Boden verfüllt", 82.5, False)
-    if re.search(r"\bhauswand\b", t) and re.search(r"\bfreigelegt\b", t):
-        return CanonicalActivity("hauswand_freigelegt", "Hauswand freigelegt", 85.0, False)
+    if (
+        re.search(r"\b(hauswand|garagenwand|garage(?:n)?\s*wand)\b", t)
+        and re.search(r"\bfreigelegt\b", t)
+    ):
+        is_garage = bool(re.search(r"\b(garagenwand|garage)\b", t))
+        loc = "Garagenwand" if is_garage else "Hauswand"
+        lfm = _extract_qty_lfm(t)
+        tiefe = _extract_qty_cm_depth(t)
+        ca = _qty_prefix(t) or _qty_prefix(raw_text)
+        parts = [f"{loc} freigelegt"]
+        if lfm:
+            parts.append(f"{ca}{lfm} lfm")
+        if tiefe:
+            parts.append(f"{ca}{tiefe} cm Tiefe")
+        text = ", ".join(parts)
+        intent = "garagenwand_freigelegt" if is_garage else "hauswand_freigelegt"
+        return CanonicalActivity(intent, text, 90.0 if (lfm or tiefe) else 85.0, bool(lfm or tiefe))
+    if re.search(r"\bdichtschl(?:ä|ae)mme\b", t) and re.search(
+        r"\b(behandelt|aufgetragen|gestrichen|verarbeitet)\b",
+        t,
+    ):
+        loc_probe = f"{t} {raw_text}".casefold()
+        if re.search(r"\becke\b", loc_probe) and re.search(r"\bhauswand\b", loc_probe):
+            label = "Ecke Hauswand mit Dichtschlämme behandelt"
+        elif re.search(r"\bhauswand\b", loc_probe):
+            label = "Hauswand mit Dichtschlämme behandelt"
+        else:
+            label = "Dichtschlämme behandelt"
+        return CanonicalActivity("dichtschlaemme_behandelt", label, 88.0, False)
+    if re.search(r"\bd(?:ä|ae)mmplatte(?:n)?\b", t) and re.search(
+        r"\b(verkleidet|angebracht)\b",
+        t,
+    ) and not re.search(r"\b(geklebt|kleben|gedübelt|geduebelt|dübeln|duebeln)\b", t):
+        loc_probe = f"{t} {raw_text}".casefold()
+        if re.search(r"\becke\b", loc_probe) and re.search(r"\bhauswand\b", loc_probe):
+            label = "Ecke Hauswand mit Dämmplatte verkleidet"
+        elif re.search(r"\bhauswand\b", loc_probe):
+            label = "Hauswand mit Dämmplatte verkleidet"
+        else:
+            label = "Dämmplatte verkleidet"
+        return CanonicalActivity("daemmplatte_verkleidet", label, 87.0, False)
     if re.search(r"\bhauswand\b", t) and re.search(r"\b(abgedichtet|abdichtet)\b", t):
         return CanonicalActivity("hauswand_abgedichtet", "Hauswand abgedichtet", 85.5, False)
     # Nach Split oft nur noch „abgedichtet“ — Kontext aus Rohtext übernehmen.
@@ -3056,6 +3119,23 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("rinne_gesetzt", "Rinne gesetzt", 81.0, False)
     if "fallrohr" in t and re.search(r"\b(angeschlossen|montiert|gesetzt)\b", t):
         return CanonicalActivity("fallrohr_angeschlossen", "Fallrohr angeschlossen", 76.5, False)
+    if re.search(r"\b(jacuzzi|stellfl(?:ä|ae)che)\b", t) and re.search(
+        r"\b(eingeschnitten|zugeschnitten)\b",
+        t,
+    ):
+        probe = f"{t} {raw_text}".casefold()
+        m_sw = re.search(
+            r"schnittware[n]?\s+(?:ca\.?\s*)?(\d+(?:[.,]\d+)?)\s*m\b",
+            probe,
+        )
+        m_m = re.search(r"(\d+(?:[.,]\d+)?)\s*m\b", t)
+        qty = m_sw.group(1) if m_sw else (m_m.group(1) if m_m else None)
+        ca = _qty_prefix(t) or _qty_prefix(raw_text)
+        if qty:
+            text = f"Jacuzzi-Stellfläche eingeschnitten, Schnittware {ca}{qty} m"
+        else:
+            text = "Jacuzzi-Stellfläche eingeschnitten"
+        return CanonicalActivity("jacuzzi_eingeschnitten", text, 100.0, bool(qty))
     if re.search(r"\b(abgerüttelt|abgeruettelt)\b", t):
         probe = f"{t} {raw_text}".casefold()
         solo = bool(re.search(r"\bganz alleine auf der baustelle\b|\balleine auf der baustelle\b", probe))

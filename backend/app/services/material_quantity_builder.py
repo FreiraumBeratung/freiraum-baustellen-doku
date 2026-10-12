@@ -344,6 +344,16 @@ def extract_quantified_materials(raw_text: str) -> list[str]:
         if _WORK_SURFACE_MAT_SKIP.search(low_desc):
             continue
         unit = _norm_unit(m.group("unit") or "")
+        if unit in {"m", "lfm"} and re.search(
+            r"dichtschl|d(?:ä|ae)mmplatte",
+            low_desc,
+        ):
+            continue
+        if re.search(
+            r"\b(schnittware|eingeschnitten|freigelegt|verkleidet|behandelt|stellfl(?:ä|ae)che|jacuzzi)\b",
+            low_desc,
+        ):
+            continue
         if unit in {"m²", "m2", "qm", "quadratmeter"} and re.fullmatch(
             r"pflaster(?:steine)?", low_desc.strip()
         ):
@@ -393,6 +403,8 @@ def _attach_quantity_if_missing(material: str, raw_text: str) -> str:
     )
     if m:
         unit = _norm_unit(m.group("unit") or "")
+        if unit in {"m", "lfm"} and re.search(r"dichtschl|d(?:ä|ae)mmplatte", mat_key):
+            return mat
         desc = mat if mat_key in _norm_key(m.group("desc") or "") else _clean_desc(m.group("desc") or mat)
         return MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc).display()
 

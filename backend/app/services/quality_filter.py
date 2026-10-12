@@ -116,6 +116,8 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bsplitt 2/5 mm\b|\bsplitt 2/5\b", ("Splitt 2/5",), (), ()),
     (r"\bsplitt\b", ("Splitt",), (), ()),
     (r"\bpflasterfl(?:ä|ae)che komplett\b|\bim drittelverband verlegt\b", ("Pflastersteine",), (), ()),
+    (r"\bdichtschl(?:ä|ae)mme behandelt\b", ("Dichtschlämme",), (), ()),
+    (r"\bd(?:ä|ae)mmplatte verkleidet\b", ("Dämmplatten",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
@@ -196,6 +198,7 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bsplitt\b", "Splitt"),
     (r"\bpflastersteine?\b", "Pflastersteine"),
     (r"\bpflasterfl(ä|ae)che\b", "Pflaster"),
+    (r"\bdichtschl(?:ä|ae)mme\b", "Dichtschlämme"),
     (r"\bzementm(?:ö|oe)rtel\b", "Zementmörtel"),
     (r"\brohre?\b", "Rohre"),
     (r"\bf(?:ü|ue|u)llboden\b", "Füllboden"),
@@ -796,6 +799,8 @@ def _priority(activity: str, *, raw_text: str = "") -> float:
         score += 2.0
     if "abgerüttelt" in a or "nachgeschottert" in a or "drittelverband" in a:
         score += 2.0
+    if "freigelegt" in a or "dichtschlämme" in a or "dichtschlaemme" in a or "verkleidet" in a:
+        score += 2.0
     if "," in activity:
         score -= 1.5
     score += phrase_priority_boost(activity, raw_text=raw_text)
@@ -913,6 +918,8 @@ _ACTIVITY_VERB_TOKENS = (
     "verteilt",
     "freigelegt",
     "abgedichtet",
+    "behandelt",
+    "verkleidet",
     "eingeschnitten",
     "aufgepumpt",
     "freigestellt",
