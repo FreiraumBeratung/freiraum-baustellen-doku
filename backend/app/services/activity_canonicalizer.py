@@ -24,6 +24,39 @@ def _repair_tiefbordstein_asr(text: str) -> str:
     return out
 
 
+def _repair_spritzschutz_lstein_asr(text: str) -> str:
+    """Whisper: Spritschutz kannte Steine → Spritzschutz-Kantensteine; 3 l steine → L-Steine."""
+    out = str(text or "")
+    out = re.sub(
+        r"\bsprits?schutz\s+kannte\s+steine?n?\b",
+        "spritzschutz-kantensteine",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(r"\bsprits?schutz\b", "spritzschutz", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bsprit[sz]?\s*schutz\b", "spritzschutz", out, flags=re.IGNORECASE)
+    out = re.sub(
+        r"\bspritzschutz\s+kannte\s+steine?n?\b",
+        "spritzschutz-kantensteine",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r"\bspritzschutz[\s-]+kantensteine?n?\b",
+        "spritzschutz-kantensteine",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
+        r"\b(\d+)\s+l\s+steine?n?\b",
+        r"\1 l-steine",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(r"\bl[\s-]+steine?n?\b", "l-steine", out, flags=re.IGNORECASE)
+    return out
+
+
 def canonicalize_activities(raw_activities: list[str], *, raw_text: str = "") -> list[str]:
     chunks: list[str] = []
     for item in raw_activities:
@@ -97,6 +130,7 @@ def _split_chunks(text: str) -> list[str]:
     if not t:
         return []
     t = _repair_tiefbordstein_asr(t)
+    t = _repair_spritzschutz_lstein_asr(t)
     # Whisper-Klebung vor dem strukturellen Splitten aufloesen, damit Verb-Uebergaenge
     # (z.B. "ausgeschachtet die KG-Rohre verlegt") sauber getrennt werden.
     t = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", t, flags=re.IGNORECASE)
@@ -2108,6 +2142,11 @@ _FOLLOW_NOUNS = (
     "bäcker",
     "baecker",
     "edeka",
+    "spritzschutz",
+    "kantensteine",
+    "l-steine",
+    "podest",
+    "wassertonne",
 )
 
 
@@ -2214,6 +2253,7 @@ def _normalize_for_match(text: str) -> str:
     out = re.sub(r"\bhoch\s+bord\b", "hochbord", out)
     out = re.sub(r"\btief\s+bord\b", "tiefbord", out)
     out = _repair_tiefbordstein_asr(out)
+    out = _repair_spritzschutz_lstein_asr(out)
     out = re.sub(r"\bver\s+legt\b", "verlegt", out)
     out = re.sub(r"\bfrä\s+sen\b", "fräsen", out)
     out = re.sub(r"\basphalt\s+iert\b", "asphaltiert", out)
@@ -2766,6 +2806,14 @@ def _extract_stone_piece_count(text: str) -> str | None:
     return m.group(1) if m else None
 
 
+def _extract_l_stein_count(text: str) -> str | None:
+    probe = str(text or "")
+    if re.search(r"\blfm\b", probe, flags=re.IGNORECASE):
+        return None
+    m = re.search(r"\b(\d+)\s*l[\s-]*steine?n?\b", probe, flags=re.IGNORECASE)
+    return m.group(1) if m else None
+
+
 def _has_any_quantity(text: str) -> bool:
     return bool(re.search(r"\b\d+(?:[.,]\d+)?\s*(m²|m2|qm|m³|m3|lfm|stück|stk|kg|t)\b", text, flags=re.IGNORECASE))
 
@@ -2958,10 +3006,41 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
     # Rand-/Rasenkantensteine MUSS vor "rasen" geprüft werden, damit
     # "Rasenkantensteine" nicht versehentlich als "Rasen verlegt" interpretiert wird.
+    # Spritzschutz-Kantensteine und L-Steine sind andere Steine — nicht zu Randsteinen ziehen.
+    if re.search(r"\bspritzschutz[\s-]*kantenstein", t) and re.search(
+        r"\b(gesetzt|gestellt|verlegt|gelegt|verbaut|eingebaut|gemacht)\b",
+        t,
+    ):
+        return CanonicalActivity(
+            "spritzschutz_kantensteine_gesetzt",
+            "Spritzschutz-Kantensteine gesetzt",
+            103.0,
+            False,
+        )
+    if re.search(r"\bl-steine?n?\b", t) and re.search(
+        r"\b(gesetzt|gestellt|verlegt|gelegt|verbaut|eingebaut|gemacht)\b",
+        t,
+    ):
+        qty = _extract_l_stein_count(t) or _extract_l_stein_count(str(raw_text or ""))
+        text = f"{qty} L-Steine gesetzt" if qty else "L-Steine gesetzt"
+        return CanonicalActivity("l_steine_gesetzt", text, 101.0, False)
+    if re.search(r"\bpodest\b", t) and re.search(
+        r"\bwassertonne\b",
+        f"{t} {raw_text}".casefold(),
+    ):
+        return CanonicalActivity(
+            "wassertonnen_podest_gesetzt",
+            "Podest für Wassertonne gesetzt",
+            102.0,
+            False,
+        )
     if re.search(
         r"\b(rasenkantenstein(e|en)?|rasenkanten|randstein(e|en)?|kantenstein(e|en)?|bordstein(e|en)?)\b",
         t,
-    ) and re.search(r"\b(gesetzt|gestellt|verlegt|gelegt|benutzt|verbaut|verarbeitet|montiert|eingebaut|gebaut|gemacht)\b", t):
+    ) and re.search(r"\b(gesetzt|gestellt|verlegt|gelegt|benutzt|verbaut|verarbeitet|montiert|eingebaut|gebaut|gemacht)\b", t) and not re.search(
+        r"\bspritzschutz\b|\bl-steine?n?\b",
+        t,
+    ):
         qty_lfm = _extract_qty_lfm(t)
         qty_stk = _extract_stone_piece_count(t)
         is_rand = bool(re.search(r"\b(randstein(e|en)?|kantenstein(e|en)?|bordstein(e|en)?)\b", t))

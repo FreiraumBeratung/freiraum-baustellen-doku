@@ -118,6 +118,8 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bpflasterfl(?:ä|ae)che komplett\b|\bim drittelverband verlegt\b", ("Pflastersteine",), (), ()),
     (r"\bdichtschl(?:ä|ae)mme behandelt\b", ("Dichtschlämme",), (), ()),
     (r"\bd(?:ä|ae)mmplatte verkleidet\b", ("Dämmplatten",), (), ()),
+    (r"\bspritzschutz[\s-]*kantensteine gesetzt\b", ("Kantensteine",), (), ()),
+    (r"\b(?:\d+\s+)?l-steine gesetzt\b", ("L-Steine",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
@@ -203,6 +205,8 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\brohre?\b", "Rohre"),
     (r"\bf(?:ü|ue|u)llboden\b", "Füllboden"),
     (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Füllboden"),
+    (r"\bspritzschutz[\s-]*kantenstein", "Kantensteine"),
+    (r"\bl-steine?n?\b", "L-Steine"),
     (r"\brasen[\s-]*kanten[\s-]*stein(?:e|en)?\b|\brasen[\s-]*kanten\b", "Rasenkantensteine"),
     (r"\brandstein(?:e|en)?\b|\bkantenstein(?:e|en)?\b|\bbordstein(?:e|en)?\b", "Rasenkantensteine"),
     (r"\bfliesen\b", "Fliesen"),
@@ -356,6 +360,12 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         (
             ("Beton benutzt?", r"\bbeton\b|\bm(ö|oe)rtel\b"),
             ("Splitt benutzt?", r"\bsplitt\b"),
+        ),
+    ),
+    (
+        r"\bspritzschutz[\s-]*kantensteine gesetzt\b|\b(?:\d+\s+)?l-steine gesetzt\b|\bpodest für wassertonne gesetzt\b",
+        (
+            ("Beton benutzt?", r"\bbeton\b|\bm(ö|oe)rtel\b"),
         ),
     ),
     (
@@ -807,6 +817,12 @@ def _priority(activity: str, *, raw_text: str = "") -> float:
         score += 2.0
     if "schilder angebracht" in a or "schild angebracht" in a:
         score += 3.0
+    if "spritzschutz" in a:
+        score += 6.0
+    if "podest" in a or "wassertonne" in a:
+        score += 4.0
+    if "l-steine" in a:
+        score += 2.0
     if "," in activity:
         score -= 1.5
     score += phrase_priority_boost(activity, raw_text=raw_text)
@@ -1582,6 +1598,8 @@ def _prefer_specific_material_labels(materials: list[str]) -> list[str]:
             continue
         # Drainagesplitt ist die spez. Variante — generisches „Splitt“ dann weglassen.
         if has_drainagesplitt and (low == "splitt" or re.fullmatch(r"splitt\s+\d{1,2}\s*/\s*\d{1,2}(?:\s*mm)?", low)):
+            continue
+        if any(v.casefold() == "kantensteine" for v in vals) and low == "rasenkantensteine":
             continue
         # „mit Boden verfüllt“ → Füllboden; nacktes „Boden“ ist dann redundant.
         if ("füllboden" in probe or "fuellboden" in probe) and low == "boden":
