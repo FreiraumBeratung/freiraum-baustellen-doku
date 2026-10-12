@@ -539,6 +539,12 @@ def _polished_summary_is_safe(
     found = set(re.findall(r"\d+", t))
     if found - allowed:
         return False
+    acts_join = " ".join(str(a or "") for a in activities).casefold()
+    if re.search(r"\bl-stein|\blstein", acts_join) and not re.search(
+        r"\bl-stein|\blstein|\bl stein",
+        t.casefold(),
+    ):
+        return False
     try:
         from app.services.summary_material_guard import summary_has_material_echo
 

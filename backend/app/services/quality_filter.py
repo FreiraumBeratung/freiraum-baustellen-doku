@@ -119,7 +119,7 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bdichtschl(?:ä|ae)mme behandelt\b", ("Dichtschlämme",), (), ()),
     (r"\bd(?:ä|ae)mmplatte verkleidet\b", ("Dämmplatten",), (), ()),
     (r"\bspritzschutz[\s-]*kantensteine gesetzt\b", ("Kantensteine",), (), ()),
-    (r"\b(?:\d+\s+)?l-steine gesetzt\b", ("L-Steine",), (), ()),
+    (r"\b(?:\d+\s+)?l-steine gesetzt\b|\b(?:\d+\s+)?lsteine? gesetzt\b", ("L-Steine",), (), ()),
     (r"\b(?:rasenkantensteine|randsteine) gesetzt\b", ("Rasenkantensteine",), (), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*lfm\s*)?palisaden gesetzt\b", ("Palisaden",), ("Splitt", "Beton"), ()),
     (r"\b(?:\d+(?:[.,]\d+)?\s*m²\s*)?(?:fläche mit )?mulch eingedeckt\b|\brindenmulch eingedeckt\b", ("Mulch",), ("Rindenmulch", "Geotextil"), ()),
@@ -206,7 +206,7 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bf(?:ü|ue|u)llboden\b", "Füllboden"),
     (r"\bmit\s+boden\b|\bboden\s+verdichtet\b", "Füllboden"),
     (r"\bspritzschutz[\s-]*kantenstein", "Kantensteine"),
-    (r"\bl-steine?n?\b", "L-Steine"),
+    (r"\bl-steine?n?\b|\blsteine?n?\b", "L-Steine"),
     (r"\brasen[\s-]*kanten[\s-]*stein(?:e|en)?\b|\brasen[\s-]*kanten\b", "Rasenkantensteine"),
     (r"\brandstein(?:e|en)?\b|\bkantenstein(?:e|en)?\b|\bbordstein(?:e|en)?\b", "Rasenkantensteine"),
     (r"\bfliesen\b", "Fliesen"),
@@ -363,7 +363,7 @@ _SUGGESTION_RULES: tuple[tuple[str, tuple[tuple[str, str], ...]], ...] = (
         ),
     ),
     (
-        r"\bspritzschutz[\s-]*kantensteine gesetzt\b|\b(?:\d+\s+)?l-steine gesetzt\b|\bpodest für wassertonne gesetzt\b",
+        r"\bspritzschutz[\s-]*kantensteine gesetzt\b|\b(?:\d+\s+)?l-steine gesetzt\b|\b(?:\d+\s+)?lsteine? gesetzt\b|\bpodest für wassertonne gesetzt\b",
         (
             ("Beton benutzt?", r"\bbeton\b|\bm(ö|oe)rtel\b"),
         ),
@@ -1260,6 +1260,24 @@ def _ensure_activity_material_consistency(activities: list[str], materials: list
             raw_probe,
         ):
             out.append("Dämmung eingebaut")
+    return _dedupe(out)
+
+
+def _ensure_l_steine_material(materials: list[str], activities: list[str]) -> list[str]:
+    """Wenn L-Steine als Tätigkeit erkannt sind, müssen sie in der Materialliste stehen."""
+    acts = " | ".join(str(a or "") for a in activities).casefold()
+    if not re.search(r"\bl-steine?n?\b|\blsteine?n?\b", acts):
+        return list(materials)
+    out = [str(m).strip() for m in materials if str(m).strip()]
+    if any(re.search(r"\bl-stein|\blstein", m.casefold()) for m in out):
+        return out
+    qty = None
+    m = re.search(r"\b(\d+)\s*l-steine?n?\b", acts)
+    if not m:
+        m = re.search(r"\b(\d+)\s*lsteine?n?\b", acts)
+    if m:
+        qty = m.group(1)
+    out.append(f"{qty} L-Steine" if qty else "L-Steine")
     return _dedupe(out)
 
 
@@ -2255,6 +2273,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     materials = _drop_garbage_material_lines(materials)
     materials = _prefer_quantified_materials(materials)
     materials = _drop_putz_layer_material_echo(materials, activities)
+    materials = _ensure_l_steine_material(materials, activities)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     activities = _drop_material_echo_activities(activities, materials)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)

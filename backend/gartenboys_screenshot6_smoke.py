@@ -133,6 +133,30 @@ def main() -> int:
     spoken_mat = _hay([str(x) for x in (spoken.get("materials") or [])])
     _expect("beton" in spoken_mat, f"gesprochener Beton muss Material bleiben ({spoken.get('materials')!r})")
 
+    for variant in (
+        "Heute 3 l stein gesetzt.",
+        "Heute 3 lstein gesetzt.",
+        "Heute 3 lsteine gesetzt.",
+        "Heute 3 l-steine gesetzt.",
+    ):
+        vs = _run(variant)
+        v_act = _hay([str(x) for x in (vs.get("activities") or [])])
+        v_mat = _hay([str(x) for x in (vs.get("materials") or [])])
+        v_sum = str(vs.get("summary") or "").casefold()
+        _expect(
+            "l-stein" in v_act or "l stein" in v_act or "lstein" in v_act,
+            f"Whisper-Variante Tätigkeit fehlt ({variant!r} → {vs.get('activities')!r})",
+        )
+        _expect(
+            "l-stein" in v_mat or "l stein" in v_mat or "lstein" in v_mat,
+            f"Whisper-Variante Material fehlt ({variant!r} → {vs.get('materials')!r})",
+        )
+        _expect(
+            "l-stein" in v_sum or "l stein" in v_sum or "lstein" in v_sum,
+            f"Whisper-Variante Zusammenfassung fehlt ({variant!r} → {vs.get('summary')!r})",
+        )
+        _expect("lfm" not in v_act, f"Variante nicht als lfm ({variant!r} → {vs.get('activities')!r})")
+
     print("GARTENBOYS-SCREENSHOT6-SMOKE: OK")
     return 0
 

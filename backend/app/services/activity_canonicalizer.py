@@ -48,11 +48,18 @@ def _repair_spritzschutz_lstein_asr(text: str) -> str:
         flags=re.IGNORECASE,
     )
     out = re.sub(
+        r"\b(\d+)\s*lsteine?n?\b",
+        r"\1 l-steine",
+        out,
+        flags=re.IGNORECASE,
+    )
+    out = re.sub(
         r"\b(\d+)\s+l\s+steine?n?\b",
         r"\1 l-steine",
         out,
         flags=re.IGNORECASE,
     )
+    out = re.sub(r"\blsteine?n?\b", "l-steine", out, flags=re.IGNORECASE)
     out = re.sub(r"\bl[\s-]+steine?n?\b", "l-steine", out, flags=re.IGNORECASE)
     return out
 
@@ -2810,6 +2817,9 @@ def _extract_l_stein_count(text: str) -> str | None:
     probe = str(text or "")
     if re.search(r"\blfm\b", probe, flags=re.IGNORECASE):
         return None
+    m = re.search(r"\b(\d+)\s*lsteine?n?\b", probe, flags=re.IGNORECASE)
+    if m:
+        return m.group(1)
     m = re.search(r"\b(\d+)\s*l[\s-]*steine?n?\b", probe, flags=re.IGNORECASE)
     return m.group(1) if m else None
 
@@ -3017,7 +3027,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             103.0,
             False,
         )
-    if re.search(r"\bl-steine?n?\b", t) and re.search(
+    if re.search(r"\b(?:l-steine?n?|lsteine?n?)\b", t) and re.search(
         r"\b(gesetzt|gestellt|verlegt|gelegt|verbaut|eingebaut|gemacht)\b",
         t,
     ):

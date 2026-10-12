@@ -76,6 +76,12 @@ def build_deterministic_summary(
         str(raw_text or "").casefold(),
     ) and not re.search(r"\ballein\b", text.casefold()):
         text = f"{text.rstrip('.')}. Die Arbeit erfolgte allein."
+    l_line = next(
+        (str(x) for x in items if re.search(r"\bl-steine?n?\b|\blsteine?n?\b", str(x), flags=re.IGNORECASE)),
+        "",
+    )
+    if l_line and not re.search(r"\bl-stein|\blstein|\bl stein", text, flags=re.IGNORECASE):
+        text = f"{text.rstrip('.')}. Zusätzlich wurden {l_line}."
     if closure_sentence:
         text = f"{text} {closure_sentence}".strip()
     return _prepend_date(text, date)
