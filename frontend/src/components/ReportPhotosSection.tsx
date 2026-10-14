@@ -72,6 +72,7 @@ export function ReportPhotosSection({
   const [statusLine, setStatusLine] = useState('')
   const [err, setErr] = useState('')
   const [inlineCameraOpen, setInlineCameraOpen] = useState(false)
+  const [viewer, setViewer] = useState<{ src: string; alt: string } | null>(null)
   const galleryRef = useRef<HTMLInputElement>(null)
   const pickerPendingRef = useRef(false)
   const processingRef = useRef(false)
@@ -192,6 +193,24 @@ export function ReportPhotosSection({
   useEffect(() => {
     if (count > 0 && enabled) setOpen(true)
   }, [count, enabled])
+
+  useEffect(() => {
+    if (!open) setViewer(null)
+  }, [open])
+
+  useEffect(() => {
+    if (!viewer) return
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setViewer(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prevOverflow
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [viewer])
 
   useEffect(() => {
     return () => {
@@ -318,6 +337,7 @@ export function ReportPhotosSection({
             ? await deleteProtocolPhoto(entityId, photoId)
             : await deleteReportPhoto(entityId, photoId)
       setPhotos((prev) => prev.filter((p) => p.id !== photoId))
+      setViewer(null)
       if (res.count === 0) setOpen(false)
       await closeOverlaySoft({ success: true, message: 'Foto entfernt.', source: 'inline-camera' })
     } catch (ex) {
@@ -424,13 +444,20 @@ export function ReportPhotosSection({
                       className="relative aspect-square overflow-hidden rounded-lg border border-zinc-700 bg-zinc-950"
                     >
                       {src ? (
-                        <img
-                          src={src}
-                          alt={photo.originalFilename || 'Baustellenfoto'}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                          decoding="async"
-                        />
+                        <button
+                          type="button"
+                          className="block h-full w-full"
+                          aria-label="Foto vergrößern"
+                          onClick={() => setViewer({ src, alt: photo.originalFilename || 'Baustellenfoto' })}
+                        >
+                          <img
+                            src={src}
+                            alt={photo.originalFilename || 'Baustellenfoto'}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
+                          />
+                        </button>
                       ) : (
                         <div className="flex h-full items-center justify-center text-xs text-zinc-600">Foto</div>
                       )}
@@ -439,7 +466,10 @@ export function ReportPhotosSection({
                         disabled={busy || writeBlocked}
                         aria-label="Foto entfernen"
                         className="absolute right-1 top-1 rounded-md bg-black/70 px-1.5 py-0.5 text-xs text-zinc-200 hover:bg-red-900/80 disabled:opacity-40"
-                        onClick={() => void removePhoto(photo.id)}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void removePhoto(photo.id)
+                        }}
                       >
                         ✕
                       </button>
@@ -459,6 +489,32 @@ export function ReportPhotosSection({
           </div>
         ) : null}
       </section>
+
+      {viewer ? (
+        <div
+          className="fixed inset-0 z-[120] flex flex-col bg-black/92 px-3 pb-[calc(1rem+env(safe-area-inset-bottom,0px))] pt-[calc(0.75rem+env(safe-area-inset-top,0px))]"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Baustellenfoto"
+          onClick={() => setViewer(null)}
+        >
+          <div className="mb-3 flex justify-end">
+            <button
+              type="button"
+              className="rounded-xl border border-white/[0.12] bg-black/50 px-3 py-1.5 text-xs font-medium text-zinc-200"
+              onClick={(e) => {
+                e.stopPropagation()
+                setViewer(null)
+              }}
+            >
+              Schließen
+            </button>
+          </div>
+          <div className="flex min-h-0 flex-1 items-center justify-center">
+            <img src={viewer.src} alt={viewer.alt} className="max-h-full max-w-full object-contain" />
+          </div>
+        </div>
+      ) : null}
     </>
   )
 }
