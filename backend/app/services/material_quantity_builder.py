@@ -409,12 +409,15 @@ def _attach_quantity_if_missing(material: str, raw_text: str) -> str:
         return MaterialLine(_norm_qty(m.group("qty") or ""), unit, desc).display()
 
     if mat_key in {"splitt", "split"} or mat_key.startswith("splitt"):
-        wm = _WORD_KUBIK_MAT.search(probe)
-        if wm:
+        for wm in _WORD_KUBIK_MAT.finditer(probe):
+            matched_mat = (wm.group("mat") or "").casefold()
+            if matched_mat not in {"split", "splitt"}:
+                continue
             qty = _word_to_qty(wm.group("qty") or "")
             label = _material_label_from_match(wm.group("mat") or "", wm.group("frac"))
             if qty and label:
                 return MaterialLine(_norm_qty(qty), "m³", label).display()
+            break
 
     return mat
 

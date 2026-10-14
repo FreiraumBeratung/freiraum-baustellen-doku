@@ -88,6 +88,10 @@ _IMPLICIT_PROBLEM_INTERRUPT = re.compile(
     r"|(?:leider|wegen)\s+[^.!?]{0,40}material\s+knapp"
     r"|keine\s+arbeit\s+wegen\s+regen"
     r"|viel\s+geregnet"
+    r"|ganzen?\s+nachmittag\s+geregnet"
+    r"|pflasterarbeiten\s+abbrechen"
+    r"|gartenarbeiten\s+abbrechen"
+    r"|geregnet[^.!?]{0,80}(?:pflaster)?arbeiten\s+abbrechen"
     r"|geregnet[^.!?]{0,50}arbeit\s+stopp"
     r"|arbeit\s+stopp"
     r"|(?:halbverband|drittelverband)[^.!?]{0,160}?zuschnitt[^.!?]{0,80}?verlaufen"
@@ -432,6 +436,8 @@ def _implicit_problem_clause(match_text: str) -> str:
     if re.search(r"weil\s+es|angefangen\s+hat\s+zu\s+regnen|geregnet\s+hat|viel\s+geregnet", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
     if re.search(r"geregnet", low) and re.search(r"stopp|gestoppt|abbrechen|beenden", low):
+        return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
+    if re.search(r"\bgeregnet\b", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")
     if re.search(r"abbrechen|abrechnen|stoppen", low) and re.search(r"regen|angefangen\s+hat\s+zu", low):
         return _polish_problem_clause("Arbeiten wegen Regen unterbrochen")

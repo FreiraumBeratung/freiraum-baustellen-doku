@@ -95,6 +95,18 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"bauherr(?:in)?\s+(?:hat\s+)?(?:gemeckert|meckert|beschwert)[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kundin\s+hat\s+(?:die\s+)?(?:stein)?farbe\s+bestätigt[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"mit\s+dem\s+kunden?\s+abgestimmt[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"kundin\s+(?:meckert|beschwert|reklamiert)[^.!?]*",
         re.IGNORECASE,
     ),
@@ -131,11 +143,27 @@ _CUSTOMER_TAIL_PATTERNS: tuple[re.Pattern[str], ...] = (
         re.IGNORECASE,
     ),
     re.compile(
+        r"kunde\s+kam\s+vorbei[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kundin\s+kam\s+vorbei[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
         r"kunde\s+gred[^.!?]*",
         re.IGNORECASE,
     ),
     re.compile(
         r"kunde\s+war\s+da(?:\s+und\s+happy)?[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kunde\s+kurz\s+da[^.!?]*",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"kundin\s+kurz\s+da[^.!?]*",
         re.IGNORECASE,
     ),
     re.compile(

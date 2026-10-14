@@ -90,17 +90,86 @@ def _repair_pflaster_rehab_asr(text: str) -> str:
     return out
 
 
+def _repair_galabau_garden_asr(text: str) -> str:
+    """Whisper: Hochbeet, Gabionen, Mutterboden, Grünschnitt, Tropfbewässerung."""
+    out = str(text or "")
+    out = re.sub(r"\bhoch\s*beet(?:e)?\b", "hochbeet", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgabio\s*nen\b", "gabionen", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bmutter\s*boden\b", "mutterboden", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bober\s*boden\b", "oberboden", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgr(?:ü|ue)n\s*schnitt\b", "grünschnitt", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bdoppel\s*stab\s*matten(?:\s*zaun)?\b", "doppelstabmattenzaun", out, flags=re.IGNORECASE)
+    out = re.sub(r"\btropf\s*bew(?:ä|ae)sserung\b", "tropfbewässerung", out, flags=re.IGNORECASE)
+    out = re.sub(r"\btrocken\s*mauer\b", "trockenmauer", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bfind\s*linge?\b", "findlinge", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bteich\s*folie\b", "teichfolie", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bunkraut\s*vlies\b", "unkrautvlies", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bwurzel\s*stock\b", "wurzelstock", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bsand\s*kasten\b", "sandkasten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgarten\s*tor\b", "gartentor", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bhof\s*ablauf\b", "hofablauf", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bwasch\s*beton\s*platten\b", "waschbetonplatten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgranit\s*pflaster\b", "granitpflaster", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bfugen\s*sand\b", "fugensand", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bedel\s*splitt\b", "edelsplitt", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bregen\s*tonne\b", "regentonne", out, flags=re.IGNORECASE)
+    out = re.sub(r"\btief\s*bord\s*steine?n?\b", "tiefbordsteine", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bruettel\s*platte\b", "rüttelplatte", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bmini\s*bagger\b", "minibagger", out, flags=re.IGNORECASE)
+    out = re.sub(r"\ban\s*gelegt\b", "angelegt", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bge\s*fuellt\b", "gefüllt", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bausgefr(?:ä|ae)\s*st\b", "ausgefräst", out, flags=re.IGNORECASE)
+    out = re.sub(r"\brasen\s*gitter\s*steine?n?\b", "rasengittersteine", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bsitz\s*mauer\b", "sitzmauer", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bblock\s*stufen\b", "blockstufen", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bsicker\s*schacht\b", "sickerschacht", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bm(?:ä|ae)h\s*kante\b", "mähkante", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bversenk\s*regner\b", "versenkregner", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bform\s*schnitt\b", "formschnitt", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bfeuer\s*stelle\b", "feuerstelle", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bzaun\s*pfosten\b", "zaunpfosten", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bstelz\s*lager\b", "stelzlager", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgarten\s*haus\b", "gartenhaus", out, flags=re.IGNORECASE)
+    out = re.sub(r"\boe?ko\s*pflaster\b", "ökopflaster", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bbetonstein\s*pflaster\b", "betonsteinpflaster", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bpe[-\s]*rohr\b", "pe-rohr", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bverbund\s*steine?n?\b", "verbundsteine", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bgeo\s*gitter\b", "geogitter", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bquell\s*stein(?:e)?\b", "quellstein", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bschwimm\s*teich\b", "schwimmteich", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bbach\s*lauf\b", "bachlauf", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bholz\s*sichtschutz\s*zaun\b", "holzsichtschutzzaun", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bwpc[-\s]*zaun\s*felder\b", "wpc-zaunfelder", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bspiel\s*rasen\b", "spielrasen", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bthuja\s*hecke\b", "thujahecke", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bsplitt\s*weg\b", "splittweg", out, flags=re.IGNORECASE)
+    out = re.sub(r"\bfilter\s*vlies\b", "filtervlies", out, flags=re.IGNORECASE)
+    return out
+
+
 def _split_pflaster_rehab_runon(text: str) -> str:
     """Lange Pflaster-Sanierungsdiktate in Arbeitsschritte trennen."""
     t = str(text or "")
     t = re.sub(
-        r"\b(aufgenommen(?:\s+im\s+abgesackten\s+bereich)?)\s+(?=pflaster\s+gestapelt)",
+        r"\b(aufgenommen(?:\s+im\s+abgesackten\s+bereich)?)\s+(?=pflaster\s+gestapelt|gestapelt\b)",
         r"\1. ",
         t,
         flags=re.IGNORECASE,
     )
     t = re.sub(
         r"\b(gestapelt(?:\s+seitlich)?)\s+(?=schotter\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(aufgenommen)\s+(?=schotter\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
+    t = re.sub(
+        r"\b(nachgestopft)\s+(?=pflaster\b)",
         r"\1. ",
         t,
         flags=re.IGNORECASE,
@@ -231,6 +300,7 @@ def _split_chunks(text: str) -> list[str]:
     t = _repair_tiefbordstein_asr(t)
     t = _repair_spritzschutz_lstein_asr(t)
     t = _repair_pflaster_rehab_asr(t)
+    t = _repair_galabau_garden_asr(t)
     # Whisper-Klebung vor dem strukturellen Splitten aufloesen, damit Verb-Uebergaenge
     # (z.B. "ausgeschachtet die KG-Rohre verlegt") sauber getrennt werden.
     t = re.sub(r"\baus\s+geschachtet\b", "ausgeschachtet", t, flags=re.IGNORECASE)
@@ -1803,6 +1873,13 @@ def _split_chunks(text: str) -> list[str]:
         flags=re.IGNORECASE,
     )
     t = re.sub(r"\bzudem\b", ".", t, flags=re.IGNORECASE)
+    t = re.sub(r"\b(morgens|nachmittags)\b", r". \1", t, flags=re.IGNORECASE)
+    t = re.sub(
+        r"\b(gemäht|gemaeht)\s+(?=getrimmt\b)",
+        r"\1. ",
+        t,
+        flags=re.IGNORECASE,
+    )
     t = _split_pflaster_rehab_runon(t)
     t = re.sub(
         r"\b(schotter\s+verteilt)\s+(?=zusätzlich|zusaetzlich|danach|anschließend|anschliessend)\b",
@@ -2036,6 +2113,9 @@ _TRANSITION_VERBS = (
     "abgerüttelt",
     "abgeruettelt",
     "nachgeschottert",
+    "nachgestopft",
+    "zersägt",
+    "zersaegt",
     "zugelegt",
     "abgezogen",
     "behandelt",
@@ -2093,6 +2173,8 @@ _FOLLOW_NOUNS = (
     "pflanzkuebel",
     "schotter",
     "splitt",
+    "splittweg",
+    "hochbeet",
     "sand",
     "boden",
     "fläche",
@@ -2285,6 +2367,55 @@ _FOLLOW_NOUNS = (
     "handstampfer",
     "kettensäge",
     "kettensaege",
+    "palisaden",
+    "palisade",
+    "gabionen",
+    "hochbeet",
+    "mutterboden",
+    "oberboden",
+    "grünschnitt",
+    "gruenschnitt",
+    "doppelstabmattenzaun",
+    "tropfbewässerung",
+    "tropfbewaesserung",
+    "trockenmauer",
+    "findlinge",
+    "teichfolie",
+    "unkrautvlies",
+    "wurzelstock",
+    "sandkasten",
+    "gartentor",
+    "rigole",
+    "hofablauf",
+    "kiesbeet",
+    "regentonne",
+    "tiefbordsteine",
+    "waschbetonplatten",
+    "trittplatten",
+    "fugensand",
+    "rasengittersteine",
+    "sitzmauer",
+    "blockstufen",
+    "sickerschacht",
+    "zisterne",
+    "mähkante",
+    "maehkante",
+    "versenkregner",
+    "formschnitt",
+    "feuerstelle",
+    "zaunpfosten",
+    "stelzlager",
+    "gartenhaus",
+    "gully",
+    "klinker",
+    "ökopflaster",
+    "oekopflaster",
+    "verbundsteine",
+    "geogitter",
+    "quellstein",
+    "schwimmteich",
+    "bachlauf",
+    "splittweg",
 )
 
 
@@ -2393,6 +2524,7 @@ def _normalize_for_match(text: str) -> str:
     out = _repair_tiefbordstein_asr(out)
     out = _repair_spritzschutz_lstein_asr(out)
     out = _repair_pflaster_rehab_asr(out)
+    out = _repair_galabau_garden_asr(out)
     out = re.sub(r"\bver\s+legt\b", "verlegt", out)
     out = re.sub(r"\bfrä\s+sen\b", "fräsen", out)
     out = re.sub(r"\basphalt\s+iert\b", "asphaltiert", out)
@@ -2745,6 +2877,16 @@ def _is_keramikterrasse_context(t: str, *, raw_text: str = "") -> bool:
     probe = f"{t} {raw_text}".casefold()
     if re.search(r"\bkeramikterrasse\b", probe):
         return True
+    if re.search(r"\bkeramik(?:platte(?:n)?)?\b", t) and re.search(
+        r"\b(pool|poolumrandung|stelzlager|garten|terrasse)\b",
+        probe,
+    ):
+        return True
+    if re.search(r"\b(poolumrandung|pool)\b", t) and re.search(
+        r"\b(keramik(?:platte(?:n)?)?|platten)\b",
+        t,
+    ):
+        return True
     if re.search(r"\bterrasse\b", probe) and re.search(
         r"\b(keramik(?:platte(?:n)?)?|keramikplatte|feinsteinzeug(?:platten?)?|platten)\b",
         probe,
@@ -3010,6 +3152,24 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if re.match(r"(?:und\s+)?genau das war alles\b", t):
         return None
 
+    if re.search(r"\baufgenommen\b", t) and re.search(
+        r"\bpflaster",
+        f"{t} {raw_text}".casefold(),
+    ) and not re.search(r"holzleisten|ilex|einkehrmaterial|palisaden", t):
+        probe = f"{t} {raw_text}".casefold()
+        text = (
+            "Pflasterfläche im abgesackten Bereich aufgenommen"
+            if re.search(r"\babgesackt", probe)
+            else "Pflasterfläche aufgenommen"
+        )
+        return CanonicalActivity("pflasterflaeche_aufgenommen", text, 118.0, False)
+    if re.search(r"\bgestapelt\b", t) and re.search(
+        r"\bpflaster",
+        f"{t} {raw_text}".casefold(),
+    ) and not re.search(r"holzleisten|ilex|einkehrmaterial", t):
+        probe = f"{t} {raw_text}".casefold()
+        text = "Pflaster seitlich gestapelt" if re.search(r"\bseitlich\b", probe) else "Pflaster gestapelt"
+        return CanonicalActivity("pflaster_gestapelt", text, 117.0, False)
     if "einkehrmaterial" in t and re.search(
         r"\b(eingearbeitet|eingebracht|eingebaut|eingekehrt|verwendet|gemacht)\b",
         t,
@@ -3160,8 +3320,33 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         return CanonicalActivity("geruestabbau", _geruestabbau_label(t), 84.0, False)
     if re.search(r"\b(bodenablauf|ablaufrinne|duschrinne)\b", t) and re.search(r"\b(eingebaut|montiert|gesetzt)\b", t):
         return CanonicalActivity("bodenablauf_eingebaut", "Bodenablauf eingebaut", 71.0, False)
+    if re.search(r"\btrockenmauer\b", t) and re.search(
+        r"\b(gesetzt|gebaut|hergestellt|gemauert|verlegt)\b",
+        t,
+    ):
+        return CanonicalActivity("trockenmauer_gesetzt", "Trockenmauer gesetzt", 81.0, False)
+    if re.search(r"\bsitzmauer\b", t) and re.search(
+        r"\b(gebaut|gesetzt|hergestellt|gemauert)\b",
+        t,
+    ):
+        label = (
+            "Sitzmauer aus Naturstein gebaut"
+            if re.search(r"\bnaturstein\b", t)
+            else "Sitzmauer gebaut"
+        )
+        return CanonicalActivity("sitzmauer_gebaut", label, 81.0, False)
+    if re.search(r"\bklinker\b", t) and re.search(r"\b(verlegt|gelegt|gesetzt)\b", t):
+        return CanonicalActivity("klinker_verlegt", "Klinker verlegt", 82.0, False)
+    if re.search(r"\brasengitter(?:steine?n?)?\b", t) and re.search(
+        r"\b(gesetzt|verlegt|eingebaut)\b",
+        t,
+    ):
+        return CanonicalActivity("rasengittersteine_gesetzt", "Rasengittersteine gesetzt", 83.0, False)
     if re.search(r"\bnaturstein(?:platte(n)?)?\b", t) and re.search(r"\b(verlegt|gelegt|gesetzt|gemacht)\b", t):
         qty = _extract_qty_m2(t) or _extract_qty_m2(raw_text)
+        if re.search(r"\b(schwimmteich|teich|bachlauf)\b", t):
+            text = "Naturstein am Teich gesetzt"
+            return CanonicalActivity("naturstein_verlegt", text, 70.0, False)
         text = f"{_qty_prefix(raw_text)}{qty} m² Naturstein verlegt" if qty else "Naturstein verlegt"
         return CanonicalActivity("naturstein_verlegt", text, 70.0, bool(qty))
     if "silikonfugen" in t or (
@@ -3213,17 +3398,26 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
     if re.search(r"\b(?:l-steine?n?|lsteine?n?)\b", t) and re.search(
         r"\b(gesetzt|gestellt|verlegt|gelegt|verbaut|eingebaut|gemacht)\b",
         t,
+    ) and not (
+        re.search(r"hinterf(?:ü|ue)llung", t)
+        and not re.search(r"\b(gesetzt|gestellt|verlegt|gelegt|verbaut|eingebaut)\b", t)
     ):
         qty = _extract_l_stein_count(t) or _extract_l_stein_count(str(raw_text or ""))
         text = f"{qty} L-Steine gesetzt" if qty else "L-Steine gesetzt"
         return CanonicalActivity("l_steine_gesetzt", text, 101.0, False)
     if re.search(r"\bpodest\b", t) and re.search(
-        r"\bwassertonne\b",
+        r"\b(wassertonne|regentonne)\b",
         f"{t} {raw_text}".casefold(),
     ):
+        probe = f"{t} {raw_text}".casefold()
+        label = (
+            "Podest für die Regentonne gesetzt"
+            if re.search(r"\bregentonne\b", probe)
+            else "Podest für Wassertonne gesetzt"
+        )
         return CanonicalActivity(
             "wassertonnen_podest_gesetzt",
-            "Podest für Wassertonne gesetzt",
+            label,
             102.0,
             False,
         )
@@ -3264,21 +3458,31 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
-    if ("pflanzen" in t or "bäume" in t or "baeume" in t or "sträucher" in t or "straeucher" in t) and re.search(
-        r"\b(gesetzt|gepflanzt|eingepflanzt|bepflanzt)\b",
-        t,
+    if re.search(r"\bkanten\b", t) and re.search(r"\bgestochen\b", t) and "kantenstein" not in t:
+        return CanonicalActivity("rasen_getrimmt", "Rasen getrimmt", 77.0, False)
+    if re.search(r"\b(gepflanzt|eingepflanzt|bepflanzt)\b", t) or (
+        re.search(
+            r"\b(pflanzen|b(?:ä|ae)ume|str(?:ä|ae)ucher|liguster|kirschlorbeer|stauden|hortensien|thuja|rosen)\b",
+            t,
+        )
+        and re.search(r"\b(gesetzt|gepflanzt|eingepflanzt|bepflanzt)\b", t)
     ):
         return CanonicalActivity("pflanzen_gepflanzt", "Pflanzen gesetzt", 74.0, False)
-    if "unkraut" in t and re.search(
+    if (
+        "unkraut" in t or "wildwuchs" in t or "brombeer" in t
+    ) and re.search(
         r"\b(entfernt|gejätet|gejaetet|gezupft|beseitigt|gehackt|gemacht|weg gemacht|weg|durchgeführt|durchgefuehrt|gerupft)\b",
         t,
     ):
         return CanonicalActivity("unkraut_entfernt", "Unkraut entfernt", 74.0, False)
     if "laub" in t and re.search(r"\b(entfernt|gefegt|geräumt|geraeumt|beseitigt|gemacht|aufgesammelt)\b", t):
         return CanonicalActivity("laub_entfernt", "Laub entfernt", 72.0, False)
-    if re.search(r"\bpalisad(?:e|en)\b", t) and re.search(
-        r"\b(gesetzt|gestellt|montiert|eingebaut|verlegt|gebaut|gemacht|eingesetzt)\b",
-        t,
+    if re.search(r"\bpalisad(?:e|en)\b", t) and (
+        re.search(
+            r"\b(gesetzt|gestellt|montiert|eingebaut|verlegt|gebaut|gemacht|eingesetzt)\b",
+            t,
+        )
+        or re.search(r"\bbeton\b", t)
     ):
         qty_lfm = _extract_qty_lfm(t)
         if qty_lfm:
@@ -3332,7 +3536,8 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         r"\b(verlegt|eingebaut|eingebracht|verteilt|ausgelegt)\b",
         t,
     ):
-        return CanonicalActivity("geotextil_verlegt", "Vlies verteilt", 78.0, False)
+        label = "Geotextil verlegt" if re.search(r"\bgeotextil\b", t) else "Vlies verteilt"
+        return CanonicalActivity("geotextil_verlegt", label, 78.0, False)
     # Drainage-Splitt vor generischem Splitt (sonst verschluckt der Splitt-Match den Chunk)
     if re.search(r"\bdrainagesplitt\b", t) and re.search(
         r"\b(eingebaut|eingebracht|verteilt|verarbeitet|verdichtet|reingemacht|rein gemacht)\b",
@@ -3448,6 +3653,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         and re.search(r"\b(gesetzt|verlegt|montiert)\b", t)
     ):
         return CanonicalActivity("rinne_gesetzt", "Rinne gesetzt", 81.0, False)
+    if re.search(r"\bregentonne\b", t) and re.search(
+        r"\b(angeschlossen|gesetzt|montiert)\b",
+        t,
+    ):
+        return CanonicalActivity("regentonne_angeschlossen", "Regentonne angeschlossen", 71.5, False)
     if "fallrohr" in t and re.search(r"\b(angeschlossen|montiert|gesetzt)\b", t):
         return CanonicalActivity("fallrohr_angeschlossen", "Fallrohr angeschlossen", 76.5, False)
     if re.search(r"\b(jacuzzi|stellfl(?:ä|ae)che)\b", t) and re.search(
@@ -3492,7 +3702,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             else "Terrassenplatten verlegt"
         )
         return CanonicalActivity("terrassenplatten_verlegt", text, 101.0, bool(qty))
-    if re.search(r"\bpflasterfl(?:ä|ae)che\b", t) and re.search(r"\baufgenommen\b", t):
+    if re.search(r"\bpflaster(?:fl(?:ä|ae)che)?\b", t) and re.search(r"\baufgenommen\b", t):
         probe = f"{t} {raw_text}".casefold()
         text = (
             "Pflasterfläche im abgesackten Bereich aufgenommen"
@@ -3551,7 +3761,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         if re.search(r"\bbauschutt\b", str(raw_text or "").casefold()):
             return CanonicalActivity("bauschutt_entsorgt", _bauschutt_entsorgt_label(t, raw_text), 108.0, False)
         return CanonicalActivity("stegplatten_entsorgt", "Plastikstegplatten entsorgt", 107.0, False)
-    if "pflaster" in t:
+    if "pflaster" in t or "verbundstein" in t:
         if re.search(r"\bnach\s+muster\b", t) and re.search(r"\b(verlegt|gelegt|zugelegt)\b", t):
             return CanonicalActivity(
                 "pflaster_verlegt",
@@ -3572,7 +3782,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         )
         _pflaster_done = bool(
             re.search(
-                r"\b(verlegt|gelegt|zugelegt|fertig\s+gestellt|fertiggestellt|angelegt|erstellt)\b",
+                r"\b(verlegt|gelegt|zugelegt|fertig\s+gestellt|fertiggestellt|angelegt|erstellt|gepflastert)\b",
                 t,
             )
             or (
@@ -3602,9 +3812,17 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         qty = _extract_qty_m2(t)
         text = f"{_qty_prefix(raw_text)}{qty} m² Gartenmauer gebaut" if qty else "Gartenmauer gebaut"
         return CanonicalActivity("gartenmauer_gebaut", text, 95.0, bool(qty))
+    _backfill_work = re.split(r"\boffen\b", t, maxsplit=1, flags=re.IGNORECASE)[0]
+    if re.search(r"hinterf(?:ü|ue)llung", _backfill_work) and "schotter" in _backfill_work:
+        label = (
+            "Hinterfüllung der L-Steine mit Schotter"
+            if re.search(r"\b(?:l-steine?n?|lsteine?n?)\b", _backfill_work)
+            else "Hinterfüllung mit Schotter"
+        )
+        return CanonicalActivity("schotter_eingebaut", label, 83.0, False)
     if "schotter" in t and "schottertragschicht" not in t and (
         re.search(
-            r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt|eingearbeitet)\b",
+            r"\b(eingebaut|verarbeitet|eingebracht|verdichtet|reingemacht|rein gemacht|rein|verwendet|verteilt|eingearbeitet|nachgestopft|angelegt)\b",
             t,
         )
         or re.search(
@@ -3641,9 +3859,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             t,
         )
         _splitt_install = re.search(
-            r"\b(eingebaut|verteilt|verdichtet|eingebracht|abgezogen|verarbeitet|aufgebracht|aufgetragen|reingemacht|rein gemacht|verwendet|verlegt|gesetzt)\b",
+            r"\b(eingebaut|verteilt|verdichtet|eingebracht|abgezogen|verarbeitet|aufgebracht|aufgetragen|reingemacht|rein gemacht|verwendet|verlegt|gesetzt|darauf|aufgef(?:ü|ue)llt|beschwert)\b",
             t,
         )
+        if "splittweg" in t:
+            _splitt_install = True
         if _splitt_delivery and not _splitt_install:
             return None
         # Nur Korngrößen-/Materialnennung ohne Einbauverb (z. B. „Splitt 16/22“) → Material, keine Tätigkeit.
@@ -3725,6 +3945,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         else:
             label = "Schilder angebracht"
         return CanonicalActivity("schilder_angebracht", label, 98.0, False)
+    if re.search(r"\bgartentor\b", t) and re.search(
+        r"\b(montiert|gesetzt|eingebaut)\b",
+        t,
+    ):
+        return CanonicalActivity("gartentor_montiert", "Gartentor montiert", 74.5, False)
     if re.search(r"\bfahrradst(?:ä|ae)nder\b", t) and re.search(
         r"\b(befestigt|montiert|angebracht|gesetzt)\b",
         t,
@@ -3735,11 +3960,59 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         else:
             label = "Fahrradständer befestigt"
         return CanonicalActivity("fahrradstaender_befestigt", label, 97.0, False)
-    if re.search(r"\b(zaun|sichtschutzzaun|sichtschutz)\b", t) and re.search(
+    if re.search(r"\bzaunpfosten\b", t) and re.search(
+        r"\b(gesetzt|eingegraben|vergossen|betoniert|montiert)\b",
+        t,
+    ):
+        return CanonicalActivity("zaunpfosten_gesetzt", "Zaunpfosten gesetzt", 78.0, False)
+    if re.search(r"\b(zaunfelder|wpc[- ]?zaun)\b", t) and re.search(
         r"\b(gesetzt|montiert|gestellt|aufgebaut|eingebaut|verlegt)\b",
         t,
     ):
+        return CanonicalActivity("zaun_gesetzt", "WPC-Zaunfelder montiert", 69.0, False)
+    if ("zaun" in t or "sichtschutz" in t) and re.search(
+        r"\b(gesetzt|montiert|gestellt|aufgebaut|eingebaut|verlegt)\b",
+        t,
+    ) and not re.search(
+        r"\b(?:am|vom|vor(?:m)?|entlang(?:\s+des)?)\s+zaun",
+        t,
+    ):
+        if "sichtschutz" in t:
+            return CanonicalActivity("zaun_gesetzt", "Sichtschutzzaun gesetzt", 69.0, False)
         return CanonicalActivity("zaun_gesetzt", "Zaun gesetzt", 69.0, False)
+    if "gartenhaus" in t and re.search(
+        r"\b(aufgestellt|gebaut|montiert|errichtet|gestellt)\b",
+        t,
+    ):
+        return CanonicalActivity("gartenhaus_aufgestellt", "Gartenhaus aufgestellt", 69.0, False)
+    if re.search(r"\b(gully|hofgully)\b", t) and re.search(
+        r"\b(gesetzt|montiert|eingebaut|angeschlossen)\b",
+        t,
+    ) and not re.search(r"\bstra(?:ß|ss)enabl", t):
+        return CanonicalActivity("gully_gesetzt", "Gully gesetzt", 82.0, False)
+    if re.search(r"\bsickerschacht\b", t) and re.search(
+        r"\b(gesetzt|eingebaut|verlegt|angeschlossen)\b",
+        t,
+    ):
+        return CanonicalActivity("sickerschacht_gesetzt", "Sickerschacht gesetzt", 78.0, False)
+    if re.search(r"\bgeogitter\b", t) and re.search(
+        r"\b(verlegt|ausgelegt|eingebaut|gelegt)\b",
+        t,
+    ):
+        return CanonicalActivity("geogitter_verlegt", "Geogitter verlegt", 76.0, False)
+    if re.search(r"\b(quellstein|bachlauf|schwimmteich)\b", t) and re.search(
+        r"\b(gesetzt|gelegt|angelegt|gebaut|hergestellt)\b",
+        t,
+    ):
+        return CanonicalActivity("teichbau_ausgefuehrt", "Teichbau durchgeführt", 72.0, False)
+    if re.search(r"\bmoos\b", t) and re.search(r"\b(entfernt|beseitigt|ausgestochen)\b", t):
+        label = "Moos aus dem Rasen entfernt" if "rasen" in t else "Moos entfernt"
+        return CanonicalActivity("moos_entfernt", label, 73.0, False)
+    if re.search(r"\bbaumst(?:ü|ue)cke\b", t) and re.search(
+        r"\b(zers(?:ä|ae)gt|entsorgt|zerkleinert)\b",
+        t,
+    ):
+        return CanonicalActivity("totholz_entsorgt", "Totholz entsorgt", 73.0, False)
 
     # Trockenbau — Spezialregeln vor dem allgemeinen Dämmblock
     if re.search(r"\bdoppelständerwand\b", t) and re.search(r"\b(aufgebaut|montiert|gebaut|errichtet)\b", t):
@@ -4251,7 +4524,12 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("schalung_erstellt", "Schalung erstellt", 83.0, False)
-    if re.search(r"\b(stra(ß|ss)enabl(ä|ae)uf|gully)\b", t) and re.search(
+    if re.search(r"\b(gully|hofgully)\b", t) and re.search(
+        r"\b(gesetzt|montiert|eingebaut|angeschlossen)\b",
+        t,
+    ) and not re.search(r"\bstra(?:ß|ss)enabl", t):
+        return CanonicalActivity("gully_gesetzt", "Gully gesetzt", 82.0, False)
+    if re.search(r"\bstra(ß|ss)enabl(ä|ae)uf\b", t) and re.search(
         r"\b(gesetzt|montiert|eingebaut)\b",
         t,
     ):
@@ -4269,6 +4547,11 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("graben_ausgehoben", "Graben ausgehoben", 79.0, False)
+    if re.search(r"\baushub\b", t) and re.search(
+        r"\b(gemacht|durchgeführt|durchgefuehrt|erstellt|ausgeführt|ausgefuehrt)\b",
+        t,
+    ):
+        return CanonicalActivity("graben_ausgehoben", "Aushub gemacht", 79.0, False)
     if re.search(r"\bgraben\s+zumachen\b", t) or (
         re.search(r"\bgraben\b", t) and re.search(r"\bzumachen\b", t)
     ):
@@ -4424,7 +4707,9 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
             text = f"{_qty_prefix(raw_text)}{qty} m² Pflasterfläche wiederhergestellt" if qty else "Pflasterfläche wiederhergestellt"
             return CanonicalActivity("pflasterflaeche_wiederhergestellt", text, 91.0, bool(qty))
 
-    if ("kanal" in t or "schacht" in t) and re.search(r"\b(angeschlossen|gesetzt|eingebaut|betoniert)\b", t):
+    if (
+        re.search(r"\bkanal\b", t) or re.search(r"\bsch(?:ä|ae)chte?\b", t)
+    ) and re.search(r"\b(angeschlossen|gesetzt|eingebaut|betoniert)\b", t):
         return CanonicalActivity("kanal_schacht", "Kanal-/Schachtarbeiten durchgeführt", 77.0, False)
     if re.search(r"\b(leitungstrasse|leitungs-?trasse|trasse)\b", t) and re.search(
         r"\b(hergestellt|erstellt|gebaut|angelegt|gemacht)\b",
@@ -4491,7 +4776,7 @@ def _canonicalize_chunk(chunk: str, *, raw_text: str) -> CanonicalActivity | Non
         t,
     ):
         return CanonicalActivity("rinnensteine_gesetzt", "Rinnensteine gesetzt", 82.5, False)
-    if re.search(r"\b(stra(ß|ss)enabl(ä|ae)uf|gully|einlauf|einläufe|einlaeufe)\b", t) and re.search(
+    if re.search(r"\b(stra(ß|ss)enabl(ä|ae)uf|einlauf|einläufe|einlaeufe)\b", t) and re.search(
         r"\b(gesetzt|montiert|eingebaut)\b",
         t,
     ):

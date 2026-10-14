@@ -115,6 +115,11 @@ _MATERIAL_CONFIDENCE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...], t
     (r"\bnachgeschottert\b|\bstellen nachgeschottert\b", ("Schotter",), (), ()),
     (r"\bsplitt 2/5 mm\b|\bsplitt 2/5\b", ("Splitt 2/5",), (), ()),
     (r"\bsplitt\b", ("Splitt",), (), ()),
+    (r"\bmutterboden eingebaut\b", ("Mutterboden",), (), ()),
+    (r"\bgabionen gesetzt\b", ("Gabionen",), (), ()),
+    (r"\bfugen mit fugensand gefüllt\b|\bfugen mit fugensand gefuellt\b", ("Fugensand",), (), ()),
+    (r"\bwaschbetonplatten verlegt\b", ("Waschbetonplatten",), (), ()),
+    (r"\bkiesbeet angelegt\b|\bkies eingebaut\b", ("Kies",), (), ()),
     (r"\bpflasterfl(?:ä|ae)che komplett\b|\bim drittelverband verlegt\b", ("Pflastersteine",), (), ()),
     (r"\bdichtschl(?:ä|ae)mme behandelt\b", ("Dichtschlämme",), (), ()),
     (r"\bd(?:ä|ae)mmplatte verkleidet\b", ("Dämmplatten",), (), ()),
@@ -249,6 +254,15 @@ _EXPLICIT_MATERIAL_PATTERNS: tuple[tuple[str, str], ...] = (
     (r"\bd(ü|ue)nger\b", "Dünger"),
     (r"\bstreugut\b|\bsalz\b", "Streugut"),
     (r"\bgeotextil\b|\btrennvlies\b|\bfiltervlies\b|\bvlies\b", "Geotextil"),
+    (r"\bmutterboden\b", "Mutterboden"),
+    (r"\bgabionen?\b", "Gabionen"),
+    (r"\bteichfolie\b", "Teichfolie"),
+    (r"\bfugensand\b", "Fugensand"),
+    (r"\bunkrautvlies\b", "Unkrautvlies"),
+    (r"\bfindlinge?\b", "Findlinge"),
+    (r"\bkiesbeet\b|\bkies eingebaut\b|\bkubikmeter kies\b", "Kies"),
+    (r"\bwaschbetonplatten?\b", "Waschbetonplatten"),
+    (r"\bgranitpflaster\b", "Granitpflaster"),
     (r"\bwc\b|\btoilette\b", "WC"),
     (r"\bwaschbecken\b|\bwaschtisch\b", "Waschbecken"),
     (r"\bdusche\b|\bduschwanne\b|\bduschkabine\b", "Dusche"),
@@ -703,11 +717,11 @@ _MACHINE_RULES: tuple[tuple[str, str, str, str], ...] = (
     ("dumper", r"\bdumper\b", "Dumper eingesetzt", "Dumperstunden erfassen?"),
     (
         "ruettelplatte",
-        r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b",
+        r"(?:\br(?:ü|ue)ttel(?:\s*)?platte\b|\br(?:ü|ue)ttler\b)",
         "Rüttelplatte eingesetzt",
         "Rüttelplattenstunden erfassen?",
     ),
-    ("stampfer", r"\bstampfer\b", "Stampfer eingesetzt", "Stampferstunden erfassen?"),
+    ("stampfer", r"(?<!hand )(?<!hand)\bstampfer\b", "Stampfer eingesetzt", "Stampferstunden erfassen?"),
     ("radlader", r"\bradlader\b", "Radlader eingesetzt", "Radladerstunden erfassen?"),
     (
         "walze",
@@ -1292,6 +1306,18 @@ def _ensure_l_steine_material(materials: list[str], activities: list[str]) -> li
     return _dedupe(out)
 
 
+def _ensure_splitt_from_activities(materials: list[str], activities: list[str]) -> list[str]:
+    """Splitt aus der Tätigkeit darf nicht verloren gehen, nur weil die Menge am Schotter klebt."""
+    acts = " | ".join(str(a or "") for a in activities).casefold()
+    if not re.search(r"\bsplitt\b", acts):
+        return list(materials)
+    out = [str(m).strip() for m in materials if str(m).strip()]
+    if any(re.search(r"\bsplitt\b|\bsplit\b", m.casefold()) for m in out):
+        return out
+    out.append("Splitt")
+    return _dedupe(out)
+
+
 def _enforce_explicit_optional_materials(materials: list[str], raw_text: str) -> list[str]:
     raw_probe = str(raw_text or "").casefold()
     optional_only_when_explicit: tuple[tuple[str, str], ...] = (
@@ -1676,8 +1702,8 @@ _MACHINE_DETECT_NAMES: dict[str, str] = {
     "bagger": r"(?:mini\s*)?bagger",
     "radlader": r"radlader",
     "dumper": r"dumper",
-    "ruettelplatte": r"r(?:ü|ue)ttelplatte|r(?:ü|ue)ttler",
-    "stampfer": r"stampfer",
+    "ruettelplatte": r"(?:r(?:ü|ue)ttel(?:\s*)?platte|r(?:ü|ue)ttler)",
+    "stampfer": r"(?<!hand )stampfer",
     "walze": r"walze(?:nzug)?|grabenwalze",
     "kran": r"autokran|turmdrehkran|kran",
     "lkw": r"lkw",
@@ -1720,8 +1746,8 @@ def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
     machine_patterns: dict[str, str] = {
         "bagger": r"\b(?:mini\s*)?bagger\b",
         "dumper": r"\bdumper\b",
-        "ruettelplatte": r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b",
-        "stampfer": r"\bstampfer\b",
+        "ruettelplatte": r"(?:\br(?:ü|ue)ttel(?:\s*)?platte\b|\br(?:ü|ue)ttler\b)",
+        "stampfer": r"(?<!hand )\bstampfer\b",
         "radlader": r"\bradlader\b",
         "walze": r"\bwalze(nzug)?\b|\bgrabenwalze\b",
         "kran": r"\b(autokran|turmdrehkran|kran)\b",
@@ -1737,12 +1763,12 @@ def _machine_hours_present(raw_text: str, *, machine_key: str) -> bool:
     gap = r"(?:\s+\S+){0,8}\s+"
     return bool(
         re.search(
-            machine_pattern + r"\s+(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b",
+            machine_pattern + r"\s+(\d+(?:[.,]\d+)?)\s*(h|std|stunden?)\b",
             raw,
             flags=re.IGNORECASE,
         )
         or re.search(
-            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b" + gap + machine_pattern,
+            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden?)\b" + gap + machine_pattern,
             raw,
             flags=re.IGNORECASE,
         )
@@ -1755,8 +1781,8 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
     machine_patterns: tuple[tuple[str, str], ...] = (
         ("Bagger", r"\b(?:mini\s*)?bagger\b"),
         ("Dumper", r"\bdumper\b"),
-        ("Rüttelplatte", r"\br(ü|ue)ttelplatte\b|\br(ü|ue)ttler\b"),
-        ("Stampfer", r"\bstampfer\b"),
+        ("Rüttelplatte", r"(?:\br(?:ü|ue)ttel(?:\s*)?platte\b|\br(?:ü|ue)ttler\b)"),
+        ("Stampfer", r"(?<!hand )\bstampfer\b"),
         ("Radlader", r"\bradlader\b"),
         ("Walze", r"\b(?:walze(?:nzug)?|grabenwalze)\b"),
         ("Kran", r"\b(?:autokran|turmdrehkran|kran)\b"),
@@ -1766,21 +1792,21 @@ def _extract_machine_hours(raw_text: str) -> list[str]:
     gap = r"(?:\s+\S+){0,8}\s+"
     for label, pattern in machine_patterns:
         m_after = re.search(
-            pattern + r"\s+(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b",
+            pattern + r"\s+(?P<hrs>\d+(?:[.,]\d+)?)\s*(?:h|std|stunden?)\b",
             raw,
             flags=re.IGNORECASE,
         )
-        if m_after and m_after.group(1):
-            hours = m_after.group(1).replace(".", ",")
+        if m_after and m_after.group("hrs"):
+            hours = m_after.group("hrs").replace(".", ",")
             out.append(f"{label}: {hours} h")
             continue
         m_before = re.search(
-            r"\b(\d+(?:[.,]\d+)?)\s*(h|std|stunden)\b" + gap + pattern,
+            r"\b(?P<hrs>\d+(?:[.,]\d+)?)\s*(?:h|std|stunden?)\b" + gap + pattern,
             raw,
             flags=re.IGNORECASE,
         )
-        if m_before and m_before.group(1):
-            hours = m_before.group(1).replace(".", ",")
+        if m_before and m_before.group("hrs"):
+            hours = m_before.group("hrs").replace(".", ",")
             out.append(f"{label}: {hours} h")
     return _dedupe(out)
 
@@ -1906,7 +1932,13 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
             return True
         return False
     if "pflanzen gesetzt" in low:
-        return bool(re.search(r"\bpflanz", raw) and re.search(r"(gesetzt|gepflanzt|bepflanzt|eingepflanzt)", raw))
+        return bool(
+            re.search(
+                r"pflanz|liguster|kirschlorbeer|b(?:ä|ae)ume|stauden|hortensien|thuja|rosen",
+                raw,
+            )
+            and re.search(r"(gesetzt|gepflanzt|bepflanzt|eingepflanzt)", raw)
+        )
     if "hecke geschnitten" in low:
         return bool(
             re.search(r"\b(hecken?|str(ä|ae)ucher)\b", raw, flags=re.IGNORECASE)
@@ -1918,17 +1950,21 @@ def _activity_is_supported_by_raw(activity: str, raw: str, all_activities: list[
         )
     if "rasen gemäht" in low:
         return bool(
-            re.search(r"\brasen\b", raw)
+            re.search(r"rasen", raw)
             and re.search(r"(gemäht|gemaeht|gemacht|mähen|maehen|geschnitten)", raw, flags=re.IGNORECASE)
         )
     if "rasen getrimmt" in low:
         return bool(
-            re.search(r"\brasen\b", raw)
-            and re.search(r"(getrimmt|freigeschnitten|freischneiden|nachgeschnitten)", raw, flags=re.IGNORECASE)
+            re.search(r"rasen|kanten", raw)
+            and re.search(
+                r"(getrimmt|freigeschnitten|freischneiden|nachgeschnitten|gestochen)",
+                raw,
+                flags=re.IGNORECASE,
+            )
         )
     if "unkraut entfernt" in low:
         return bool(
-            re.search(r"\bunkraut\b", raw, flags=re.IGNORECASE)
+            re.search(r"unkraut|wildwuchs|brombeer", raw, flags=re.IGNORECASE)
             and re.search(
                 r"(entfernt|gejätet|gejaetet|gezupft|zupfen|weg gemacht|weg|gemacht|gehackt|gerupft|beseitigt)",
                 raw,
@@ -2050,6 +2086,11 @@ def _drop_runon_noise_activities(activities: list[str]) -> list[str]:
         if low.startswith("ja also vom tag her "):
             continue
         if re.search(r"\bfeierabend\b", low):
+            continue
+        if re.search(r"\bgeregnet\b", low) and re.search(r"\b(abbrechen|abrechnen|unterbrochen)\b", low) and not re.search(
+            r"\b(verlegt|gesetzt|eingebaut|aufgenommen|gestapelt)\b",
+            low,
+        ):
             continue
         out.append(str(act))
     return out
@@ -2285,6 +2326,7 @@ def apply_quality_filter(input_data: dict[str, Any], structured: dict[str, Any])
     materials = _prefer_quantified_materials(materials)
     materials = _drop_putz_layer_material_echo(materials, activities)
     materials = _ensure_l_steine_material(materials, activities)
+    materials = _ensure_splitt_from_activities(materials, activities)
     activities = _ensure_activity_material_consistency(activities, materials, raw_text)
     activities = _drop_material_echo_activities(activities, materials)
     material_suggestions = _build_material_suggestions(activities, materials, raw_text)
