@@ -115,6 +115,11 @@ export function LoginPage() {
           <BigButton type="submit" disabled={loading}>
             {loading ? '…' : 'Einloggen'}
           </BigButton>
+          <p className="text-center text-sm text-zinc-500">
+            <Link className="font-medium text-orange-400 hover:underline" to="/passwort-vergessen">
+              Passwort vergessen?
+            </Link>
+          </p>
         </form>
         {import.meta.env.DEV ? (
           <div className="mt-4 border-t border-zinc-800 pt-4">

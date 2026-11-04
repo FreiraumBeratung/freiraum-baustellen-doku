@@ -12,6 +12,7 @@ const ACCOUNT_ROLE_KEY = 'freiraum_baustellen_account_role'
 const PERMISSIONS_KEY = 'freiraum_baustellen_permissions'
 const FIRM_MODULES_KEY = 'freiraum_baustellen_firm_modules'
 const TENANT_ID_KEY = 'freiraum_baustellen_tenant_id'
+const MUST_CHANGE_PASSWORD_KEY = 'freiraum_baustellen_must_change_password'
 
 function viteApiBaseOverride(): string | undefined {
   const t = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim().replace(/\/$/, '')
@@ -85,6 +86,7 @@ export function clearToken() {
   clearPermissions()
   clearFirmModules()
   clearTenantId()
+  clearMustChangePassword()
 }
 
 export function getIsAdmin(): boolean {
@@ -164,6 +166,19 @@ export function clearTenantId() {
   localStorage.removeItem(TENANT_ID_KEY)
 }
 
+export function getMustChangePassword(): boolean {
+  return localStorage.getItem(MUST_CHANGE_PASSWORD_KEY) === '1'
+}
+
+export function setMustChangePassword(value: boolean) {
+  if (value) localStorage.setItem(MUST_CHANGE_PASSWORD_KEY, '1')
+  else localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY)
+}
+
+export function clearMustChangePassword() {
+  localStorage.removeItem(MUST_CHANGE_PASSWORD_KEY)
+}
+
 /** true = aktiv; fehlender Eintrag gilt als aktiv (bestehende Sessions). */
 export function getLicenseActive(): boolean {
   const raw = localStorage.getItem(LICENSE_ACTIVE_KEY)
@@ -200,6 +215,7 @@ export type AuthSessionResponse = {
   permissions?: string[]
   firmModules?: FirmModules
   tenantId?: string
+  mustChangePassword?: boolean
 }
 
 /** Lizenzstatus vom Server holen (z. B. nach Admin-Reaktivierung). */
@@ -217,6 +233,7 @@ export async function fetchAuthSession(): Promise<AuthSessionResponse | null> {
     if (typeof data.tenantId === 'string' && data.tenantId.trim()) {
       setTenantId(data.tenantId)
     }
+    setMustChangePassword(data.mustChangePassword === true)
     if (active) notifyLicenseReactivated()
     return data
   } catch {
@@ -268,6 +285,7 @@ export type AuthLoginResponse = {
   permissions?: string[]
   firmModules?: FirmModules
   tenantId?: string
+  mustChangePassword?: boolean
 }
 
 export type AdminUserRow = {
@@ -318,6 +336,42 @@ export async function deleteAdminUser(userId: string): Promise<{ ok: boolean }> 
   return api<{ ok: boolean }>(`/api/admin/users/${encodeURIComponent(userId)}`, { method: 'DELETE' })
 }
 
+export async function setAdminTemporaryPassword(
+  userId: string,
+): Promise<{ ok: boolean; temporaryPassword: string }> {
+  return api<{ ok: boolean; temporaryPassword: string }>(
+    `/api/admin/users/${encodeURIComponent(userId)}/temporary-password`,
+    { method: 'POST' },
+  )
+}
+
+export async function changeOwnPassword(payload: {
+  currentPassword: string
+  newPassword: string
+}): Promise<{ ok: boolean; mustChangePassword?: boolean }> {
+  return api<{ ok: boolean; mustChangePassword?: boolean }>('/api/auth/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export async function requestPasswordReset(email: string): Promise<{ ok: boolean; message: string }> {
+  return api<{ ok: boolean; message: string }>('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email: email.trim().toLowerCase() }),
+  })
+}
+
+export async function submitPasswordReset(payload: {
+  token: string
+  newPassword: string
+}): Promise<{ ok: boolean }> {
+  return api<{ ok: boolean }>('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export async function sendFeedback(payload: {
   category: FeedbackCategory
   message: string
@@ -365,6 +419,7 @@ export async function postAuthLogin(email: string, password: string): Promise<Au
     setAccountRole(data.accountRole)
     setPermissions(data.permissions)
     setFirmModules(data.firmModules)
+    setMustChangePassword(data.mustChangePassword === true)
     return data
   }
 
@@ -1019,7 +1074,11 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   if (res.status === 401) {
     const errBody = (await res.json().catch(() => ({}))) as ApiError
     const detail = typeof errBody.detail === 'string' ? errBody.detail : null
+    const isChangePassword = path.includes('/api/auth/change-password')
     const isLogin = path.includes('/api/auth/login')
+    if (isChangePassword) {
+      throw new Error(detail ?? 'Aktuelles Passwort ist falsch.')
+    }
     if (!isLogin) {
       clearToken()
       if (!path.includes('/auth/')) {

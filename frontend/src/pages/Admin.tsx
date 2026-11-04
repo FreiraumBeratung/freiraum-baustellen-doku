@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react'
+import { ChevronDown, ChevronUp, KeyRound, Trash2 } from 'lucide-react'
 import {
   deleteAdminUser,
   listAdminUsers,
+  setAdminTemporaryPassword,
   setAdminUserLicense,
   setAdminUserModules,
   type AdminUserRow,
@@ -42,6 +43,7 @@ export function AdminPage() {
   const [err, setErr] = useState('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [detailsOpen, setDetailsOpen] = useState<Record<string, boolean>>({})
+  const [tempPw, setTempPw] = useState<{ email: string; password: string } | null>(null)
 
   const load = useCallback(async () => {
     setErr('')
@@ -100,6 +102,28 @@ export function AdminPage() {
     } catch (ex) {
       const m = ex instanceof Error ? ex.message : ''
       setErr(m || 'Account konnte nicht gelöscht werden.')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  async function issueTempPassword(row: AdminUserRow) {
+    const label = row.companyName?.trim() || row.email
+    const ok = window.confirm(
+      `Temporäres Passwort für „${label}“ erzeugen?\n\nDer Kunde loggt sich damit ein und ändert es unter Firmenprofil → Einstellungen.`,
+    )
+    if (!ok) return
+    setBusyId(row.id)
+    setMsg('')
+    setErr('')
+    try {
+      const r = await setAdminTemporaryPassword(row.id)
+      setTempPw({ email: row.email, password: r.temporaryPassword })
+      setMsg('Temporäres Passwort erzeugt. Einmalig anzeigen und dem Kunden sagen — nicht per unsicherer Dauer-Mail.')
+      window.setTimeout(() => setMsg(''), 6000)
+    } catch (ex) {
+      const m = ex instanceof Error ? ex.message : ''
+      setErr(m || 'Temporäres Passwort konnte nicht erzeugt werden.')
     } finally {
       setBusyId(null)
     }
@@ -199,6 +223,18 @@ export function AdminPage() {
                   </p>
                 )}
 
+                {!row.isAdmin ? (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void issueTempPassword(row)}
+                    className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-orange-500/30 bg-orange-950/25 text-sm font-semibold text-orange-200 hover:bg-orange-950/40 disabled:opacity-40"
+                  >
+                    <KeyRound className="h-4 w-4" aria-hidden />
+                    {busy ? '…' : 'Temp-Passwort'}
+                  </button>
+                ) : null}
+
                 {!row.isAdmin && !isSelf ? (
                   <button
                     type="button"
@@ -279,6 +315,51 @@ export function AdminPage() {
           <p className="text-center text-sm text-zinc-500">Keine Accounts gefunden.</p>
         ) : null}
       </div>
+
+      {tempPw ? (
+        <div
+          className="fixed inset-0 z-[90] flex items-end justify-center bg-black/70 px-4 pb-8 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="temp-pw-title"
+          onClick={() => setTempPw(null)}
+        >
+          <div className="w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+          <Card
+            className="border-orange-400/25 bg-zinc-950 px-5 py-5"
+          >
+            <h2 id="temp-pw-title" className="text-base font-semibold text-white">
+              Temporäres Passwort
+            </h2>
+            <p className="mt-2 text-sm text-zinc-400">{tempPw.email}</p>
+            <p className="mt-4 break-all rounded-xl border border-white/[0.08] bg-black/50 px-3 py-3 font-mono text-lg tracking-wide text-orange-200">
+              {tempPw.password}
+            </p>
+            <p className="mt-3 text-[0.75rem] leading-snug text-zinc-500">
+              Dem Kunden persönlich mitteilen. Nach dem Login unter Firmenprofil → Einstellungen ändern.
+            </p>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-orange-500/35 bg-orange-950/30 text-sm font-semibold text-orange-100"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(tempPw.password)
+                }}
+              >
+                Kopieren
+              </button>
+              <button
+                type="button"
+                className="inline-flex h-11 flex-1 items-center justify-center rounded-xl border border-white/10 text-sm font-semibold text-zinc-300"
+                onClick={() => setTempPw(null)}
+              >
+                Schließen
+              </button>
+            </div>
+          </Card>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

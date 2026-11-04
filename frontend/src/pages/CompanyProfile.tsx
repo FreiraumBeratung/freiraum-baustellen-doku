@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Settings, Shield, X } from 'lucide-react'
-import { api, resolveBackendPublicUrl } from '../api/client'
+import { api, changeOwnPassword, resolveBackendPublicUrl } from '../api/client'
 import { useAuth } from '../context/AuthContext'
+import { PasswordField } from '../components/PasswordField'
 import { BigButton, Card, PageTitle, PoweredBy, Switch } from '../components/ui'
 import { useWriteBlocked } from '../hooks/useWriteBlocked'
 import { useShellMaxClass } from '../hooks/useShellMaxClass'
@@ -30,10 +31,17 @@ type SettingsSlice = {
 export function CompanyProfilePage() {
   const shellMax = useShellMaxClass()
   const nav = useNavigate()
-  const { logout, isAdmin } = useAuth()
+  const [params, setParams] = useSearchParams()
+  const { logout, isAdmin, setMustChangePasswordFlag } = useAuth()
   const { writeBlocked } = useWriteBlocked()
   const [prof, setProf] = useState<CompanyProfile | null>(null)
   const [msg, setMsg] = useState('')
+  const [pwMsg, setPwMsg] = useState('')
+  const [pwErr, setPwErr] = useState('')
+  const [pwBusy, setPwBusy] = useState(false)
+  const [currentPw, setCurrentPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [repeatPw, setRepeatPw] = useState('')
   const [loading, setLoading] = useState(true)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const settingsSnap = useRef<SettingsSlice | null>(null)
@@ -52,6 +60,12 @@ export function CompanyProfilePage() {
       )
       .finally(() => setLoading(false))
   }, [])
+
+  useEffect(() => {
+    if (params.get('passwort') !== '1' || !prof) return
+    openSettings()
+    setParams({}, { replace: true })
+  }, [params, prof, setParams])
 
   useEffect(() => {
     if (!settingsOpen) return
@@ -79,6 +93,33 @@ export function CompanyProfilePage() {
     }
     settingsSnap.current = null
     setSettingsOpen(false)
+    setPwMsg('')
+    setPwErr('')
+    setCurrentPw('')
+    setNewPw('')
+    setRepeatPw('')
+  }
+
+  async function savePassword() {
+    setPwMsg('')
+    setPwErr('')
+    if (newPw !== repeatPw) {
+      setPwErr('Die neuen Passwörter stimmen nicht überein.')
+      return
+    }
+    setPwBusy(true)
+    try {
+      await changeOwnPassword({ currentPassword: currentPw, newPassword: newPw })
+      setMustChangePasswordFlag(false)
+      setCurrentPw('')
+      setNewPw('')
+      setRepeatPw('')
+      setPwMsg('Passwort gespeichert.')
+    } catch (ex) {
+      setPwErr(ex instanceof Error ? ex.message : 'Passwort konnte nicht geändert werden.')
+    } finally {
+      setPwBusy(false)
+    }
   }
 
   async function persist(): Promise<boolean> {
@@ -364,6 +405,48 @@ export function CompanyProfilePage() {
                     />
                   </label>
                 ) : null}
+              </div>
+
+              <div className="rounded-2xl border border-white/[0.06] bg-black/40 px-3 py-3">
+                <p className="text-sm font-medium text-zinc-200">Passwort ändern</p>
+                <p className="mt-1 text-[0.72rem] leading-snug text-zinc-600">
+                  Aktuelles Passwort bestätigen, dann ein neues wählen und speichern.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <PasswordField
+                    id="profile-current-password"
+                    label="Aktuelles Passwort"
+                    autoComplete="current-password"
+                    value={currentPw}
+                    onChange={(e) => setCurrentPw(e.target.value)}
+                    className="border-white/[0.1] bg-black/55"
+                  />
+                  <PasswordField
+                    id="profile-new-password"
+                    label="Neues Passwort"
+                    autoComplete="new-password"
+                    value={newPw}
+                    onChange={(e) => setNewPw(e.target.value)}
+                    className="border-white/[0.1] bg-black/55"
+                    minLength={8}
+                  />
+                  <PasswordField
+                    id="profile-repeat-password"
+                    label="Neues Passwort wiederholen"
+                    autoComplete="new-password"
+                    value={repeatPw}
+                    onChange={(e) => setRepeatPw(e.target.value)}
+                    className="border-white/[0.1] bg-black/55"
+                    minLength={8}
+                  />
+                </div>
+                {pwErr ? <p className="mt-2 text-sm text-red-400">{pwErr}</p> : null}
+                {pwMsg ? <p className="mt-2 text-sm text-orange-300">{pwMsg}</p> : null}
+                <div className="mt-3">
+                  <BigButton type="button" disabled={pwBusy || !currentPw || !newPw} onClick={() => void savePassword()}>
+                    {pwBusy ? '…' : 'Passwort speichern'}
+                  </BigButton>
+                </div>
               </div>
             </div>
 

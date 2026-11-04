@@ -68,7 +68,7 @@ const allTiles: Tile[] = [
 ]
 
 export function DashboardPage() {
-  const { can, isCompanyOwner, logout } = useAuth()
+  const { can, isCompanyOwner, logout, mustChangePassword } = useAuth()
   const nav = useNavigate()
   const [company, setCompany] = useState<CompanyProfile | null>(null)
   const [todoOpen, setTodoOpen] = useState(false)
@@ -365,6 +365,18 @@ export function DashboardPage() {
           ) : null}
         </div>
       </header>
+
+      {mustChangePassword && isCompanyOwner ? (
+        <Link
+          to="/profil?passwort=1"
+          className="relative mt-5 block rounded-[1.25rem] border border-orange-400/25 bg-orange-500/[0.08] px-4 py-3 ring-1 ring-orange-400/15 transition hover:bg-orange-500/[0.12] active:scale-[0.99]"
+        >
+          <p className="text-sm font-medium text-orange-100">Bitte Passwort jetzt ändern</p>
+          <p className="mt-1 text-[0.78rem] leading-snug text-zinc-400">
+            Sie nutzen ein temporäres Passwort. Unter Firmenprofil → Einstellungen ein eigenes setzen.
+          </p>
+        </Link>
+      ) : null}
 
       {recurringDue.length > 0 ? (
         <Link

@@ -7,6 +7,7 @@ import {
   getFirmModules,
   getIsAdmin,
   getLicenseActive,
+  getMustChangePassword,
   getPermissions,
   getTenantId,
   getToken,
@@ -15,6 +16,7 @@ import {
   setFirmModules,
   setIsAdmin,
   setLicenseActive,
+  setMustChangePassword,
   setPermissions,
   setTenantId,
   setToken,
@@ -37,9 +39,11 @@ type AuthState = {
   permissions: string[]
   firmModules: FirmModules
   tenantId: string
+  mustChangePassword: boolean
   ready: boolean
   can: (permission: AppPermission) => boolean
   isCompanyOwner: boolean
+  setMustChangePasswordFlag: (value: boolean) => void
   login: (emailOrUsername: string, password: string) => Promise<void>
   register: (p: {
     companyName: string
@@ -59,6 +63,7 @@ function applySessionFields(r: {
   permissions?: string[]
   firmModules?: FirmModules
   tenantId?: string
+  mustChangePassword?: boolean
 }) {
   const active = r.licenseActive !== false
   const modules = normalizeFirmModules(r.firmModules)
@@ -70,6 +75,7 @@ function applySessionFields(r: {
   if (typeof r.tenantId === 'string' && r.tenantId.trim()) {
     setTenantId(r.tenantId)
   }
+  setMustChangePassword(r.mustChangePassword === true)
   return {
     active,
     admin: r.isAdmin === true,
@@ -77,6 +83,7 @@ function applySessionFields(r: {
     perms: Array.isArray(r.permissions) ? r.permissions.map(String) : [],
     firmModules: modules,
     tenantId: (typeof r.tenantId === 'string' && r.tenantId.trim() ? r.tenantId.trim() : getTenantId()),
+    mustChange: r.mustChangePassword === true,
   }
 }
 
@@ -88,6 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [permissions, setPermissionsState] = useState<string[]>([])
   const [firmModules, setFirmModulesState] = useState<FirmModules>(() => getFirmModules())
   const [tenantId, setTenantIdState] = useState('')
+  const [mustChangePassword, setMustChangePasswordState] = useState(false)
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -98,6 +106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPermissionsState(getPermissions())
     setFirmModulesState(getFirmModules())
     setTenantIdState(getTenantId())
+    setMustChangePasswordState(getMustChangePassword())
     setReady(true)
 
     const onSuspended = () => setLicenseActiveState(false)
@@ -122,6 +131,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPermissionsState(applied.perms)
         setFirmModulesState(applied.firmModules)
         setTenantIdState(applied.tenantId)
+        setMustChangePasswordState(applied.mustChange)
       })
     }
 
@@ -136,6 +146,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setPermissionsState(applied.perms)
         setFirmModulesState(applied.firmModules)
         setTenantIdState(applied.tenantId)
+        setMustChangePasswordState(applied.mustChange)
       })
     }
     window.addEventListener('focus', onFocus)
@@ -160,6 +171,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPermissionsState(applied.perms)
     setFirmModulesState(applied.firmModules)
     setTenantIdState(applied.tenantId)
+    setMustChangePasswordState(applied.mustChange)
   }, [])
 
   const register = useCallback(
@@ -193,9 +205,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setPermissionsState(applied.perms)
       setFirmModulesState(applied.firmModules)
       setTenantIdState(applied.tenantId)
+      setMustChangePasswordState(applied.mustChange)
     },
     [],
   )
+
+  const setMustChangePasswordFlag = useCallback((value: boolean) => {
+    setMustChangePassword(value)
+    setMustChangePasswordState(value)
+  }, [])
 
   const logout = useCallback(() => {
     clearToken()
@@ -206,6 +224,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setPermissionsState([])
     setFirmModulesState(normalizeFirmModules(null))
     setTenantIdState('')
+    setMustChangePasswordState(false)
   }, [])
 
   const can = useCallback(
@@ -224,9 +243,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       firmModules,
       tenantId,
+      mustChangePassword,
       ready,
       can,
       isCompanyOwner,
+      setMustChangePasswordFlag,
       login,
       register,
       logout,
@@ -239,9 +260,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       permissions,
       firmModules,
       tenantId,
+      mustChangePassword,
       ready,
       can,
       isCompanyOwner,
+      setMustChangePasswordFlag,
       login,
       register,
       logout,

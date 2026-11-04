@@ -5,6 +5,8 @@ import { AuthLayout } from './components/AuthLayout'
 import { ProfileGate } from './components/ProfileGate'
 import { RequirePermission } from './components/RequirePermission'
 import { LoginPage } from './pages/Login'
+import { ForgotPasswordPage } from './pages/ForgotPassword'
+import { ResetPasswordPage } from './pages/ResetPassword'
 import { RegisterPage } from './pages/Register'
 import { OnboardingPage } from './pages/Onboarding'
 import { DashboardPage } from './pages/Dashboard'
@@ -55,6 +57,22 @@ export default function App() {
         element={
           <AuthLayout>
             <RegisterPage />
+          </AuthLayout>
+        }
+      />
+      <Route
+        path="/passwort-vergessen"
+        element={
+          <AuthLayout>
+            <ForgotPasswordPage />
+          </AuthLayout>
+        }
+      />
+      <Route
+        path="/passwort-zuruecksetzen"
+        element={
+          <AuthLayout>
+            <ResetPasswordPage />
           </AuthLayout>
         }
       />

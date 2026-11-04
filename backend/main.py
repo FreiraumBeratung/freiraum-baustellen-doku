@@ -91,6 +91,7 @@ from app.services.password_security import (
     user_needs_password_migration,
     verify_password,
 )
+from app.services import password_reset as pwd_reset
 from app.services.admin_users import (
     bootstrap_admin_from_env,
     delete_user_account,
@@ -298,6 +299,25 @@ class EmployeeAccessPatchBody(BaseModel):
     loginActive: bool | None = None
 
 
+class ChangePasswordBody(BaseModel):
+    currentPassword: str = Field(..., min_length=1, max_length=200)
+    newPassword: str = Field(..., min_length=1, max_length=200)
+
+
+class ForgotPasswordBody(BaseModel):
+    email: EmailStr
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email_forgot(cls, v: Any) -> str:
+        return str(v).strip().lower()
+
+
+class ResetPasswordBody(BaseModel):
+    token: str = Field(..., min_length=16, max_length=200)
+    newPassword: str = Field(..., min_length=1, max_length=200)
+
+
 def _persist_user_password(email_norm: str, plain: str) -> None:
     users = get_users()
     for u in users:
@@ -375,6 +395,44 @@ def save_users(users: list[dict]) -> None:
     _write_json(USERS_FILE, users)
 
 
+def _password_reset_file() -> Path:
+    return DATA_DIR / "password_reset_tokens.json"
+
+
+def _read_reset_doc() -> dict[str, Any]:
+    return pwd_reset.load_doc(lambda: _read_json(_password_reset_file(), {}))
+
+
+def _write_reset_doc(doc: dict[str, Any]) -> None:
+    pwd_reset.save_doc(lambda payload: _write_json(_password_reset_file(), payload), doc)
+
+
+def _set_user_password(user_id: str, plain: str, *, require_change: bool = False) -> dict | None:
+    users = get_users()
+    found: dict | None = None
+    for u in users:
+        if str(u.get("id") or "") == str(user_id):
+            pwd_reset.apply_new_password(u, plain, require_change=require_change)
+            found = u
+            break
+    if found is None:
+        return None
+    doc = _read_reset_doc()
+    pwd_reset.invalidate_user_tokens(doc, str(user_id))
+    _write_reset_doc(doc)
+    save_users(users)
+    return found
+
+
+def _client_ip(request: Request) -> str:
+    fwd = str(request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+    if fwd:
+        return fwd[:80]
+    if request.client and request.client.host:
+        return str(request.client.host)[:80]
+    return ""
+
+
 def find_user_by_email(email: str) -> dict | None:
     for u in get_users():
         if u.get("email", "").lower() == email.lower():
@@ -417,6 +475,7 @@ def _auth_session_fields(user: dict[str, Any]) -> dict[str, Any]:
         "permissions": sorted(effective_permissions(user)),
         "firmModules": firm_modules_for_user(get_users(), user),
         "tenantId": str(user.get("tenantId") or user.get("id") or "").strip(),
+        "mustChangePassword": bool(user.get("mustChangePassword")),
         "displayName": (
             str(user.get("entrepreneurName") or user.get("companyName") or user.get("email") or "")
             if owner
@@ -1932,6 +1991,69 @@ def auth_session(user_id: str = Depends(require_bearer)):
     return {"ok": True, **_auth_session_fields(user)}
 
 
+@app.post("/api/auth/change-password")
+def change_password(body: ChangePasswordBody, user_id: str = Depends(require_bearer)):
+    """Eingeloggt: aktuelles Passwort prüfen, neues Hash speichern. Kein Mail-Store."""
+    user = find_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=401, detail="Ungültiges Token")
+    if not verify_password(body.currentPassword, user):
+        raise HTTPException(status_code=401, detail="Aktuelles Passwort ist falsch.")
+    issue = pwd_reset.validate_new_password(body.newPassword)
+    if issue:
+        raise HTTPException(status_code=400, detail=issue)
+    if body.newPassword == body.currentPassword:
+        raise HTTPException(status_code=400, detail="Neues Passwort muss sich vom aktuellen unterscheiden.")
+    updated = _set_user_password(user_id, body.newPassword, require_change=False)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    return {"ok": True, **_auth_session_fields(updated)}
+
+
+@app.post("/api/auth/forgot-password")
+def forgot_password(body: ForgotPasswordBody, request: Request):
+    """Immer dieselbe Antwort — kein Hinweis, ob die E-Mail existiert."""
+    email_norm = str(body.email).strip().lower()
+    doc = _read_reset_doc()
+    ip = _client_ip(request)
+    if not pwd_reset.too_many_forgot_requests(doc, email=email_norm, ip=ip):
+        pwd_reset.record_forgot_request(doc, email=email_norm, ip=ip)
+        user = find_user_by_email(email_norm)
+        if user and is_company_owner(user) and not is_worker(user):
+            raw, token_hash = pwd_reset.new_reset_token()
+            pwd_reset.store_reset_token(doc, user_id=str(user.get("id") or ""), token_hash=token_hash)
+            base = pwd_reset.public_app_base(
+                origin=str(request.headers.get("origin") or ""),
+                referer=str(request.headers.get("referer") or ""),
+                env_url=str(os.environ.get("FREIRAUM_PUBLIC_APP_URL") or ""),
+            )
+            pwd_reset.send_reset_email(
+                to_email=email_norm,
+                reset_url=pwd_reset.build_reset_url(base, raw),
+            )
+        _write_reset_doc(doc)
+    return {"ok": True, "message": pwd_reset.GENERIC_FORGOT_OK}
+
+
+@app.post("/api/auth/reset-password")
+def reset_password(body: ResetPasswordBody):
+    issue = pwd_reset.validate_new_password(body.newPassword)
+    if issue:
+        raise HTTPException(status_code=400, detail=issue)
+    doc = _read_reset_doc()
+    user_id = pwd_reset.consume_reset_token(doc, str(body.token).strip())
+    _write_reset_doc(doc)
+    if not user_id:
+        raise HTTPException(status_code=400, detail="Link ungültig oder abgelaufen. Bitte erneut „Passwort vergessen“ nutzen.")
+    user = find_user_by_id(user_id)
+    if not user or not is_company_owner(user):
+        raise HTTPException(status_code=400, detail="Link ungültig oder abgelaufen. Bitte erneut „Passwort vergessen“ nutzen.")
+    updated = _set_user_password(user_id, body.newPassword, require_change=False)
+    if updated is None:
+        raise HTTPException(status_code=400, detail="Link ungültig oder abgelaufen. Bitte erneut „Passwort vergessen“ nutzen.")
+    return {"ok": True}
+
+
 # --- Admin (M3): Account-Metadaten, keine Mandantendaten ---
 class AdminLicenseBody(BaseModel):
     licenseActive: bool
@@ -1978,6 +2100,28 @@ def admin_set_user_modules(
         raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
     save_users(users)
     return {"ok": True, "user": updated}
+
+
+@app.post("/api/admin/users/{target_user_id}/temporary-password")
+def admin_set_temporary_password(target_user_id: str, _admin_id: str = Depends(require_admin)):
+    """Einmaliges temporäres Passwort — Klartext nur in dieser Antwort, nie in users.json."""
+    target = find_user_by_id(target_user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    if is_worker(target) or not is_company_owner(target):
+        raise HTTPException(
+            status_code=400,
+            detail="Mitarbeiter-Passwort bitte im Mitarbeiter-Bereich ändern.",
+        )
+    temp = pwd_reset.generate_temporary_password()
+    updated = _set_user_password(target_user_id, temp, require_change=True)
+    if updated is None:
+        raise HTTPException(status_code=404, detail="Benutzer nicht gefunden")
+    return {
+        "ok": True,
+        "temporaryPassword": temp,
+        "user": list_users_public([updated])[0] if list_users_public([updated]) else None,
+    }
 
 
 @app.delete("/api/admin/users/{target_user_id}")
